@@ -90,16 +90,15 @@ A release is the only event that changes the running application, and it is sepa
 - **`make release`** works in this order. It refuses to run unless the main checkout is clean and on the main branch. It computes the version, builds the binary into a new release folder outside the repository, and checks that the disk has room for the build and a copy of the database. It waits until the running application reports no collection or preparation in progress. It stops the application, switches it to the new build, starts it, and waits until the application answers its health check; the new build copies the database before it changes its layout (see `docs/ARCHITECTURE.md`). When a step up to the health check fails, it switches back to the previous build, restores that copy if the layout changed, and starts the previous build. Only then does it move the changelog entries, commit, tag and push; a failure of these steps is printed and the steps are repeated, and the application is left running. It keeps the last five builds.
 - **`make rollback`** returns to the previous release in one command. When the release changed the database layout, the command also restores the copy made before that release, so changes to the data since the release are lost. It prints which copy it restored. The tag and changelog section of the undone release stay, and the next release takes the next version.
 - After a rollback caused by the application, the coordinator opens a card for the defect and does not release until that card is merged.
+- **A change to the interface description.** A merge that changes `api/openapi.yaml` blocks `make release` until a client built against it is pinned: in the client repository `npm run sync-api -- <path to the server>`, `npm run check`, `npm run build`, `npm run release -- <version>`, the tag and the release; then the new version goes into `web/release.txt` on the main branch. A card that only tidies the server leaves `git diff main -- api/openapi.yaml` empty and costs no client release.
 - The journal records every release and every rollback.
 
 ## Tests
 
-Tests check behaviour through public boundaries, so the code behind those boundaries can be rebuilt without rewriting the tests.
+Tests check behaviour through public boundaries, so the code behind those boundaries can be rebuilt without rewriting the tests. The rules a test follows are in `AGENTS.md`, section "Tests".
 
-- A test drives the HTTP application programming interface, a command, the store on a fixture database, or one of the interfaces `Fetcher`, `Model` and `Score`.
-- A test's name says the behaviour it checks. Test names contain no card names, card numbers, rule numbers or section numbers.
-- No test reads source files or checks that some code exists.
-- Tests use invented data and make no network request and no model call. Fakes stand behind the `Fetcher` and `Model` interfaces. Behaviour that needs a job site is checked against recorded responses behind the fake `Fetcher`.
+- Test names contain no card names, card numbers, rule numbers or section numbers.
+- Behaviour that needs a job site is checked against recorded responses behind the fake `Fetcher`.
 - `make check` runs every test, and tests are never selected by name.
 
 ## Budgets

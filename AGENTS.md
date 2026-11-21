@@ -26,7 +26,7 @@ These are the rules for every coding agent working in this repository. `docs/ARC
 
 ## Tests
 
-- Test behaviour through the HTTP (Hypertext Transfer Protocol) interface, a command, the store on a fixture database, or one of the interfaces `Fetcher`, `Model` and `Score`.
+- Test behaviour through the HTTP (Hypertext Transfer Protocol) interface, a command, the store on a fixture database, or one of the interfaces `Fetcher`, `Model` and `Score`. A test reaches the server through the same wiring the command registers, and builds no route list of its own; a harness that repeats the wiring is the defect, not the shortcut.
 - Name each test by the behaviour it checks.
 - Use the fakes behind `Fetcher` and `Model`. Tests make no network request and no model call.
 - Do not write tests that read source files or check that some code exists.
@@ -50,8 +50,8 @@ Before a branch is merged, every behaviour in this list that the change touches 
 
 - Work only in the working copy and on the branch the coordinator gave you, and do not read the work repository or another working copy.
 - Commit on your branch after each step. Do not merge, rebase, push, tag or release.
-- When the card is unclear, or needs a file outside its Packages, stop and ask the coordinator.
-- Before you report, run `make check` and make it pass.
+- When the card is unclear, needs a file outside its Packages, or seems to need a rule in this file or in `docs/` changed, stop and ask the coordinator. Changing a documented rule so that a test passes is not an executor's decision.
+- Before you report, run `make check`, make it pass, and commit. A report counts only what is committed on the branch.
 - End with a report: what changed for the user; what was removed; which checks ran and their results; what was not verified; open questions.
 
 ## Coordinator
