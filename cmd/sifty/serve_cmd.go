@@ -14,6 +14,7 @@ import (
 	"time"
 
 	siftyapi "github.com/sifty-works/sifty-server/api"
+	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/collect"
 	"github.com/sifty-works/sifty-server/internal/config"
@@ -193,7 +194,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			}
 			return m
 		}
-		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, col, r)
+		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, col, r)
 	})
 
 	srv := &http.Server{

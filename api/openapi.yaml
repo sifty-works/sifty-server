@@ -1845,6 +1845,18 @@ paths:
                     $ref: '#/components/responses/Error'
                 "204":
                     description: No Content
+    /api/documents/{id}/refresh:
+        post:
+            operationId: postApiDocumentsIdRefresh
+            responses:
+                4XX:
+                    $ref: '#/components/responses/Error'
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DocumentItem'
+                    description: OK
     /api/documents/{id}/text:
         get:
             operationId: getApiDocumentsIdText

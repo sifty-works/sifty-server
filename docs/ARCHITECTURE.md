@@ -86,7 +86,10 @@ Goals(p) GoalsView; Evidence(me) []Fact      // inputs of Score; fit hashes what
 EvidenceText(me, p, docs) string             // Shortlist check and preparation; never contacts, legal name or form answers
 Visibility(p) Filter
 FormAnswers(me) map[string]string            // contacts, legal name, form answers: application only
+type TextSource interface { Text(ctx context.Context, body []byte) (string, error) } // stored bytes in, text out
 ```
+
+- A pdf is read by `TextSource`, whose one implementation runs an external program (`pdftotext - -` of poppler, bytes on standard input, text on standard output) through the launcher of the command-line model adapters (`models.RunCLI`): reduced environment, the caller's timeout (30 seconds), and a cap on the output (4 MiB for a pdf, 8 MiB for a model). It is not a model call and passes no gate. A missing program leaves the document `unavailable` with a reason that names the install command; a failed, stopped or silent program leaves it `error` with a reason and no text. `POST /api/documents/{id}/refresh` reads a pdf that has no text again from the stored file. The server does not install the program. Another program is another implementation or the same one with another command.
 
 - Saving writes one JSON record and calls one `changed` callback, which queues `recompute_fit`. Consumers compare the hash of the projection they used, so only what changed is recomputed: a new keyword changes visibility only, a new skill recomputes Fits you of every profile, a new compensation of one profile recomputes only that profile. When visibility grows, vacancies that became visible without a reading are queued for reading.
 

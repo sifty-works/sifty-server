@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/db"
@@ -24,6 +26,11 @@ func newDocServer(t *testing.T, d *db.DB) *httptest.Server {
 
 func newDocServerWithFiles(t *testing.T, d *db.DB, filesDir string) *httptest.Server {
 	t.Helper()
+	return newDocServerWithPDF(t, d, filesDir, candidate.ProgramText{Program: filepath.Join(t.TempDir(), "absent")})
+}
+
+func newDocServerWithPDF(t *testing.T, d *db.DB, filesDir string, pdfText candidate.TextSource) *httptest.Server {
+	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := server.New(server.Options{
 		Version:           "test",
@@ -31,7 +38,7 @@ func newDocServerWithFiles(t *testing.T, d *db.DB, filesDir string) *httptest.Se
 		Logger:            logger,
 		BinaryUploadPaths: []string{"/api/me/photo", "/api/documents"},
 	}, func(mux *http.ServeMux) {
-		candidate.RegisterRoutes(mux, d, filesDir, logger, nil, nil)
+		candidate.RegisterRoutes(mux, d, filesDir, pdfText, logger, nil, nil)
 	})
 	ts := httptest.NewServer(h)
 	t.Cleanup(ts.Close)
@@ -91,14 +98,13 @@ func TestUploadKindsTable(t *testing.T) {
 	docxCharCount := float64(len([]rune(docxText)))
 
 	cases := []struct {
-		name            string
-		filename        string
-		body            []byte
-		ct              string
-		wantKind        string
-		wantState       string
-		wantCharCount   float64
-		wantStateReason bool
+		name          string
+		filename      string
+		body          []byte
+		ct            string
+		wantKind      string
+		wantState     string
+		wantCharCount float64
 	}{
 		{
 			name:          "txt kind state and exact charCount",
@@ -127,16 +133,6 @@ func TestUploadKindsTable(t *testing.T) {
 			wantState:     "ready",
 			wantCharCount: docxCharCount,
 		},
-		{
-			name:            "pdf unavailable state and reason",
-			filename:        "cv.pdf",
-			body:            buildPDF(),
-			ct:              "application/pdf",
-			wantKind:        "pdf",
-			wantState:       "unavailable",
-			wantCharCount:   0,
-			wantStateReason: true,
-		},
 	}
 
 	d := openTestDB(t)
@@ -160,10 +156,6 @@ func TestUploadKindsTable(t *testing.T) {
 			}
 			if out["charCount"] != tc.wantCharCount {
 				t.Errorf("charCount = %v, want %v", out["charCount"], tc.wantCharCount)
-			}
-			hasReason := out["stateReason"] != nil && out["stateReason"] != ""
-			if hasReason != tc.wantStateReason {
-				t.Errorf("stateReason present = %v, want %v (value: %v)", hasReason, tc.wantStateReason, out["stateReason"])
 			}
 		})
 	}
@@ -234,26 +226,143 @@ func TestDocxExtractionMultipleStructures(t *testing.T) {
 	}
 }
 
-func TestPdfDocumentStateIsUnavailable(t *testing.T) {
-	d := openTestDB(t)
-	ts := newDocServer(t, d)
+func makeScript(t *testing.T, body string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "pdftotext.sh")
+	if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body), 0755); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	return p
+}
 
-	pdfBody := buildPDF()
-	out, status := uploadDoc(t, ts, "cv.pdf", pdfBody, "application/pdf")
+func docText(t *testing.T, ts *httptest.Server, id any) (string, int) {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/documents/%.0f/text", ts.URL, id), nil)
+	req.Host = "127.0.0.1:9999"
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("GET text: %v", err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return string(b), resp.StatusCode
+}
+
+func refreshDoc(t *testing.T, ts *httptest.Server, id any) map[string]any {
+	t.Helper()
+	out, status := send(t, ts, http.MethodPost, fmt.Sprintf("/api/documents/%.0f/refresh", id), map[string]any{})
 	if status != http.StatusOK {
-		t.Fatalf("POST /api/documents pdf: status %d, body: %v", status, out)
+		t.Fatalf("refresh: status %d, body: %v", status, out)
 	}
-	if out["kind"] != "pdf" {
-		t.Errorf("kind = %v, want pdf", out["kind"])
+	return out
+}
+
+func TestPdfIsReadByTheProgramFromItsStandardInput(t *testing.T) {
+	work := t.TempDir()
+	script := makeScript(t, fmt.Sprintf("printf '%%s\\n' \"$@\" > %[1]s/args\ncat > %[1]s/stdin\nprintf 'Jane Roe\\fSecond page\\n'", work))
+	ts := newDocServerWithPDF(t, openTestDB(t), t.TempDir(), candidate.ProgramText{Program: script, Args: []string{"-", "-"}})
+
+	body := buildPDF()
+	out, status := uploadDoc(t, ts, "cv.pdf", body, "application/pdf")
+	if status != http.StatusOK {
+		t.Fatalf("upload: status %d, body: %v", status, out)
 	}
+	want := "Jane Roe\nSecond page"
+	if out["state"] != "ready" || out["charCount"] != float64(len(want)) {
+		t.Errorf("state %v, charCount %v; want ready, %d", out["state"], out["charCount"], len(want))
+	}
+	if text, _ := docText(t, ts, out["id"]); text != want {
+		t.Errorf("text = %q, want %q", text, want)
+	}
+	if args, _ := os.ReadFile(filepath.Join(work, "args")); string(args) != "-\n-\n" {
+		t.Errorf("arguments = %q, want a dash twice", args)
+	}
+	if in, _ := os.ReadFile(filepath.Join(work, "stdin")); !bytes.Equal(in, body) {
+		t.Errorf("the program did not receive the stored bytes on standard input")
+	}
+}
+
+func TestPdfWithoutTheProgramIsStoredWithAnInstallReason(t *testing.T) {
+	ts := newDocServer(t, openTestDB(t))
+
+	out, status := uploadDoc(t, ts, "cv.pdf", buildPDF(), "application/pdf")
+	if status != http.StatusOK {
+		t.Fatalf("upload: status %d, body: %v", status, out)
+	}
+	if out["state"] != "unavailable" || out["charCount"] != float64(0) {
+		t.Errorf("state %v, charCount %v; want unavailable, 0", out["state"], out["charCount"])
+	}
+	if reason, _ := out["stateReason"].(string); !strings.Contains(reason, "poppler") {
+		t.Errorf("stateReason = %q, want it to name poppler", reason)
+	}
+	if _, status := docText(t, ts, out["id"]); status != http.StatusNotFound {
+		t.Errorf("text status = %d, want 404 for a document with no text", status)
+	}
+}
+
+func TestRefreshReadsAStoredPdfOnceTheProgramIsInstalled(t *testing.T) {
+	work := t.TempDir()
+	program := filepath.Join(work, "pdftotext.sh")
+	ts := newDocServerWithPDF(t, openTestDB(t), t.TempDir(), candidate.ProgramText{Program: program})
+
+	out, _ := uploadDoc(t, ts, "cv.pdf", buildPDF(), "application/pdf")
 	if out["state"] != "unavailable" {
-		t.Errorf("state = %v, want unavailable", out["state"])
+		t.Fatalf("state = %v, want unavailable", out["state"])
 	}
-	if out["stateReason"] == nil || out["stateReason"] == "" {
-		t.Errorf("stateReason should be non-empty for pdf, got %v", out["stateReason"])
+	script := fmt.Sprintf("echo run >> %s/calls\nprintf 'Jane Roe'", work)
+	if err := os.WriteFile(program, []byte("#!/bin/sh\n"+script), 0755); err != nil {
+		t.Fatalf("write script: %v", err)
 	}
-	if out["charCount"] != float64(0) {
-		t.Errorf("charCount = %v, want 0 for pdf", out["charCount"])
+
+	item := refreshDoc(t, ts, out["id"])
+	if item["state"] != "ready" || item["stateReason"] != nil || item["charCount"] != float64(8) {
+		t.Errorf("after refresh: %v, want ready with 8 characters and no reason", item)
+	}
+	if text, _ := docText(t, ts, out["id"]); text != "Jane Roe" {
+		t.Errorf("text = %q, want Jane Roe", text)
+	}
+	refreshDoc(t, ts, out["id"])
+	if calls, _ := os.ReadFile(filepath.Join(work, "calls")); strings.Count(string(calls), "run") != 1 {
+		t.Errorf("program ran %q times, want once: a document with text is not read again", calls)
+	}
+}
+
+func TestPdfProgramFailureLeavesAReasonAndNoText(t *testing.T) {
+	cases := []struct {
+		name       string
+		script     string
+		timeout    time.Duration
+		maxOutput  int
+		wantReason string
+	}{
+		{"exits with an error", "echo 'broken xref table' >&2\nexit 1", 0, 0, "could not be read"},
+		{"writes more than the cap", "printf '%0200d' 7", 0, 64, "too long to keep"},
+		{"never returns", "sleep 5 & wait", 200 * time.Millisecond, 0, "too long and was stopped"},
+		{"writes nothing", "exit 0", 0, 0, "No text was found"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := candidate.ProgramText{Program: makeScript(t, tc.script), Timeout: tc.timeout, MaxOutput: tc.maxOutput}
+			ts := newDocServerWithPDF(t, openTestDB(t), t.TempDir(), src)
+			start := time.Now()
+			out, status := uploadDoc(t, ts, "cv.pdf", buildPDF(), "application/pdf")
+			if status != http.StatusOK {
+				t.Fatalf("upload: status %d, body: %v", status, out)
+			}
+			if time.Since(start) > 4*time.Second {
+				t.Errorf("the upload waited %v for the program", time.Since(start))
+			}
+			reason, _ := out["stateReason"].(string)
+			if out["state"] != "error" || out["charCount"] != float64(0) || !strings.Contains(reason, tc.wantReason) {
+				t.Errorf("state %v, charCount %v, reason %q; want error, 0, %q", out["state"], out["charCount"], reason, tc.wantReason)
+			}
+			if strings.Contains(reason, "xref") {
+				t.Errorf("reason %q carries the program's error output", reason)
+			}
+			if _, status := docText(t, ts, out["id"]); status != http.StatusNotFound {
+				t.Errorf("text status = %d, want 404", status)
+			}
+		})
 	}
 }
 

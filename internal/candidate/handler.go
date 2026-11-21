@@ -319,7 +319,7 @@ func photoPath(filesDir string) string {
 	return filepath.Join(filesDir, "me_photo")
 }
 
-func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, logger *slog.Logger, changed func(), enqueue func(kind, subject string) (int64, error)) {
+func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, pdfText TextSource, logger *slog.Logger, changed func(), enqueue func(kind, subject string) (int64, error)) {
 	notify := func() {
 		if changed != nil {
 			changed()
@@ -694,7 +694,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, logger
 			server.MapError(w, err, logger)
 			return
 		}
-		text, state, stateReason := extractText(kind, body)
+		text, state, stateReason := extractText(r.Context(), pdfText, logger, kind, body)
 		item, err := saveDocument(r.Context(), database, filesDir, name, kind, body, text, state, stateReason)
 		if server.MapError(w, err, logger) {
 			return
@@ -777,6 +777,37 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, logger
 		w.Header().Set("Content-Type", ct)
 		w.WriteHeader(http.StatusOK)
 		w.Write(body)
+	})
+
+	server.Handle(mux, "POST /api/documents/{id}/refresh", logger, func(r *http.Request, _ struct{}) (DocumentItem, error) {
+		ctx := r.Context()
+		id, err := parseDocumentID(r)
+		if err != nil {
+			return DocumentItem{}, err
+		}
+		row, err := loadDocumentRow(ctx, database, id)
+		if err != nil {
+			return DocumentItem{}, err
+		}
+		if row.Kind != "pdf" || strings.TrimSpace(row.Text) != "" {
+			return rowToItem(row), nil
+		}
+		if row.FileName == "" || filesDir == "" {
+			return DocumentItem{}, apperr.NotFound{Message: "No original file for this document."}
+		}
+		body, err := os.ReadFile(filepath.Join(filesDir, row.FileName))
+		if err != nil {
+			return DocumentItem{}, apperr.NotFound{Message: "No original file for this document."}
+		}
+		text, state, stateReason := extractText(ctx, pdfText, logger, row.Kind, body)
+		if err := updateDocumentText(ctx, database, id, text, state, stateReason); err != nil {
+			return DocumentItem{}, err
+		}
+		row, err = loadDocumentRow(ctx, database, id)
+		if err != nil {
+			return DocumentItem{}, err
+		}
+		return rowToItem(row), nil
 	})
 
 	server.Handle(mux, "POST /api/documents/{id}/analyze", logger, func(r *http.Request, _ struct{}) (DocumentItem, error) {

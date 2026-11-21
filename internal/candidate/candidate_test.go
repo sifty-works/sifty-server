@@ -47,7 +47,7 @@ func newServerWithFiles(t *testing.T, d *db.DB, filesDir string, changed ...func
 		if len(changed) > 0 {
 			notify = changed[0]
 		}
-		candidate.RegisterRoutes(mux, d, filesDir, logger, notify, nil)
+		candidate.RegisterRoutes(mux, d, filesDir, nil, logger, notify, nil)
 	})
 	ts := httptest.NewServer(h)
 	t.Cleanup(ts.Close)

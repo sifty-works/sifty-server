@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -87,7 +88,7 @@ func checkDocumentBytes(kind string, body []byte) error {
 	return nil
 }
 
-func extractText(kind string, body []byte) (text, state, stateReason string) {
+func extractText(ctx context.Context, src TextSource, logger *slog.Logger, kind string, body []byte) (text, state, stateReason string) {
 	switch kind {
 	case "txt", "md":
 		return string(body), "ready", ""
@@ -98,7 +99,7 @@ func extractText(kind string, body []byte) (text, state, stateReason string) {
 		}
 		return t, "ready", ""
 	case "pdf":
-		return "", "unavailable", "PDF text extraction is not available yet."
+		return extractPDF(ctx, src, logger, body)
 	}
 	return "", "error", "Unknown document kind."
 }
@@ -293,6 +294,16 @@ func deleteDocument(ctx context.Context, database *db.DB, filesDir string, id in
 	}
 	if _, err := database.ExecContext(ctx, `DELETE FROM document WHERE id=?`, id); err != nil {
 		return fmt.Errorf("candidate: delete document: %w", err)
+	}
+	return nil
+}
+
+func updateDocumentText(ctx context.Context, database *db.DB, id int64, text, state, stateReason string) error {
+	_, err := database.ExecContext(ctx,
+		`UPDATE document SET text=?, char_count=?, state=?, state_reason=? WHERE id=?`,
+		text, len([]rune(text)), state, stateReason, id)
+	if err != nil {
+		return fmt.Errorf("candidate: update document text: %w", err)
 	}
 	return nil
 }

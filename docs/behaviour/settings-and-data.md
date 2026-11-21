@@ -16,7 +16,7 @@ What the user gets: the application is one program that starts on an empty data 
 
 ## First start
 
-The application is one program to run; reading application forms additionally needs Node.js and Playwright on the machine (see `application.md`). It starts on an empty data folder without copying any template. Every key of the settings file is optional; a missing key takes its default. The first run shows empty lists and a hint to add sources, and model work shows "Configure a provider" until one is set.
+The application is one program to run; reading application forms additionally needs Node.js and Playwright on the machine (see `application.md`), and reading the text of a PDF needs poppler (`pdftotext`), which a document card names with its install command when it is missing. It starts on an empty data folder without copying any template. Every key of the settings file is optional; a missing key takes its default. The first run shows empty lists and a hint to add sources, and model work shows "Configure a provider" until one is set.
 
 ## Where settings live
 

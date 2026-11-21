@@ -33,14 +33,14 @@ func (a *cliOpencodeAdapter) Complete(ctx context.Context, r Request) (Response,
 	}
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
-	env := append(isolatedEnv(),
+	env := append(IsolatedEnv(),
 		"OPENCODE_DISABLE_PROJECT_CONFIG=1",
 		"OPENCODE_DISABLE_EXTERNAL_SKILLS=1",
 		"OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=1",
 	)
-	out, err := runCLI(ctx, a.program,
+	out, err := RunCLI(ctx, a.program,
 		[]string{"run", "--pure", "--format", "json", "--model", a.model},
-		r.Prompt, env)
+		r.Prompt, env, maxModelCLIOutput)
 	if err != nil {
 		return Response{}, err
 	}

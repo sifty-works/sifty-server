@@ -39,7 +39,7 @@ func (a *cliClaudeAdapter) Complete(ctx context.Context, r Request) (Response, e
 	if len(r.Schema) > 0 {
 		args = append(args, "--json-schema", string(r.Schema))
 	}
-	out, err := runCLI(ctx, a.program, args, r.Prompt, isolatedEnv())
+	out, err := RunCLI(ctx, a.program, args, r.Prompt, IsolatedEnv(), maxModelCLIOutput)
 	if err != nil {
 		return Response{}, err
 	}

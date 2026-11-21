@@ -61,11 +61,16 @@ type analyzeFix struct {
 
 func newAnalyzeFix(t *testing.T) analyzeFix {
 	t.Helper()
+	return newAnalyzeFixWithPDF(t, candidate.ProgramText{Program: filepath.Join(t.TempDir(), "absent")})
+}
+
+func newAnalyzeFixWithPDF(t *testing.T, pdfText candidate.TextSource) analyzeFix {
+	t.Helper()
 	d := openTestDB(t)
 	r := runner.New(d, nil, time.Now, slog.Default())
 	fm := &models.FakeModel{}
 	registerKindsWith(t, r, d, fm)
-	base := newRouteServer(t, d, r)
+	base := newRouteServerWithPDF(t, d, r, pdfText)
 	return analyzeFix{d: d, r: r, fm: fm, base: base}
 }
 
@@ -452,18 +457,96 @@ func TestAnalyzeOneModelCallPerChunk(t *testing.T) {
 	}
 }
 
-func TestAnalyzeDocumentWithNoTextRefused(t *testing.T) {
-	d := openTestDB(t)
-	base := newRouteServer(t, d, nil)
+func TestPdfCannotBeAnalysedUntilTheProgramHasReadIt(t *testing.T) {
+	program := filepath.Join(t.TempDir(), "pdftotext.sh")
+	fix := newAnalyzeFixWithPDF(t, candidate.ProgramText{Program: program, Args: []string{"-", "-"}})
+	fix.fm.AddReply(models.Response{Text: fakeProposalReply([]map[string]any{
+		{"field": "skill", "value": "Go", "quote": "Expert Go developer."},
+	})})
 
-	d.Exec(`INSERT INTO document (name, kind, state, state_reason, char_count, evidence, text, file_name, created_at) VALUES ('empty.pdf', 'pdf', 'unavailable', 'PDF text extraction is not available yet.', 0, 0, '', '', datetime('now'))`)
-	var docID int64
-	d.QueryRow(`SELECT last_insert_rowid()`).Scan(&docID)
-
-	out, status := apiSend(t, http.MethodPost, base, fmt.Sprintf("/api/documents/%d/analyze", docID), nil)
-	if status != http.StatusUnprocessableEntity {
-		t.Errorf("analyze unavailable: status %d, want 422; body: %v", status, out)
+	resp, err := http.Post(fix.base+"/api/documents?name=cv.pdf", "application/pdf", strings.NewReader("%PDF-1.4 invented bytes"))
+	if err != nil {
+		t.Fatalf("upload: %v", err)
 	}
+	var doc map[string]any
+	json.NewDecoder(resp.Body).Decode(&doc)
+	resp.Body.Close()
+	if doc["state"] != "unavailable" {
+		t.Fatalf("state = %v, want unavailable", doc["state"])
+	}
+	path := fmt.Sprintf("/api/documents/%.0f", doc["id"])
+
+	out, status := apiSend(t, http.MethodPost, fix.base, path+"/analyze", nil)
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("analyze before reading: status %d, want 422; body: %v", status, out)
+	}
+
+	os.WriteFile(program, []byte("#!/bin/sh\ncat >/dev/null\nprintf 'Expert Go developer.'"), 0755)
+	out, status = apiSend(t, http.MethodPost, fix.base, path+"/refresh", nil)
+	if status != http.StatusOK || out["state"] != "ready" {
+		t.Fatalf("refresh: status %d, body: %v; want ready", status, out)
+	}
+	out, status = apiSend(t, http.MethodPost, fix.base, path+"/analyze", nil)
+	if status != http.StatusOK || out["state"] != "analysing" {
+		t.Fatalf("analyze after reading: status %d, body: %v; want analysing", status, out)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go fix.r.Start(ctx)
+	waitForDocState(t, fix.base, doc["id"].(float64), "analysed", 5*time.Second)
+}
+
+func TestPdfProgramIsStartedByNameWithAReducedEnvironment(t *testing.T) {
+	uploadPDF := func(t *testing.T, port int) map[string]any {
+		t.Helper()
+		resp, err := http.Post(fmt.Sprintf("http://127.0.0.1:%d/api/documents?name=cv.pdf", port), "application/pdf", strings.NewReader("%PDF-1.4 invented bytes"))
+		if err != nil {
+			t.Fatalf("upload: %v", err)
+		}
+		defer resp.Body.Close()
+		var doc map[string]any
+		json.NewDecoder(resp.Body).Decode(&doc)
+		return doc
+	}
+
+	t.Run("program on the path", func(t *testing.T) {
+		bin, work := t.TempDir(), t.TempDir()
+		script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" > %[1]s/args\n/usr/bin/env > %[1]s/env\n/bin/cat > /dev/null\nprintf 'Jane Roe'\n", work)
+		if err := os.WriteFile(filepath.Join(bin, "pdftotext"), []byte(script), 0755); err != nil {
+			t.Fatalf("write script: %v", err)
+		}
+		t.Setenv("PATH", bin)
+		t.Setenv("SIFTY_TEST_SECRET", "invented-provider-key")
+		port, cancel := startServer(t, t.TempDir(), true)
+		defer cancel()
+
+		doc := uploadPDF(t, port)
+		if doc["state"] != "ready" || doc["charCount"] != float64(8) {
+			t.Errorf("document = %v, want ready with the script's 8 characters", doc)
+		}
+		if args, _ := os.ReadFile(filepath.Join(work, "args")); string(args) != "-\n-\n" {
+			t.Errorf("arguments = %q, want a dash twice", args)
+		}
+		env, _ := os.ReadFile(filepath.Join(work, "env"))
+		if !strings.Contains(string(env), "PATH=") {
+			t.Errorf("the program recorded no environment")
+		}
+		if strings.Contains(string(env), "SIFTY_TEST_SECRET") || strings.Contains(string(env), "invented-provider-key") {
+			t.Errorf("the server's own environment reached the program")
+		}
+	})
+
+	t.Run("program missing from the path", func(t *testing.T) {
+		t.Setenv("PATH", t.TempDir())
+		port, cancel := startServer(t, t.TempDir(), true)
+		defer cancel()
+
+		doc := uploadPDF(t, port)
+		if reason, _ := doc["stateReason"].(string); doc["state"] != "unavailable" || !strings.Contains(reason, "poppler") {
+			t.Errorf("document = %v, want unavailable with a reason that names poppler", doc)
+		}
+	})
 }
 
 func TestProposalListShowsDocumentName(t *testing.T) {
