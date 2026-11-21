@@ -41,11 +41,23 @@ func registerAllRoutes(
 		}
 		return r.Enqueue(runner.Spec{Kind: kind, Subject: subject})
 	}
+	cancel := func(kind, subject string) error {
+		if r == nil {
+			return nil
+		}
+		for _, j := range r.Active(kind) {
+			if j.Subject == subject {
+				return r.Cancel(j.ID)
+			}
+		}
+		return nil
+	}
 	server.Handle(mux, "POST /api/providers/{name}/check", logger, models.CheckProviderHandler(gate))
 	server.Handle(mux, "GET /api/models", logger, models.ModelsHandler(gate))
 	server.Handle(mux, "PATCH /api/models", logger, models.PatchModelsHandler(gate))
 	inbox.RegisterRoutes(mux, database, now, logger, collectActive, sourceNames, rules, recomputeFit)
 	inbox.RegisterIndustryRoutes(mux, logger)
 	candidate.RegisterRoutes(mux, database, filesDir, pdfText, logger, recomputeFit, enqueue)
+	server.Handle(mux, "POST /api/documents/{id}/cancel", logger, candidate.CancelAnalysisHandler(database, cancel))
 	col.RegisterRoutes(mux)
 }

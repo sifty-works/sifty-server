@@ -112,12 +112,14 @@ type Answerer   interface { Answer(ctx context.Context, v Vacancy, f Form, have 
 type Spec struct { Kind, Subject string; Priority int; Params json.RawMessage }
 type Runner interface {
     Enqueue(Spec) (int64, error)          // deduplicated by (kind, subject) among queued and running
+    Cancel(id int64) error                // stops a queued or running job and leaves it `cancelled`
 }
 ```
 
 - One table `job(id, kind, subject, priority, state, attempts, not_before, progress, error, params, created, updated)` runs every kind of background work: `collect`, `read_vacancy`, `recompute_fit`, `shortlist_check`, `locate`, `prepare`, `analyze_document`, `retention`. Finished jobs are kept for 90 days.
 - **Lanes are taken per stage, not per job:** `browser` (1) for reading a form, `net` (several) for collection and search, `cpu` (1) for recomputation. A model is not a lane; a stage that needs one takes the model gate per call and holds no lane while it waits, so reading a form never waits for a model.
 - **Restart:** a job that was running becomes `interrupted`. Automatic kinds (`read_vacancy`, `recompute_fit`, `shortlist_check`, `retention`) are queued again while they have had fewer than three attempts, else `failed`. `locate` is queued again as a boards-only search. `collect`, `prepare` and `analyze_document` stay `interrupted` until the user retries; for `prepare` this follows the decision that failed preparations are not retried automatically.
+- **Cancel:** the job states are `queued`, `running`, `done`, `failed`, `interrupted` and `cancelled`. A cancelled job is a decision of the user and is answered at once: a queued job never starts, and a running job has its context cancelled without waiting for it to notice. The saved `params` of a cancelled job are kept, so retrying an `analyze_document` takes the job over and continues from the saved chunk, as it does for an `interrupted` one. A restart does not queue a cancelled job again.
 - **Retries:** one policy, exponential pause, at most three attempts.
 - **Schedule:** a ticker every five minutes queues `collect` when automatic collection is on and the interval since the start of the last run has passed. Loading the application calls `POST /api/collect` without `force`, which applies the same rule at once. "Collect jobs" calls it with `force`. `retention` is queued daily.
 - **Status:** one endpoint or event stream replaces separate polls of queues, analysis and health. The list reloads only when decisions or visibility change; a new fit result reloads only visible rows or the open vacancy.

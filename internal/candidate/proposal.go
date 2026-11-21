@@ -3,8 +3,11 @@ package candidate
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/db"
 )
 
@@ -65,6 +68,35 @@ func updateDocumentAnalysing(ctx context.Context, database *db.DB, docID int64) 
 	_, err := database.ExecContext(ctx,
 		`UPDATE document SET state='analysing', state_reason='' WHERE id=?`, docID)
 	return err
+}
+
+func CancelAnalysisHandler(database *db.DB, cancel func(kind, subject string) error) func(*http.Request, struct{}) (DocumentItem, error) {
+	return func(r *http.Request, _ struct{}) (DocumentItem, error) {
+		ctx := r.Context()
+		id, err := parseDocumentID(r)
+		if err != nil {
+			return DocumentItem{}, err
+		}
+		row, err := loadDocumentRow(ctx, database, id)
+		if err != nil {
+			return DocumentItem{}, err
+		}
+		if row.State != "analysing" {
+			return DocumentItem{}, apperr.Conflict{Message: "This document is not being analysed."}
+		}
+		if err := cancel("analyze_document", strconv.FormatInt(id, 10)); err != nil {
+			return DocumentItem{}, fmt.Errorf("candidate: cancel analysis: %w", err)
+		}
+		if _, err := database.ExecContext(ctx,
+			`UPDATE document SET state='ready', state_reason='Analysis cancelled.' WHERE id=? AND state='analysing'`, id); err != nil {
+			return DocumentItem{}, fmt.Errorf("candidate: set cancelled: %w", err)
+		}
+		row, err = loadDocumentRow(ctx, database, id)
+		if err != nil {
+			return DocumentItem{}, err
+		}
+		return rowToItem(row), nil
+	}
 }
 
 func updateDocumentError(ctx context.Context, database *db.DB, docID int64, reason string) error {

@@ -23,6 +23,11 @@ const (
 	stateInterrupted = "interrupted"
 )
 
+var (
+	errCancelled = errors.New("runner: job cancelled")
+	errNotQueued = errors.New("runner: job is no longer queued")
+)
+
 var retryDelays = [2]time.Duration{30 * time.Second, 2 * time.Minute}
 
 type Spec struct {
@@ -81,7 +86,7 @@ func (j *Job) SaveParams(ctx context.Context, params json.RawMessage) error {
 func (r *Runner) AdoptInterrupted(kind, subject string) (int64, bool, error) {
 	var id int64
 	err := r.db.QueryRow(
-		`SELECT id FROM job WHERE kind=? AND subject=? AND state='interrupted' ORDER BY id DESC LIMIT 1`,
+		`SELECT id FROM job WHERE kind=? AND subject=? AND state IN ('interrupted','cancelled') ORDER BY id DESC LIMIT 1`,
 		kind, subject,
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -92,7 +97,7 @@ func (r *Runner) AdoptInterrupted(kind, subject string) (int64, bool, error) {
 	}
 	now := r.now().UTC().Format(time.RFC3339)
 	res, err := r.db.Exec(
-		`UPDATE job SET state='queued', not_before=?, updated=? WHERE id=? AND state='interrupted'`,
+		`UPDATE job SET state='queued', not_before=?, updated=? WHERE id=? AND state IN ('interrupted','cancelled')`,
 		now, now, id,
 	)
 	if err != nil {
@@ -152,6 +157,7 @@ type jobState struct {
 	mu     sync.Mutex
 	progAt time.Time
 	job    *Job
+	stop   context.CancelCauseFunc
 }
 
 type Runner struct {
@@ -239,6 +245,24 @@ func (r *Runner) Enqueue(s Spec) (int64, error) {
 	return id, nil
 }
 
+func (r *Runner) Cancel(id int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	res, err := r.db.Exec(
+		`UPDATE job SET state='cancelled', updated=? WHERE id=? AND state IN ('queued','running')`,
+		r.now().UTC().Format(time.RFC3339), id,
+	)
+	if err != nil {
+		return fmt.Errorf("runner: cancel: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		if st := r.active[id]; st != nil {
+			st.stop(errCancelled)
+		}
+	}
+	return nil
+}
+
 func (r *Runner) Last(kind string) (Job, bool) {
 	row := r.db.QueryRow(
 		`SELECT id, kind, subject, priority, state, attempts, not_before,
@@ -300,17 +324,26 @@ func (r *Runner) dispatch(ctx context.Context) {
 		if err != nil || j == nil {
 			return
 		}
-		if err := r.markRunning(j); err != nil {
+		j.r = r
+		jobCtx, stop := context.WithCancelCause(ctx)
+		r.mu.Lock()
+		err = r.markRunning(j)
+		if err == nil {
+			r.active[j.ID] = &jobState{job: j, stop: stop}
+		}
+		r.mu.Unlock()
+		if err != nil {
+			stop(nil)
+			if errors.Is(err, errNotQueued) {
+				continue
+			}
 			return
 		}
 		kind := r.kinds[j.Kind]
-		j.r = r
-		state := &jobState{job: j}
-		r.mu.Lock()
-		r.active[j.ID] = state
-		r.mu.Unlock()
-
-		go r.runJob(ctx, j, kind)
+		go func() {
+			defer stop(nil)
+			r.runJob(jobCtx, j, kind)
+		}()
 	}
 }
 
@@ -361,12 +394,15 @@ func (r *Runner) pickOne() (*Job, error) {
 func (r *Runner) markRunning(j *Job) error {
 	now := r.now().UTC().Format(time.RFC3339)
 	j.Attempts++
-	_, err := r.db.Exec(
+	res, err := r.db.Exec(
 		`UPDATE job SET state='running', attempts=?, updated=? WHERE id=? AND state='queued'`,
 		j.Attempts, now, j.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("runner: mark running: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return errNotQueued
 	}
 	j.State = stateRunning
 	j.Updated = r.now()
@@ -392,9 +428,12 @@ func (r *Runner) runJob(ctx context.Context, j *Job, kind Kind) {
 
 func (r *Runner) finishJob(ctx context.Context, j *Job, runErr error) {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	delete(r.active, j.ID)
-	r.mu.Unlock()
 
+	if errors.Is(context.Cause(ctx), errCancelled) {
+		return
+	}
 	if runErr != nil && ctx.Err() != nil {
 		return
 	}
@@ -500,7 +539,7 @@ func (r *Runner) acquireLane(ctx context.Context, name string) (func(), error) {
 func (r *Runner) deleteOldJobs() {
 	cutoff := r.now().UTC().Add(-90 * 24 * time.Hour).Format(time.RFC3339)
 	if _, err := r.db.Exec(
-		`DELETE FROM job WHERE state IN ('done','failed','interrupted') AND created < ?`, cutoff,
+		`DELETE FROM job WHERE state IN ('done','failed','interrupted','cancelled') AND created < ?`, cutoff,
 	); err != nil {
 		r.log.Warn("runner: failed to delete old jobs", "error", err)
 	}
