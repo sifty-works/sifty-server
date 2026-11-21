@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -45,46 +44,30 @@ work: {reading: localbox, shortlist_check: localbox, preparation: cloudbox}
 daily_model_limit: 25
 `
 
-func startModelsServe(t *testing.T) (string, string) {
+func startModelsServe(t *testing.T) (base, dir string) {
 	t.Helper()
-	dir := t.TempDir()
+	dir = t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "sifty.yaml"), []byte(twoProviderYAML), 0600); err != nil {
 		t.Fatalf("write settings: %v", err)
 	}
-	port, cancel := startServe(t, dir)
+	port, cancel := startServer(t, dir, true)
 	t.Cleanup(cancel)
-	return dir, fmt.Sprintf("http://127.0.0.1:%d", port)
+	base = fmt.Sprintf("http://127.0.0.1:%d", port)
+	return base, dir
 }
 
 func getModels(t *testing.T, base string) modelsResp {
 	t.Helper()
-	resp, err := http.Get(base + "/api/models")
-	if err != nil || resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /api/models: %v, response %v", err, resp)
+	body, status := apiGet(t, base, "/api/models")
+	if status != http.StatusOK {
+		t.Fatalf("GET /api/models: status %d", status)
 	}
-	defer resp.Body.Close()
+	b, _ := json.Marshal(body)
 	var out modelsResp
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	if err := json.Unmarshal(b, &out); err != nil {
 		t.Fatalf("decode models: %v", err)
 	}
 	return out
-}
-
-func sendJSON(t *testing.T, method, url, body string) (int, string) {
-	t.Helper()
-	req, _ := http.NewRequest(method, url, strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("%s %s: %v", method, url, err)
-	}
-	defer resp.Body.Close()
-	out, _ := io.ReadAll(resp.Body)
-	return resp.StatusCode, string(out)
-}
-
-func patchModels(t *testing.T, base, body string) (int, string) {
-	return sendJSON(t, http.MethodPatch, base+"/api/models", body)
 }
 
 func workProvider(m modelsResp, kind string) string {
@@ -97,7 +80,8 @@ func workProvider(m modelsResp, kind string) string {
 }
 
 func TestModelsListsBothProvidersTheWorkKindsAndTheSwitches(t *testing.T) {
-	_, base := startModelsServe(t)
+	base, _ := startModelsServe(t)
+
 	m := getModels(t, base)
 
 	const want = "[{cloudbox openai cloud-mini paid } {localbox ollama tiny-local local }]"
@@ -119,10 +103,10 @@ func TestModelsListsBothProvidersTheWorkKindsAndTheSwitches(t *testing.T) {
 }
 
 func TestChangingTheProviderOfAKindOfWorkKeepsTheFileComments(t *testing.T) {
-	dir, base := startModelsServe(t)
+	base, dir := startModelsServe(t)
 
-	if status, body := patchModels(t, base, `{"work":{"reading":"cloudbox"}}`); status != http.StatusOK {
-		t.Fatalf("patch: status %d, body %s", status, body)
+	if result, status := apiSend(t, http.MethodPatch, base, "/api/models", `{"work":{"reading":"cloudbox"}}`); status != http.StatusOK {
+		t.Fatalf("patch: status %d, body %v", status, result)
 	}
 	if got := workProvider(getModels(t, base), "reading"); got != "cloudbox" {
 		t.Errorf("reading provider after the change: %q", got)
@@ -135,21 +119,21 @@ func TestChangingTheProviderOfAKindOfWorkKeepsTheFileComments(t *testing.T) {
 }
 
 func TestEachSwitchOfTheModelsSectionChangesOnlyWhatItNames(t *testing.T) {
-	_, base := startModelsServe(t)
+	base, _ := startModelsServe(t)
 
-	patchModels(t, base, `{"paused":true}`)
+	apiSend(t, http.MethodPatch, base, "/api/models", `{"paused":true}`)
 	if m := getModels(t, base); !m.Paused || m.AllowPaidBulk || m.DailyLimit != 25 || workProvider(m, "reading") != "localbox" {
 		t.Errorf("after pausing: %+v", m)
 	}
-	patchModels(t, base, `{"allowPaidBulk":true}`)
+	apiSend(t, http.MethodPatch, base, "/api/models", `{"allowPaidBulk":true}`)
 	if m := getModels(t, base); !m.AllowPaidBulk || !m.Paused || m.DailyLimit != 25 {
 		t.Errorf("after allowing paid bulk work: %+v", m)
 	}
-	patchModels(t, base, `{"dailyLimit":0}`)
+	apiSend(t, http.MethodPatch, base, "/api/models", `{"dailyLimit":0}`)
 	if m := getModels(t, base); m.DailyLimit != 0 || !m.Paused || !m.AllowPaidBulk {
 		t.Errorf("after clearing the daily limit: %+v", m)
 	}
-	patchModels(t, base, `{"work":{"reading":"cloudbox"}}`)
+	apiSend(t, http.MethodPatch, base, "/api/models", `{"work":{"reading":"cloudbox"}}`)
 	if m := getModels(t, base); workProvider(m, "reading") != "cloudbox" ||
 		workProvider(m, "shortlist_check") != "localbox" || workProvider(m, "preparation") != "cloudbox" ||
 		!m.Paused || !m.AllowPaidBulk || m.DailyLimit != 0 {
@@ -158,16 +142,16 @@ func TestEachSwitchOfTheModelsSectionChangesOnlyWhatItNames(t *testing.T) {
 }
 
 func TestAnUnknownProviderOrKindOfWorkIsRefusedAndChangesNothing(t *testing.T) {
-	_, base := startModelsServe(t)
+	base, _ := startModelsServe(t)
 
-	for body, message := range map[string]string{
+	for payload, message := range map[string]string{
 		`{"work":{"reading":"nowhere"}}`:   "nowhere",
 		`{"work":{"dreaming":"localbox"}}`: "dreaming",
 		`{"dailyLimit":-1}`:                "0 or more",
 	} {
-		status, out := patchModels(t, base, body)
-		if status != http.StatusUnprocessableEntity || !strings.Contains(out, message) {
-			t.Errorf("PATCH %s: status %d, body %s", body, status, out)
+		result, status := apiSend(t, http.MethodPatch, base, "/api/models", payload)
+		if status != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(result["error"]), message) {
+			t.Errorf("PATCH %s: status %d, body %v", payload, status, result)
 		}
 	}
 	if m := getModels(t, base); workProvider(m, "reading") != "localbox" || m.DailyLimit != 25 {
@@ -176,7 +160,7 @@ func TestAnUnknownProviderOrKindOfWorkIsRefusedAndChangesNothing(t *testing.T) {
 }
 
 func TestTheDaysCountHoldsOnlyTodaysBackgroundCalls(t *testing.T) {
-	dir, base := startModelsServe(t)
+	base, dir := startModelsServe(t)
 
 	database, err := db.Open(filepath.Join(dir, "sifty.db"), db.Migrations)
 	if err != nil {
@@ -200,9 +184,9 @@ func TestTheDaysCountHoldsOnlyTodaysBackgroundCalls(t *testing.T) {
 }
 
 func TestTheSeparatePauseAddressIsNoLongerUsed(t *testing.T) {
-	_, base := startModelsServe(t)
+	base, _ := startModelsServe(t)
 
-	status, _ := sendJSON(t, http.MethodPut, base+"/api/models/pause", `{"paused":true}`)
+	_, status := apiSend(t, http.MethodPut, base, "/api/models/pause", `{"paused":true}`)
 	if status != http.StatusNotFound || getModels(t, base).Paused {
 		t.Errorf("the old address answered %d and left the pause switch at %v", status, getModels(t, base).Paused)
 	}

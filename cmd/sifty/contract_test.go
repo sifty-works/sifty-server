@@ -12,7 +12,7 @@ import (
 
 func TestContractResponseShapes(t *testing.T) {
 	dir := t.TempDir()
-	port, cancel := startServe(t, dir)
+	port, cancel := startServer(t, dir, true)
 	defer cancel()
 
 	base := fmt.Sprintf("http://127.0.0.1:%d", port)
@@ -60,7 +60,7 @@ func TestContractResponseShapes(t *testing.T) {
 
 func TestContractSchemaMatchesShape(t *testing.T) {
 	dir := t.TempDir()
-	_, cancel := startServe(t, dir)
+	_, cancel := startServer(t, dir, true)
 	defer cancel()
 
 	schemas := map[string]any{}

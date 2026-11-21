@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log/slog"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,16 +13,6 @@ import (
 )
 
 var retentionBase = time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
-
-func openRetentionTestDB(t *testing.T) *db.DB {
-	t.Helper()
-	d, err := db.Open(filepath.Join(t.TempDir(), "test.db"), db.Migrations)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { d.Close() })
-	return d
-}
 
 func expiryPosting(url string, expires time.Time) listing.Posting {
 	return listing.Posting{
@@ -62,7 +51,7 @@ func runRetentionJob(t *testing.T, d *db.DB, cat *catalog.Catalog, now time.Time
 }
 
 func TestRetentionExpiredVacanciesWithoutApplicationRemoved(t *testing.T) {
-	d := openRetentionTestDB(t)
+	d := openTestDB(t)
 	now := retentionBase
 	twoDaysAgo := now.Add(-48 * time.Hour)
 	fewHoursAgo := now.Add(-6 * time.Hour)
@@ -115,7 +104,7 @@ func TestRetentionExpiredVacanciesWithoutApplicationRemoved(t *testing.T) {
 }
 
 func TestRetentionSecondRunRemovesNothing(t *testing.T) {
-	d := openRetentionTestDB(t)
+	d := openTestDB(t)
 	now := retentionBase
 	cat := catalog.New(d, func() time.Time { return now })
 	ctx := context.Background()
@@ -133,7 +122,7 @@ func TestRetentionSecondRunRemovesNothing(t *testing.T) {
 }
 
 func TestRetentionJobResumesAfterRestart(t *testing.T) {
-	d := openRetentionTestDB(t)
+	d := openTestDB(t)
 	ts := retentionBase.UTC().Format(time.RFC3339)
 	_, err := d.Exec(
 		`INSERT INTO job (kind,subject,priority,state,attempts,not_before,progress,error,params,created,updated)

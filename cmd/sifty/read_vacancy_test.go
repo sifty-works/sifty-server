@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -30,16 +29,6 @@ func (c *testClock) Advance(d time.Duration) {
 	c.mu.Lock()
 	c.now = c.now.Add(d)
 	c.mu.Unlock()
-}
-
-func openReadVacancyTestDB(t *testing.T) *db.DB {
-	t.Helper()
-	d, err := db.Open(filepath.Join(t.TempDir(), "test.db"), db.Migrations)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { d.Close() })
-	return d
 }
 
 func insertFullVacancy(t *testing.T, d *db.DB, url, title, company string) (id int64) {
@@ -93,33 +82,34 @@ func registerReadVacancyKind(r *runner.Runner, d *db.DB, m *models.FakeModel) {
 	})
 }
 
-func waitForJobState(t *testing.T, r *runner.Runner, kind, state string, timeout time.Duration) runner.Job {
+type readVacancyFix struct {
+	d  *db.DB
+	id int64
+	fm *models.FakeModel
+	r  *runner.Runner
+}
+
+func newReadVacancyFix(t *testing.T, url string) readVacancyFix {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if j, ok := r.Last(kind); ok && j.State == state {
-			return j
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Fatalf("job %q did not reach state %q within %v", kind, state, timeout)
-	return runner.Job{}
+	d := openTestDB(t)
+	id := insertFullVacancy(t, d, url, "Backend Engineer", "Stackworks")
+	fm := &models.FakeModel{}
+	r := runner.New(d, nil, time.Now, slog.Default())
+	registerReadVacancyKind(r, d, fm)
+	return readVacancyFix{d: d, id: id, fm: fm, r: r}
 }
 
 func TestReadVacancy_reads_vacancy_and_saves_reading(t *testing.T) {
-	d := openReadVacancyTestDB(t)
-	id := insertFullVacancy(t, d, "https://jobs.example.com/rv1", "Backend Engineer", "Stackworks")
+	fix := newReadVacancyFix(t, "https://jobs.example.com/rv1")
+	fix.fm.AddReply(models.Response{Text: emptyReadingReply()})
 
-	fm := &models.FakeModel{}
-	fm.AddReply(models.Response{Text: emptyReadingReply()})
-
-	specs, err := runReadVacancyDirect(t, d, id, 1, fm)
+	specs, err := runReadVacancyDirect(t, fix.d, fix.id, 1, fix.fm)
 	if err != nil {
 		t.Fatalf("runReadVacancy: %v", err)
 	}
 
 	var readerVer string
-	d.QueryRow(`SELECT reader_version FROM vacancy_reading WHERE vacancy_id=?`, id).Scan(&readerVer)
+	fix.d.QueryRow(`SELECT reader_version FROM vacancy_reading WHERE vacancy_id=?`, fix.id).Scan(&readerVer)
 	if readerVer == "" {
 		t.Error("reading was not saved to vacancy_reading")
 	}
@@ -133,29 +123,25 @@ func TestReadVacancy_reads_vacancy_and_saves_reading(t *testing.T) {
 }
 
 func TestReadVacancy_deleted_vacancy_ends_without_error(t *testing.T) {
-	d := openReadVacancyTestDB(t)
-	id := insertFullVacancy(t, d, "https://jobs.example.com/rv2", "Platform Engineer", "Stackworks")
-	d.Exec(`DELETE FROM vacancy WHERE id=?`, id)
+	fix := newReadVacancyFix(t, "https://jobs.example.com/rv2")
+	fix.d.Exec(`DELETE FROM vacancy WHERE id=?`, fix.id)
 
-	fm := &models.FakeModel{}
-	specs, err := runReadVacancyDirect(t, d, id, 1, fm)
+	specs, err := runReadVacancyDirect(t, fix.d, fix.id, 1, fix.fm)
 	if err != nil {
 		t.Fatalf("expected no error when vacancy deleted, got: %v", err)
 	}
 	if len(specs) != 0 {
 		t.Errorf("expected no specs enqueued, got %v", specs)
 	}
-	if len(fm.Calls()) != 0 {
+	if len(fix.fm.Calls()) != 0 {
 		t.Errorf("model should not be called for deleted vacancy")
 	}
 }
 
 func TestReadVacancy_version_mismatch_ends_without_error(t *testing.T) {
-	d := openReadVacancyTestDB(t)
-	id := insertFullVacancy(t, d, "https://jobs.example.com/rv3", "Platform Engineer", "Stackworks")
+	fix := newReadVacancyFix(t, "https://jobs.example.com/rv3")
 
-	fm := &models.FakeModel{}
-	specs, err := runReadVacancyDirect(t, d, id, 99, fm)
+	specs, err := runReadVacancyDirect(t, fix.d, fix.id, 99, fix.fm)
 	if err != nil {
 		t.Fatalf("expected no error on version mismatch, got: %v", err)
 	}
@@ -165,25 +151,19 @@ func TestReadVacancy_version_mismatch_ends_without_error(t *testing.T) {
 }
 
 func TestReadVacancy_wait_error_requeues_without_counting_attempt(t *testing.T) {
-	d := openReadVacancyTestDB(t)
-	id := insertFullVacancy(t, d, "https://jobs.example.com/rv4", "Data Engineer", "Stackworks")
-
+	fix := newReadVacancyFix(t, "https://jobs.example.com/rv4")
 	retryAt := time.Now().Add(10 * time.Minute).Truncate(time.Second)
-	fm := &models.FakeModel{}
-	fm.AddError(models.WaitError{RetryAfter: retryAt})
-	fm.AddReply(models.Response{Text: emptyReadingReply()})
+	fix.fm.AddError(models.WaitError{RetryAfter: retryAt})
+	fix.fm.AddReply(models.Response{Text: emptyReadingReply()})
 
-	r := runner.New(d, nil, time.Now, slog.Default())
-	registerReadVacancyKind(r, d, fm)
-
-	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", id)})
+	fix.r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", fix.id)})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go r.Start(ctx)
+	go fix.r.Start(ctx)
 
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if j, ok := r.Last("read_vacancy"); ok && j.State == "queued" && j.Error != "" {
+		if j, ok := fix.r.Last("read_vacancy"); ok && j.State == "queued" && j.Error != "" {
 			if j.Attempts != 0 {
 				t.Errorf("wait error should not count as attempt: attempts=%d", j.Attempts)
 			}
@@ -200,24 +180,18 @@ func TestReadVacancy_wait_error_requeues_without_counting_attempt(t *testing.T) 
 }
 
 func TestReadVacancy_paid_bulk_refused_leaves_job_waiting(t *testing.T) {
-	d := openReadVacancyTestDB(t)
-	id := insertFullVacancy(t, d, "https://jobs.example.com/rv5", "DevOps Engineer", "Stackworks")
+	fix := newReadVacancyFix(t, "https://jobs.example.com/rv5")
+	fix.fm.AddError(models.ErrBulkOnPaid)
+	fix.fm.AddReply(models.Response{Text: emptyReadingReply()})
 
-	fm := &models.FakeModel{}
-	fm.AddError(models.ErrBulkOnPaid)
-	fm.AddReply(models.Response{Text: emptyReadingReply()})
-
-	r := runner.New(d, nil, time.Now, slog.Default())
-	registerReadVacancyKind(r, d, fm)
-
-	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", id)})
+	fix.r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", fix.id)})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go r.Start(ctx)
+	go fix.r.Start(ctx)
 
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if j, ok := r.Last("read_vacancy"); ok && j.State == "queued" && j.Error != "" {
+		if j, ok := fix.r.Last("read_vacancy"); ok && j.State == "queued" && j.Error != "" {
 			if j.Attempts != 0 {
 				t.Errorf("paid bulk refused should not count as attempt: attempts=%d", j.Attempts)
 			}
@@ -232,19 +206,16 @@ func TestReadVacancy_paid_bulk_refused_leaves_job_waiting(t *testing.T) {
 }
 
 func TestReadVacancy_three_model_errors_fail_job(t *testing.T) {
-	d := openReadVacancyTestDB(t)
-	id := insertFullVacancy(t, d, "https://jobs.example.com/rv6", "Frontend Engineer", "Stackworks")
-
-	fm := &models.FakeModel{}
-	fm.AddError(errors.New("model error"))
-	fm.AddError(errors.New("model error"))
-	fm.AddError(errors.New("model error"))
+	fix := newReadVacancyFix(t, "https://jobs.example.com/rv6")
+	fix.fm.AddError(errors.New("model error"))
+	fix.fm.AddError(errors.New("model error"))
+	fix.fm.AddError(errors.New("model error"))
 
 	clk := newTestClock()
-	r := runner.New(d, nil, clk.Now, slog.Default())
-	registerReadVacancyKind(r, d, fm)
+	r := runner.New(fix.d, nil, clk.Now, slog.Default())
+	registerReadVacancyKind(r, fix.d, fix.fm)
 
-	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", id)})
+	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", fix.id)})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go r.Start(ctx)
@@ -260,14 +231,22 @@ func TestReadVacancy_three_model_errors_fail_job(t *testing.T) {
 		}
 	}()
 
-	j := waitForJobState(t, r, "read_vacancy", "failed", 5*time.Second)
+	var j runner.Job
+	waitFor(t, 5*time.Second, func() bool {
+		jj, ok := r.Last("read_vacancy")
+		if ok && jj.State == "failed" {
+			j = jj
+			return true
+		}
+		return false
+	})
 	if j.Attempts != 3 {
 		t.Errorf("attempts = %d, want 3", j.Attempts)
 	}
 }
 
 func TestReadVacancy_two_jobs_run_one_after_the_other(t *testing.T) {
-	d := openReadVacancyTestDB(t)
+	d := openTestDB(t)
 	id1 := insertFullVacancy(t, d, "https://jobs.example.com/rv7a", "Senior Engineer", "Alpha")
 	id2 := insertFullVacancy(t, d, "https://jobs.example.com/rv7b", "Lead Engineer", "Beta")
 
@@ -324,23 +303,20 @@ func TestReadVacancy_two_jobs_run_one_after_the_other(t *testing.T) {
 }
 
 func TestReadVacancy_vacancy_deleted_while_reading_saves_nothing(t *testing.T) {
-	d := openReadVacancyTestDB(t)
-	id := insertFullVacancy(t, d, "https://jobs.example.com/rv10", "Systems Engineer", "Stackworks")
-
-	fm := &models.FakeModel{}
-	fm.AddReply(models.Response{Text: emptyReadingReply()})
+	fix := newReadVacancyFix(t, "https://jobs.example.com/rv10")
+	fix.fm.AddReply(models.Response{Text: emptyReadingReply()})
 
 	var specs []runner.Spec
-	j := &runner.Job{Subject: fmt.Sprintf("%d/1", id)}
+	j := &runner.Job{Subject: fmt.Sprintf("%d/1", fix.id)}
 	var capturedVacancyID int64
 	err := runReadVacancy(
 		context.Background(),
 		j,
-		d,
+		fix.d,
 		func(vid int64) models.Model {
 			capturedVacancyID = vid
-			d.Exec(`DELETE FROM vacancy WHERE id=?`, id)
-			return fm
+			fix.d.Exec(`DELETE FROM vacancy WHERE id=?`, fix.id)
+			return fix.fm
 		},
 		func(s runner.Spec) (int64, error) {
 			specs = append(specs, s)
@@ -353,49 +329,43 @@ func TestReadVacancy_vacancy_deleted_while_reading_saves_nothing(t *testing.T) {
 	if len(specs) != 0 {
 		t.Errorf("expected no recompute_fit queued when vacancy deleted, got %v", specs)
 	}
-	if capturedVacancyID != id {
-		t.Errorf("model fn received vacancyID=%d, want %d", capturedVacancyID, id)
+	if capturedVacancyID != fix.id {
+		t.Errorf("model fn received vacancyID=%d, want %d", capturedVacancyID, fix.id)
 	}
 	var readingCount int
-	d.QueryRow(`SELECT count(*) FROM vacancy_reading WHERE vacancy_id=?`, id).Scan(&readingCount)
+	fix.d.QueryRow(`SELECT count(*) FROM vacancy_reading WHERE vacancy_id=?`, fix.id).Scan(&readingCount)
 	if readingCount != 0 {
 		t.Errorf("expected no reading saved when vacancy deleted, got count=%d", readingCount)
 	}
 }
 
 func TestReadVacancy_saves_reading_for_correct_version(t *testing.T) {
-	d := openReadVacancyTestDB(t)
-	id := insertFullVacancy(t, d, "https://jobs.example.com/rv12", "Cloud Engineer", "Stackworks")
+	fix := newReadVacancyFix(t, "https://jobs.example.com/rv12")
+	fix.fm.AddReply(models.Response{Text: emptyReadingReply()})
 
-	fm := &models.FakeModel{}
-	fm.AddReply(models.Response{Text: emptyReadingReply()})
-
-	_, err := runReadVacancyDirect(t, d, id, 1, fm)
+	_, err := runReadVacancyDirect(t, fix.d, fix.id, 1, fix.fm)
 	if err != nil {
 		t.Fatalf("runReadVacancy: %v", err)
 	}
 
 	var savedVersion int64
-	d.QueryRow(`SELECT version FROM vacancy_reading WHERE vacancy_id=?`, id).Scan(&savedVersion)
+	fix.d.QueryRow(`SELECT version FROM vacancy_reading WHERE vacancy_id=?`, fix.id).Scan(&savedVersion)
 	if savedVersion != 1 {
 		t.Errorf("reading version = %d, want 1", savedVersion)
 	}
 }
 
 func TestReadVacancy_reading_has_correct_reader_version(t *testing.T) {
-	d := openReadVacancyTestDB(t)
-	id := insertFullVacancy(t, d, "https://jobs.example.com/rv13", "Site Reliability Engineer", "Stackworks")
+	fix := newReadVacancyFix(t, "https://jobs.example.com/rv13")
+	fix.fm.AddReply(models.Response{Text: emptyReadingReply()})
 
-	fm := &models.FakeModel{}
-	fm.AddReply(models.Response{Text: emptyReadingReply()})
-
-	_, err := runReadVacancyDirect(t, d, id, 1, fm)
+	_, err := runReadVacancyDirect(t, fix.d, fix.id, 1, fix.fm)
 	if err != nil {
 		t.Fatalf("runReadVacancy: %v", err)
 	}
 
 	var savedReaderVer string
-	d.QueryRow(`SELECT reader_version FROM vacancy_reading WHERE vacancy_id=?`, id).Scan(&savedReaderVer)
+	fix.d.QueryRow(`SELECT reader_version FROM vacancy_reading WHERE vacancy_id=?`, fix.id).Scan(&savedReaderVer)
 	if savedReaderVer != reading.ReaderVersion() {
 		t.Errorf("reader_version = %q, want %q", savedReaderVer, reading.ReaderVersion())
 	}

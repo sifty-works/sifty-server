@@ -15,60 +15,9 @@ import (
 	"time"
 )
 
-func startServe(t *testing.T, dataDir string) (port int, cancel func()) {
-	t.Helper()
-	ctx, cancelCtx := context.WithCancel(context.Background())
-
-	pr, pw := io.Pipe()
-	stderr := io.Discard
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		run(ctx, []string{"serve", "--offline", "--data-dir", dataDir, "--port", "0"},
-			pw, stderr)
-		pw.Close()
-	}()
-
-	sc := bufio.NewScanner(pr)
-	portCh := make(chan int, 1)
-	go func() {
-		for sc.Scan() {
-			line := sc.Text()
-			if strings.HasPrefix(line, "Listening on http://127.0.0.1:") {
-				var p int
-				if _, err := fmt.Sscanf(line, "Listening on http://127.0.0.1:%d", &p); err == nil {
-					portCh <- p
-					return
-				}
-			}
-		}
-		portCh <- 0
-	}()
-
-	select {
-	case p := <-portCh:
-		if p == 0 {
-			cancelCtx()
-			t.Fatal("did not receive 'Listening on' line")
-		}
-		port = p
-	case <-time.After(10 * time.Second):
-		cancelCtx()
-		t.Fatal("timeout waiting for server to start")
-	}
-
-	cancel = func() {
-		cancelCtx()
-		<-done
-		pr.Close()
-	}
-	return port, cancel
-}
-
 func TestServeCreatesDataFolderWithRestrictedPermissions(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "newdata")
-	port, cancel := startServe(t, dir)
+	port, cancel := startServer(t, dir, true)
 	defer cancel()
 
 	info, err := os.Stat(dir)
@@ -91,7 +40,7 @@ func TestServeCreatesDataFolderWithRestrictedPermissions(t *testing.T) {
 
 func TestSecondServeOnSameFolderIsRefused(t *testing.T) {
 	dir := t.TempDir()
-	_, cancel := startServe(t, dir)
+	_, cancel := startServer(t, dir, true)
 	defer cancel()
 
 	var stderr bytes.Buffer
@@ -124,7 +73,7 @@ func TestBrokenSettingsFileIsRecoveredAtStart(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "sifty.yaml"), []byte("{{{: not valid yaml\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	port, cancel := startServe(t, dir)
+	port, cancel := startServer(t, dir, true)
 	defer cancel()
 
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/api/status", port))
@@ -160,7 +109,7 @@ func TestUnknownConfigKeyAppearsInStatusRecovered(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "sifty.yaml"), []byte("unknown_top_key: true\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	port, cancel := startServe(t, dir)
+	port, cancel := startServer(t, dir, true)
 	defer cancel()
 
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/api/status", port))
@@ -197,7 +146,7 @@ func TestUnknownConfigKeyAppearsInStatusRecovered(t *testing.T) {
 
 func TestPortZeroTakesAFreePortNotDefaultPort(t *testing.T) {
 	dir := t.TempDir()
-	port, cancel := startServe(t, dir)
+	port, cancel := startServer(t, dir, true)
 	defer cancel()
 
 	if port == 7373 {
@@ -318,7 +267,7 @@ func TestVersionCommand(t *testing.T) {
 
 func TestDocumentUploadLimitUsesRealServerWiring(t *testing.T) {
 	dir := t.TempDir()
-	port, cancel := startServe(t, dir)
+	port, cancel := startServer(t, dir, true)
 	defer cancel()
 
 	base := fmt.Sprintf("http://127.0.0.1:%d", port)

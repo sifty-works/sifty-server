@@ -15,16 +15,6 @@ import (
 	"github.com/sifty-works/sifty-server/internal/runner"
 )
 
-func openQueueTestDB(t *testing.T) *db.DB {
-	t.Helper()
-	d, err := db.Open(filepath.Join(t.TempDir(), "test.db"), db.Migrations)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { d.Close() })
-	return d
-}
-
 const readingProviderYAML = `providers:
   testprovider:
     type: ollama
@@ -127,23 +117,32 @@ func fixedNow() func() time.Time {
 const knownReaderVersion = "reading/1+aabbccdd"
 const oldReaderVersion = "reading/1+00000000"
 
-func TestQueueReadings_full_text_visible_vacancy_is_queued(t *testing.T) {
-	d := openQueueTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
+type queueFix struct {
+	d   *db.DB
+	cat *catalog.Catalog
+	ctx context.Context
+}
 
-	insertProfile(t, d, 1, "Platform Engineer")
-	id, _, err := cat.Upsert(ctx, postingFull("https://jobs.example.com/pe1", "Platform Engineer", "Stackworks"), "src")
+func newQueueFix(t *testing.T) queueFix {
+	t.Helper()
+	d := openTestDB(t)
+	return queueFix{d: d, cat: catalog.New(d, fixedNow()), ctx: context.Background()}
+}
+
+func TestQueueReadings_full_text_visible_vacancy_is_queued(t *testing.T) {
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Platform Engineer")
+	id, _, err := fix.cat.Upsert(fix.ctx, postingFull("https://jobs.example.com/pe1", "Platform Engineer", "Stackworks"), "src")
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 
 	store := openStoreWithReading(t)
-	if err := queueReadings(ctx, d, fakeEnqueue(d), store, false, knownReaderVersion); err != nil {
+	if err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, false, knownReaderVersion); err != nil {
 		t.Fatalf("queueReadings: %v", err)
 	}
 
-	subjects := collectQueuedSubjects(t, d)
+	subjects := collectQueuedSubjects(t, fix.d)
 	if len(subjects) != 1 {
 		t.Fatalf("queued count = %d, want 1; subjects=%v", len(subjects), subjects)
 	}
@@ -153,19 +152,16 @@ func TestQueueReadings_full_text_visible_vacancy_is_queued(t *testing.T) {
 	}
 
 	var priority int
-	d.QueryRow(`SELECT priority FROM job WHERE kind='read_vacancy'`).Scan(&priority)
+	fix.d.QueryRow(`SELECT priority FROM job WHERE kind='read_vacancy'`).Scan(&priority)
 	if priority != 0 {
 		t.Errorf("priority = %d, want 0 (new reading)", priority)
 	}
 }
 
 func TestQueueReadings_summary_only_vacancy_is_not_queued(t *testing.T) {
-	d := openQueueTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
-
-	insertProfile(t, d, 1, "Platform Engineer")
-	cat.Upsert(ctx, listing.Posting{
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Platform Engineer")
+	fix.cat.Upsert(fix.ctx, listing.Posting{
 		URL:       "https://jobs.example.com/sum1",
 		Title:     "Platform Engineer",
 		Company:   "Stackworks",
@@ -174,128 +170,113 @@ func TestQueueReadings_summary_only_vacancy_is_not_queued(t *testing.T) {
 	}, "src")
 
 	store := openStoreWithReading(t)
-	if err := queueReadings(ctx, d, fakeEnqueue(d), store, false, knownReaderVersion); err != nil {
+	if err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, false, knownReaderVersion); err != nil {
 		t.Fatalf("queueReadings: %v", err)
 	}
 
-	if subs := collectQueuedSubjects(t, d); len(subs) != 0 {
+	if subs := collectQueuedSubjects(t, fix.d); len(subs) != 0 {
 		t.Errorf("expected no queued jobs, got %v", subs)
 	}
 }
 
 func TestQueueReadings_hidden_vacancy_is_not_queued(t *testing.T) {
-	d := openQueueTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
-
-	insertProfile(t, d, 1, "Data Analyst")
-	cat.Upsert(ctx, postingFull("https://jobs.example.com/pe2", "Platform Engineer", "Stackworks"), "src")
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Data Analyst")
+	fix.cat.Upsert(fix.ctx, postingFull("https://jobs.example.com/pe2", "Platform Engineer", "Stackworks"), "src")
 
 	store := openStoreWithReading(t)
-	if err := queueReadings(ctx, d, fakeEnqueue(d), store, false, knownReaderVersion); err != nil {
+	if err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, false, knownReaderVersion); err != nil {
 		t.Fatalf("queueReadings: %v", err)
 	}
 
-	if subs := collectQueuedSubjects(t, d); len(subs) != 0 {
+	if subs := collectQueuedSubjects(t, fix.d); len(subs) != 0 {
 		t.Errorf("expected no queued jobs for hidden vacancy, got %v", subs)
 	}
 }
 
 func TestQueueReadings_vacancy_with_decision_is_visible(t *testing.T) {
-	d := openQueueTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
-
-	insertProfile(t, d, 1, "Data Analyst")
-	id, _, err := cat.Upsert(ctx, postingFull("https://jobs.example.com/pe3", "Platform Engineer", "Stackworks"), "src")
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Data Analyst")
+	id, _, err := fix.cat.Upsert(fix.ctx, postingFull("https://jobs.example.com/pe3", "Platform Engineer", "Stackworks"), "src")
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	d.Exec(`INSERT INTO decision (profile,vacancy,stage,reason,decided_at) VALUES (1,?,'shortlist','','2026-01-01T00:00:00Z')`, id)
+	fix.d.Exec(`INSERT INTO decision (profile,vacancy,stage,reason,decided_at) VALUES (1,?,'shortlist','','2026-01-01T00:00:00Z')`, id)
 
 	store := openStoreWithReading(t)
-	if err := queueReadings(ctx, d, fakeEnqueue(d), store, false, knownReaderVersion); err != nil {
+	if err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, false, knownReaderVersion); err != nil {
 		t.Fatalf("queueReadings: %v", err)
 	}
 
-	if subs := collectQueuedSubjects(t, d); len(subs) != 1 {
+	if subs := collectQueuedSubjects(t, fix.d); len(subs) != 1 {
 		t.Errorf("expected 1 queued job for vacancy with decision, got %v", subs)
 	}
 }
 
 func TestQueueReadings_imported_reading_is_not_reread(t *testing.T) {
-	d := openQueueTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
-
-	insertProfile(t, d, 1, "Platform Engineer")
-	id, _, err := cat.Upsert(ctx, postingFull("https://jobs.example.com/pe4", "Platform Engineer", "Stackworks"), "src")
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Platform Engineer")
+	id, _, err := fix.cat.Upsert(fix.ctx, postingFull("https://jobs.example.com/pe4", "Platform Engineer", "Stackworks"), "src")
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	d.Exec(`INSERT INTO vacancy_reading (vacancy_id,version,reader_version,record,created) VALUES (?,1,'import-1','{}','2026-01-01T00:00:00Z')`, id)
+	fix.d.Exec(`INSERT INTO vacancy_reading (vacancy_id,version,reader_version,record,created) VALUES (?,1,'import-1','{}','2026-01-01T00:00:00Z')`, id)
 
 	store := openStoreWithReading(t)
-	if err := queueReadings(ctx, d, fakeEnqueue(d), store, false, knownReaderVersion); err != nil {
+	if err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, false, knownReaderVersion); err != nil {
 		t.Fatalf("queueReadings: %v", err)
 	}
 
-	if subs := collectQueuedSubjects(t, d); len(subs) != 0 {
+	if subs := collectQueuedSubjects(t, fix.d); len(subs) != 0 {
 		t.Errorf("imported reading should not be reread, got %v", subs)
 	}
 }
 
 func TestQueueReadings_older_reader_version_queued_at_low_priority(t *testing.T) {
-	d := openQueueTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
-
-	insertProfile(t, d, 1, "Platform Engineer")
-	id, _, err := cat.Upsert(ctx, postingFull("https://jobs.example.com/pe5", "Platform Engineer", "Stackworks"), "src")
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Platform Engineer")
+	id, _, err := fix.cat.Upsert(fix.ctx, postingFull("https://jobs.example.com/pe5", "Platform Engineer", "Stackworks"), "src")
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	d.Exec(`INSERT INTO vacancy_reading (vacancy_id,version,reader_version,record,created) VALUES (?,1,?,'{}','2026-01-01T00:00:00Z')`, id, oldReaderVersion)
+	fix.d.Exec(`INSERT INTO vacancy_reading (vacancy_id,version,reader_version,record,created) VALUES (?,1,?,'{}','2026-01-01T00:00:00Z')`, id, oldReaderVersion)
 
 	store := openStoreWithReading(t)
-	if err := queueReadings(ctx, d, fakeEnqueue(d), store, false, knownReaderVersion); err != nil {
+	if err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, false, knownReaderVersion); err != nil {
 		t.Fatalf("queueReadings: %v", err)
 	}
 
-	subs := collectQueuedSubjects(t, d)
+	subs := collectQueuedSubjects(t, fix.d)
 	if len(subs) != 1 {
 		t.Fatalf("expected 1 queued job, got %v", subs)
 	}
 	var priority int
-	d.QueryRow(`SELECT priority FROM job WHERE kind='read_vacancy'`).Scan(&priority)
+	fix.d.QueryRow(`SELECT priority FROM job WHERE kind='read_vacancy'`).Scan(&priority)
 	if priority != -1 {
 		t.Errorf("priority = %d, want -1 (re-reading at low priority)", priority)
 	}
 }
 
 func TestQueueReadings_queued_text_is_not_queued_again(t *testing.T) {
-	d := openQueueTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
-
-	insertProfile(t, d, 1, "Platform Engineer")
-	id, _, err := cat.Upsert(ctx, postingFull("https://jobs.example.com/pe6", "Platform Engineer", "Stackworks"), "src")
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Platform Engineer")
+	id, _, err := fix.cat.Upsert(fix.ctx, postingFull("https://jobs.example.com/pe6", "Platform Engineer", "Stackworks"), "src")
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	subject := fmt.Sprintf("%d/1", id)
-	d.Exec(`INSERT INTO job (kind,subject,priority,state,attempts,not_before,progress,error,params,created,updated)
+	fix.d.Exec(`INSERT INTO job (kind,subject,priority,state,attempts,not_before,progress,error,params,created,updated)
 	        VALUES ('read_vacancy',?,'0','queued',0,datetime('now'),'{}','',NULL,datetime('now'),datetime('now'))`, subject)
 
 	prevCount := func() int {
 		var n int
-		d.QueryRow(`SELECT count(*) FROM job WHERE kind='read_vacancy'`).Scan(&n)
+		fix.d.QueryRow(`SELECT count(*) FROM job WHERE kind='read_vacancy'`).Scan(&n)
 		return n
 	}
 	before := prevCount()
 
 	store := openStoreWithReading(t)
-	if err := queueReadings(ctx, d, fakeEnqueue(d), store, false, knownReaderVersion); err != nil {
+	if err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, false, knownReaderVersion); err != nil {
 		t.Fatalf("queueReadings: %v", err)
 	}
 
@@ -305,85 +286,73 @@ func TestQueueReadings_queued_text_is_not_queued_again(t *testing.T) {
 }
 
 func TestQueueReadings_failed_text_is_not_queued_again(t *testing.T) {
-	d := openQueueTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
-
-	insertProfile(t, d, 1, "Platform Engineer")
-	id, _, err := cat.Upsert(ctx, postingFull("https://jobs.example.com/pe7", "Platform Engineer", "Stackworks"), "src")
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Platform Engineer")
+	id, _, err := fix.cat.Upsert(fix.ctx, postingFull("https://jobs.example.com/pe7", "Platform Engineer", "Stackworks"), "src")
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	subject := fmt.Sprintf("%d/1", id)
-	d.Exec(`INSERT INTO job (kind,subject,priority,state,attempts,not_before,progress,error,params,created,updated)
+	fix.d.Exec(`INSERT INTO job (kind,subject,priority,state,attempts,not_before,progress,error,params,created,updated)
 	        VALUES ('read_vacancy',?,'0','failed',3,datetime('now'),'{}','model error',NULL,datetime('now'),datetime('now'))`, subject)
 
 	store := openStoreWithReading(t)
-	if err := queueReadings(ctx, d, fakeEnqueue(d), store, false, knownReaderVersion); err != nil {
+	if err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, false, knownReaderVersion); err != nil {
 		t.Fatalf("queueReadings: %v", err)
 	}
 
 	var total int
-	d.QueryRow(`SELECT count(*) FROM job WHERE kind='read_vacancy'`).Scan(&total)
+	fix.d.QueryRow(`SELECT count(*) FROM job WHERE kind='read_vacancy'`).Scan(&total)
 	if total != 1 {
 		t.Errorf("failed job should not be requeued; job count = %d, want 1", total)
 	}
 }
 
 func TestQueueReadings_offline_queues_nothing(t *testing.T) {
-	d := openQueueTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
-
-	insertProfile(t, d, 1, "Platform Engineer")
-	cat.Upsert(ctx, postingFull("https://jobs.example.com/pe8", "Platform Engineer", "Stackworks"), "src")
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Platform Engineer")
+	fix.cat.Upsert(fix.ctx, postingFull("https://jobs.example.com/pe8", "Platform Engineer", "Stackworks"), "src")
 
 	store := openStoreWithReading(t)
-	if err := queueReadings(ctx, d, fakeEnqueue(d), store, true, knownReaderVersion); err != nil {
+	if err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, true, knownReaderVersion); err != nil {
 		t.Fatalf("queueReadings offline: %v", err)
 	}
 
-	if subs := collectQueuedSubjects(t, d); len(subs) != 0 {
+	if subs := collectQueuedSubjects(t, fix.d); len(subs) != 0 {
 		t.Errorf("offline: expected no queued jobs, got %v", subs)
 	}
 }
 
 func TestQueueReadings_no_provider_queues_nothing(t *testing.T) {
-	d := openQueueTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
-
-	insertProfile(t, d, 1, "Platform Engineer")
-	cat.Upsert(ctx, postingFull("https://jobs.example.com/pe9", "Platform Engineer", "Stackworks"), "src")
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Platform Engineer")
+	fix.cat.Upsert(fix.ctx, postingFull("https://jobs.example.com/pe9", "Platform Engineer", "Stackworks"), "src")
 
 	store := openStoreNoReading(t)
-	if err := queueReadings(ctx, d, fakeEnqueue(d), store, false, knownReaderVersion); err != nil {
+	if err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, false, knownReaderVersion); err != nil {
 		t.Fatalf("queueReadings no provider: %v", err)
 	}
 
-	if subs := collectQueuedSubjects(t, d); len(subs) != 0 {
+	if subs := collectQueuedSubjects(t, fix.d); len(subs) != 0 {
 		t.Errorf("no provider: expected no queued jobs, got %v", subs)
 	}
 }
 
 func TestQueueReadings_active_read_vacancy_suppresses_all_queueing(t *testing.T) {
-	d := openQueueTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Platform Engineer")
+	fix.cat.Upsert(fix.ctx, postingFull("https://jobs.example.com/pe10", "Platform Engineer", "Stackworks"), "src")
 
-	insertProfile(t, d, 1, "Platform Engineer")
-	cat.Upsert(ctx, postingFull("https://jobs.example.com/pe10", "Platform Engineer", "Stackworks"), "src")
-
-	d.Exec(`INSERT INTO job (kind,subject,priority,state,attempts,not_before,progress,error,params,created,updated)
+	fix.d.Exec(`INSERT INTO job (kind,subject,priority,state,attempts,not_before,progress,error,params,created,updated)
 	        VALUES ('read_vacancy','999/1',0,'running',1,datetime('now'),'{}','',NULL,datetime('now'),datetime('now'))`)
 
 	store := openStoreWithReading(t)
-	if err := queueReadings(ctx, d, fakeEnqueue(d), store, false, knownReaderVersion); err != nil {
+	if err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, false, knownReaderVersion); err != nil {
 		t.Fatalf("queueReadings with active job: %v", err)
 	}
 
 	var total int
-	d.QueryRow(`SELECT count(*) FROM job WHERE kind='read_vacancy'`).Scan(&total)
+	fix.d.QueryRow(`SELECT count(*) FROM job WHERE kind='read_vacancy'`).Scan(&total)
 	if total != 1 {
 		t.Errorf("active job: expected only the pre-existing 1 job, got %d", total)
 	}
