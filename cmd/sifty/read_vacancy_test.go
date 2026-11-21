@@ -216,6 +216,7 @@ func TestReadVacancy_three_model_errors_fail_job(t *testing.T) {
 				return
 			case <-time.After(5 * time.Millisecond):
 				clk.Advance(5 * time.Minute)
+				r.Wake()
 			}
 		}
 	}()

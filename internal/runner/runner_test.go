@@ -319,6 +319,7 @@ func TestThirdFailureMarksFailed(t *testing.T) {
 		select {
 		case <-time.After(100 * time.Millisecond):
 			cl.Advance(3 * time.Minute)
+			r.Wake()
 		case <-timeout:
 			t.Fatal("job never reached failed after 3 attempts")
 		}

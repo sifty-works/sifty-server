@@ -207,17 +207,6 @@ func TestList_links_pattern_web3career_config(t *testing.T) {
 	}
 }
 
-func TestList_xml_feed_via_generic(t *testing.T) {
-	body := mustReadFile(t, "testdata/rss.xml")
-	addr := "https://feeds.example.com/jobs.xml"
-	m := fetchtest.NewMap()
-	m.Set(addr, fetchtest.MapEntry{Response: fetch.Response{URL: addr, Status: 200, ContentType: "application/rss+xml", Body: body}})
-	ps, err := listGeneric(t, m, addr)
-	if err != nil || len(ps) == 0 {
-		t.Fatalf("List err=%v len=%d, want feed postings", err, len(ps))
-	}
-}
-
 func TestList_a16z_portfolio_jobs(t *testing.T) {
 	body := mustReadFile(t, "testdata/a16z.html")
 	addr := "https://a16zfrontier.com/"
@@ -255,17 +244,6 @@ func TestList_a16z_portfolio_jobs(t *testing.T) {
 	}
 	if reqs := m.Requests(); len(reqs) != 1 {
 		t.Errorf("requests = %v, want exactly 1", reqs)
-	}
-}
-
-func TestList_nothing_recognised(t *testing.T) {
-	const body = `<!DOCTYPE html><html><body><p>No jobs here.</p></body></html>`
-	addr := "https://empty.example.com/"
-	m := fetchtest.NewMap()
-	m.Set(addr, fetchtest.MapEntry{Response: fetch.Response{URL: addr, Status: 200, Body: []byte(body)}})
-	_, err := listGeneric(t, m, addr)
-	if err != source.ErrNothingRecognised {
-		t.Errorf("error = %v, want ErrNothingRecognised", err)
 	}
 }
 

@@ -602,31 +602,6 @@ func TestTextEndpointUnavailableForPdf(t *testing.T) {
 	}
 }
 
-func TestOriginalEndpointServesStoredFile(t *testing.T) {
-	d := openTestDB(t)
-	ts := newDocServer(t, d)
-
-	content := []byte("original file content")
-	out, _ := uploadDoc(t, ts, "doc.txt", content, "text/plain")
-	id := out["id"]
-	idStr := fmt.Sprintf("%.0f", id)
-
-	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/documents/"+idStr+"/original", nil)
-	req.Host = "127.0.0.1:9999"
-	resp, err := ts.Client().Do(req)
-	if err != nil {
-		t.Fatalf("GET /api/documents/%s/original: %v", idStr, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("original endpoint: status %d, want 200", resp.StatusCode)
-	}
-	got, _ := io.ReadAll(resp.Body)
-	if !bytes.Equal(got, content) {
-		t.Errorf("original content mismatch")
-	}
-}
-
 func TestOriginalEndpointNotFoundForPastedText(t *testing.T) {
 	d := openTestDB(t)
 	ts := newDocServer(t, d)

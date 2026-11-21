@@ -120,11 +120,14 @@ func TestDecide_experienceKindIsUnclearUnlessConfirmed(t *testing.T) {
 	}
 }
 
-func TestDecide_plainTechSkillHeld(t *testing.T) {
-	i := idx([]string{"PostgreSQL"}, nil)
-	r := req("PostgreSQL", "skill")
-	if got := Decide(r, i, nil); got != "✓" {
-		t.Fatalf("want ✓, got %q", got)
+func TestDecide_skillHeldUnderItsOwnNameGivesYes(t *testing.T) {
+	for _, name := range []string{"PostgreSQL", "C#", "C++", "Node.js", ".NET"} {
+		t.Run(name, func(t *testing.T) {
+			i := idx([]string{name}, nil)
+			if got := Decide(req(name, "skill"), i, nil); got != "✓" {
+				t.Fatalf("%s should match the %s skill, got %q", name, name, got)
+			}
+		})
 	}
 }
 
@@ -151,38 +154,6 @@ func TestDecide_multipleSkillsPartialIsUnclear(t *testing.T) {
 	got := Decide(r, i, nil)
 	if got == "✓" {
 		t.Fatalf("only Docker held, should not give ✓, got %q", got)
-	}
-}
-
-func TestDecide_tokenizePreservesCSharp(t *testing.T) {
-	i := idx([]string{"C#"}, nil)
-	r := req("C#", "skill")
-	if got := Decide(r, i, nil); got != "✓" {
-		t.Fatalf("C# should match C# skill, got %q", got)
-	}
-}
-
-func TestDecide_tokenizePreservesCPlusPlus(t *testing.T) {
-	i := idx([]string{"C++"}, nil)
-	r := req("C++", "skill")
-	if got := Decide(r, i, nil); got != "✓" {
-		t.Fatalf("C++ should match C++ skill, got %q", got)
-	}
-}
-
-func TestDecide_tokenizePreservesNodejs(t *testing.T) {
-	i := idx([]string{"Node.js"}, nil)
-	r := req("Node.js", "skill")
-	if got := Decide(r, i, nil); got != "✓" {
-		t.Fatalf("Node.js should match Node.js skill, got %q", got)
-	}
-}
-
-func TestDecide_tokenizePreservesDotNet(t *testing.T) {
-	i := idx([]string{".NET"}, nil)
-	r := req(".NET", "skill")
-	if got := Decide(r, i, nil); got != "✓" {
-		t.Fatalf(".NET should match .NET skill, got %q", got)
 	}
 }
 

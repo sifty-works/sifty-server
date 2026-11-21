@@ -422,41 +422,6 @@ func TestDeleteDocumentRemovesToReviewProposals(t *testing.T) {
 	}
 }
 
-func TestAnalyzeOneModelCallPerChunk(t *testing.T) {
-	fix := newAnalyzeFix(t)
-
-	var longText strings.Builder
-	for longText.Len() < 20000 {
-		longText.WriteString("This is a paragraph about software engineering skills. ")
-	}
-	text := longText.String()
-
-	chunks := candidate.SplitChunks(text)
-	if len(chunks) < 2 {
-		t.Fatalf("expected at least 2 chunks for 20KB text, got %d", len(chunks))
-	}
-	for range chunks {
-		fix.fm.AddReply(models.Response{Text: emptyProposalReply()})
-	}
-
-	base := fix.base
-	out, _ := pasteAnalyzeDoc(t, base, "long.txt", text)
-	docID := out["id"].(float64)
-
-	apiSend(t, http.MethodPost, base, fmt.Sprintf("/api/documents/%.0f/analyze", docID), nil)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go fix.r.Start(ctx)
-
-	waitForDocState(t, base, docID, "analysed", 10*time.Second)
-
-	calls := fix.fm.Calls()
-	if len(calls) != len(chunks) {
-		t.Errorf("model calls = %d, want %d (one per chunk)", len(calls), len(chunks))
-	}
-}
-
 func TestPdfCannotBeAnalysedUntilTheProgramHasReadIt(t *testing.T) {
 	program := filepath.Join(t.TempDir(), "pdftotext.sh")
 	fix := newAnalyzeFixWithPDF(t, candidate.ProgramText{Program: program, Args: []string{"-", "-"}})

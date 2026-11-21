@@ -315,6 +315,8 @@ func (r *Runner) signal() {
 	}
 }
 
+func (r *Runner) Wake() { r.signal() }
+
 func (r *Runner) dispatch(ctx context.Context) {
 	for {
 		if ctx.Err() != nil {

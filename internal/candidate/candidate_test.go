@@ -541,36 +541,21 @@ func TestDeleteFirstProfileIsRejected(t *testing.T) {
 	}
 }
 
-func TestDeleteProfileRemovesItFromList(t *testing.T) {
-	d := openTestDB(t)
-	ts := newServer(t, d)
-
-	out, _ := send(t, ts, http.MethodPost, "/api/profiles", map[string]any{"name": "Second"})
-	newID := int64(out["id"].(float64))
-
-	listOut, status := send(t, ts, http.MethodDelete, fmt.Sprintf("/api/profiles/%d", newID), struct{}{})
-	if status != http.StatusOK {
-		t.Fatalf("delete second profile: status %d, body: %v", status, listOut)
-	}
-
-	profiles, _ := listOut["profiles"].([]any)
-	if len(profiles) != 1 {
-		t.Errorf("after delete: expected 1 profile, got %d", len(profiles))
-	}
-	remaining := profiles[0].(map[string]any)
-	if remaining["id"].(float64) != 1 {
-		t.Errorf("remaining profile id = %v, want 1", remaining["id"])
-	}
-}
-
-func TestDeleteActiveProfileFallsBackToFirst(t *testing.T) {
+func TestDeletedProfileLeavesTheFirstActive(t *testing.T) {
 	d := openTestDB(t)
 	ts := newServer(t, d)
 
 	out, _ := send(t, ts, http.MethodPost, "/api/profiles", map[string]any{"name": "Second"})
 	secondID := int64(out["id"].(float64))
 
-	send(t, ts, http.MethodDelete, fmt.Sprintf("/api/profiles/%d", secondID), struct{}{})
+	deleted, status := send(t, ts, http.MethodDelete, fmt.Sprintf("/api/profiles/%d", secondID), struct{}{})
+	if status != http.StatusOK {
+		t.Fatalf("delete second profile: status %d, body: %v", status, deleted)
+	}
+	remaining, _ := deleted["profiles"].([]any)
+	if len(remaining) != 1 || remaining[0].(map[string]any)["id"].(float64) != 1 {
+		t.Errorf("profiles in the delete response = %v, want only profile 1", remaining)
+	}
 
 	listOut, _ := get(t, ts, "/api/profiles")
 	profiles, _ := listOut["profiles"].([]any)
@@ -822,39 +807,29 @@ func TestPatchAllNullCompensationOnNonFirstProfileIsInherited(t *testing.T) {
 	}
 }
 
-func TestTargetRolesAreNotInherited(t *testing.T) {
-	d := openTestDB(t)
-	ts := newServer(t, d)
+func TestTargetRolesAndKeywordsAreNotInherited(t *testing.T) {
+	for _, tc := range []struct {
+		field  string
+		values []string
+	}{
+		{"targetRoles", []string{"Engineer", "Developer"}},
+		{"keywords", []string{"remote", "senior"}},
+	} {
+		t.Run(tc.field, func(t *testing.T) {
+			d := openTestDB(t)
+			ts := newServer(t, d)
 
-	send(t, ts, http.MethodPatch, "/api/profiles/1", map[string]any{
-		"targetRoles": []string{"Engineer", "Developer"},
-	})
+			send(t, ts, http.MethodPatch, "/api/profiles/1", map[string]any{tc.field: tc.values})
 
-	out, _ := send(t, ts, http.MethodPost, "/api/profiles", map[string]any{"name": "Second"})
-	secondID := int64(out["id"].(float64))
+			out, _ := send(t, ts, http.MethodPost, "/api/profiles", map[string]any{"name": "Second"})
+			secondID := int64(out["id"].(float64))
 
-	detail, _ := get(t, ts, fmt.Sprintf("/api/profiles/%d", secondID))
-	inherited, _ := detail["inherited"].(map[string]any)
-	if _, ok := inherited["targetRoles"]; ok {
-		t.Error("targetRoles must not be inherited from the first profile")
-	}
-}
-
-func TestKeywordsAreNotInherited(t *testing.T) {
-	d := openTestDB(t)
-	ts := newServer(t, d)
-
-	send(t, ts, http.MethodPatch, "/api/profiles/1", map[string]any{
-		"keywords": []string{"remote", "senior"},
-	})
-
-	out, _ := send(t, ts, http.MethodPost, "/api/profiles", map[string]any{"name": "Second"})
-	secondID := int64(out["id"].(float64))
-
-	detail, _ := get(t, ts, fmt.Sprintf("/api/profiles/%d", secondID))
-	inherited, _ := detail["inherited"].(map[string]any)
-	if _, ok := inherited["keywords"]; ok {
-		t.Error("keywords must not be inherited from the first profile")
+			detail, _ := get(t, ts, fmt.Sprintf("/api/profiles/%d", secondID))
+			inherited, _ := detail["inherited"].(map[string]any)
+			if _, ok := inherited[tc.field]; ok {
+				t.Errorf("%s must not be inherited from the first profile", tc.field)
+			}
+		})
 	}
 }
 
@@ -1089,7 +1064,7 @@ func TestQAEmptyQuestionIsRejected(t *testing.T) {
 	}
 }
 
-func TestReferenceListsNonEmpty(t *testing.T) {
+func TestReferenceListsAreComplete(t *testing.T) {
 	d := openTestDB(t)
 	ts := newServer(t, d)
 
@@ -1117,28 +1092,20 @@ func TestReferenceListsNonEmpty(t *testing.T) {
 	if opts == nil {
 		t.Fatal("options missing from reference response")
 	}
-}
-
-func TestReferenceEUHas27Members(t *testing.T) {
-	d := openTestDB(t)
-	ts := newServer(t, d)
-
-	body, _ := get(t, ts, "/api/reference")
-	regions, _ := body["regions"].([]any)
 
 	for _, r := range regions {
 		rm := r.(map[string]any)
-		if rm["code"] == "EU" {
-			size := int(rm["size"].(float64))
-			if size != 27 {
-				t.Errorf("EU size = %d, want 27", size)
-			}
-			countries, _ := rm["countries"].([]any)
-			if len(countries) != 27 {
-				t.Errorf("EU countries count = %d, want 27", len(countries))
-			}
-			return
+		if rm["code"] != "EU" {
+			continue
 		}
+		if size := int(rm["size"].(float64)); size != 27 {
+			t.Errorf("EU size = %d, want 27", size)
+		}
+		members, _ := rm["countries"].([]any)
+		if len(members) != 27 {
+			t.Errorf("EU countries count = %d, want 27", len(members))
+		}
+		return
 	}
 	t.Error("EU region not found in reference data")
 }

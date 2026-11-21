@@ -7,27 +7,19 @@ import (
 )
 
 func TestFromLabels_KnownLabelsMapToIndustries(t *testing.T) {
-	got := industry.FromLabels([]string{"Blockchain", "Fintech"})
-	want := map[string]bool{"Web3": true, "Finance": true}
-	if len(got) != 2 {
-		t.Fatalf("FromLabels: got %v, want [Web3 Finance]", got)
-	}
-	for _, g := range got {
-		if !want[g] {
-			t.Errorf("unexpected industry %q", g)
+	for _, labels := range [][]string{
+		{"Blockchain", "Fintech"},
+		{"Blockchain", "DeFi"},
+	} {
+		got := industry.FromLabels(labels)
+		want := map[string]bool{"Web3": true, "Finance": true}
+		if len(got) != 2 {
+			t.Fatalf("FromLabels(%v): got %v, want [Web3 Finance]", labels, got)
 		}
-	}
-}
-
-func TestFromLabels_MultipleLabelsYieldUnionedIndustries(t *testing.T) {
-	got := industry.FromLabels([]string{"Blockchain", "DeFi"})
-	if len(got) != 2 {
-		t.Fatalf("union: got %v, want [Web3 Finance]", got)
-	}
-	want := map[string]bool{"Web3": true, "Finance": true}
-	for _, g := range got {
-		if !want[g] {
-			t.Errorf("unexpected industry %q", g)
+		for _, g := range got {
+			if !want[g] {
+				t.Errorf("FromLabels(%v): unexpected industry %q", labels, g)
+			}
 		}
 	}
 }

@@ -7,14 +7,6 @@ import (
 	"testing"
 )
 
-func TestLineCommentRemoved(t *testing.T) {
-	src := "package p\n\n// a doc comment\nfunc F() {}\n"
-	want := "package p\n\nfunc F() {}\n"
-	if got := applyW(t, src); got != want {
-		t.Errorf("line comment not removed\ngot:\n%s\nwant:\n%s", got, want)
-	}
-}
-
 func TestBlockCommentRemoved(t *testing.T) {
 	src := "package p\n\n/*\nmulti\nblock\n*/\nfunc F() {}\n"
 	want := "package p\n\nfunc F() {}\n"

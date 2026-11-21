@@ -2,8 +2,8 @@ package models_test
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -22,6 +22,35 @@ func makeScript(t *testing.T, body string) string {
 	return p
 }
 
+var scriptDir, replyScript string
+
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "cli-script-")
+	if err != nil {
+		os.Exit(1)
+	}
+	scriptDir = dir
+	replyScript = filepath.Join(dir, "reply.sh")
+	body := "#!/bin/sh\nd=$(dirname \"$0\")\nenv | cut -d= -f1 | sort > \"$d/env.txt\"\ncat \"$d/reply\"\n"
+	if err := os.WriteFile(replyScript, []byte(body), 0755); err != nil {
+		os.Exit(1)
+	}
+	warm := exec.Command(replyScript)
+	warm.Env = []string{"PATH=" + os.Getenv("PATH")}
+	warm.Run()
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}
+
+func scriptReplying(t *testing.T, reply string) string {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(scriptDir, "reply"), []byte(reply), 0644); err != nil {
+		t.Fatalf("write reply: %v", err)
+	}
+	return replyScript
+}
+
 func cliGate(t *testing.T, pc config.ProviderConfig) *models.Gate {
 	t.Helper()
 	cfg := config.Defaults()
@@ -34,7 +63,7 @@ func cliGate(t *testing.T, pc config.ProviderConfig) *models.Gate {
 }
 
 func TestCLIClaudeStructuredOutputReturned(t *testing.T) {
-	script := makeScript(t, `printf '{"is_error":false,"structured_output":{"score":42},"result":""}'`)
+	script := scriptReplying(t, `{"is_error":false,"structured_output":{"score":42},"result":""}`)
 	pc := providerConfig("cli-claude", script, "sonnet", "local")
 	gate := cliGate(t, pc)
 	resp, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "rate this"})
@@ -47,7 +76,7 @@ func TestCLIClaudeStructuredOutputReturned(t *testing.T) {
 }
 
 func TestCLIClaudePlainResultReturned(t *testing.T) {
-	script := makeScript(t, `printf '{"is_error":false,"result":"hello from claude"}'`)
+	script := scriptReplying(t, `{"is_error":false,"result":"hello from claude"}`)
 	pc := providerConfig("cli-claude", script, "sonnet", "local")
 	gate := cliGate(t, pc)
 	resp, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "hello"})
@@ -60,7 +89,7 @@ func TestCLIClaudePlainResultReturned(t *testing.T) {
 }
 
 func TestCLIClaudeErrorAnswerReturnsError(t *testing.T) {
-	script := makeScript(t, `printf '{"is_error":true,"result":"something went wrong"}'`)
+	script := scriptReplying(t, `{"is_error":true,"result":"something went wrong"}`)
 	pc := providerConfig("cli-claude", script, "sonnet", "local")
 	gate := cliGate(t, pc)
 	_, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "hello"})
@@ -73,9 +102,8 @@ func TestCLIClaudeErrorAnswerReturnsError(t *testing.T) {
 }
 
 func TestCLIClaudeIsolatedEnvironment(t *testing.T) {
-	envFile := filepath.Join(t.TempDir(), "env.txt")
-	script := makeScript(t, fmt.Sprintf(`env | cut -d= -f1 | sort > %s
-printf '{"is_error":false,"result":"ok"}'`, envFile))
+	script := scriptReplying(t, `{"is_error":false,"result":"ok"}`)
+	envFile := filepath.Join(scriptDir, "env.txt")
 	t.Setenv("SIFTY_SHOULD_NOT_PASS", "secret")
 	pc := providerConfig("cli-claude", script, "sonnet", "local")
 	gate := cliGate(t, pc)
@@ -117,8 +145,9 @@ printf '{"is_error":false,"result":"ok"}'`)
 }
 
 func TestCLIOpencodeTextEventsJoined(t *testing.T) {
-	script := makeScript(t, `printf '{"type":"text","part":{"type":"text","text":"hello "}}\n'
-printf '{"type":"text","part":{"type":"text","text":"world"}}\n'`)
+	script := scriptReplying(t, `{"type":"text","part":{"type":"text","text":"hello "}}
+{"type":"text","part":{"type":"text","text":"world"}}
+`)
 	pc := providerConfig("cli-opencode", script, "claude-sonnet", "local")
 	gate := cliGate(t, pc)
 	resp, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "hello"})
@@ -131,7 +160,8 @@ printf '{"type":"text","part":{"type":"text","text":"world"}}\n'`)
 }
 
 func TestCLIOpencodeToolEventRefused(t *testing.T) {
-	script := makeScript(t, `printf '{"type":"tool_call","part":{"type":"tool","text":""}}\n'`)
+	script := scriptReplying(t, `{"type":"tool_call","part":{"type":"tool","text":""}}
+`)
 	pc := providerConfig("cli-opencode", script, "claude-sonnet", "local")
 	gate := cliGate(t, pc)
 	_, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "hello"})
@@ -144,7 +174,8 @@ func TestCLIOpencodeToolEventRefused(t *testing.T) {
 }
 
 func TestCLIOpencodeErrorEventReturnsError(t *testing.T) {
-	script := makeScript(t, `printf '{"type":"error","error":"connection failed"}\n'`)
+	script := scriptReplying(t, `{"type":"error","error":"connection failed"}
+`)
 	pc := providerConfig("cli-opencode", script, "claude-sonnet", "local")
 	gate := cliGate(t, pc)
 	_, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "hello"})
@@ -157,7 +188,8 @@ func TestCLIOpencodeErrorEventReturnsError(t *testing.T) {
 }
 
 func TestCLIOpencodeNoTextReturnsError(t *testing.T) {
-	script := makeScript(t, `printf '{"type":"status","part":{"type":"status","text":"done"}}\n'`)
+	script := scriptReplying(t, `{"type":"status","part":{"type":"status","text":"done"}}
+`)
 	pc := providerConfig("cli-opencode", script, "claude-sonnet", "local")
 	gate := cliGate(t, pc)
 	_, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "hello"})
