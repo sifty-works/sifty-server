@@ -10,12 +10,16 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/collect"
+	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/db"
+	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/server"
 )
@@ -72,6 +76,24 @@ func startServer(t *testing.T, dir string, offline bool) (port int, cancel func(
 	}
 	cancel = func() { cancelCtx(); <-done; pr.Close() }
 	return port, cancel
+}
+
+type fixedModel struct{ models.Model }
+
+func (f fixedModel) For(string, string, ...int64) models.Model { return f.Model }
+
+func registerKindsWith(t *testing.T, r *runner.Runner, d *db.DB, m models.Model) {
+	t.Helper()
+	registerKindsAt(t, r, d, m, catalog.New(d, time.Now), time.Now)
+}
+
+func registerKindsAt(t *testing.T, r *runner.Runner, d *db.DB, m models.Model, cat *catalog.Catalog, now func() time.Time) {
+	t.Helper()
+	store, _, err := config.Open(filepath.Join(t.TempDir(), "sifty.yaml"))
+	if err != nil {
+		t.Fatalf("open settings: %v", err)
+	}
+	registerJobKinds(r, d, store, fixedModel{m}, cat, slog.New(slog.NewTextHandler(io.Discard, nil)), false, now)
 }
 
 func newRouteServer(t *testing.T, d *db.DB, r *runner.Runner) string {

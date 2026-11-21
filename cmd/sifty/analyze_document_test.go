@@ -52,16 +52,6 @@ func (p *pauseOnCall4) Complete(ctx context.Context, r models.Request) (models.R
 	return p.FakeModel.Complete(ctx, r)
 }
 
-func registerAnalyzeKind(r *runner.Runner, d *db.DB, m models.Model) {
-	r.Register(runner.Kind{
-		Name:   "analyze_document",
-		Resume: false,
-		Run: func(runCtx context.Context, j *runner.Job) error {
-			return runAnalyzeDocument(runCtx, j, d, m)
-		},
-	})
-}
-
 type analyzeFix struct {
 	d    *db.DB
 	r    *runner.Runner
@@ -74,7 +64,7 @@ func newAnalyzeFix(t *testing.T) analyzeFix {
 	d := openTestDB(t)
 	r := runner.New(d, nil, time.Now, slog.Default())
 	fm := &models.FakeModel{}
-	registerAnalyzeKind(r, d, fm)
+	registerKindsWith(t, r, d, fm)
 	base := newRouteServer(t, d, r)
 	return analyzeFix{d: d, r: r, fm: fm, base: base}
 }
@@ -615,7 +605,7 @@ func TestAnalyzeResumesFromCheckpoint(t *testing.T) {
 			}
 
 			r, trigger := tc.makeRunner(d)
-			registerAnalyzeKind(r, d, fm)
+			registerKindsWith(t, r, d, fm)
 			base := newRouteServer(t, d, r)
 
 			out, _ := pasteAnalyzeDoc(t, base, "cv.txt", text)
@@ -679,7 +669,7 @@ func TestAnalyzeCheckpointSurvivesCancel(t *testing.T) {
 	m := &pauseOnCall4{FakeModel: fm, blocked: make(chan struct{})}
 
 	r1 := runner.New(d, nil, time.Now, slog.Default())
-	registerAnalyzeKind(r1, d, m)
+	registerKindsWith(t, r1, d, m)
 	base1 := newRouteServer(t, d, r1)
 
 	out, _ := pasteAnalyzeDoc(t, base1, "cv.txt", text)
@@ -698,7 +688,7 @@ func TestAnalyzeCheckpointSurvivesCancel(t *testing.T) {
 	cancel1()
 
 	r2 := runner.New(d, nil, time.Now, slog.Default())
-	registerAnalyzeKind(r2, d, m)
+	registerKindsWith(t, r2, d, m)
 	base2 := newRouteServer(t, d, r2)
 
 	ctx2, cancel2 := context.WithCancel(context.Background())
@@ -743,7 +733,7 @@ func TestAnalyzeInterruptedDoesNotAutoRestart(t *testing.T) {
 	fm.AddReply(models.Response{Text: emptyProposalReply()})
 
 	r := runner.New(d, nil, time.Now, slog.Default())
-	registerAnalyzeKind(r, d, fm)
+	registerKindsWith(t, r, d, fm)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

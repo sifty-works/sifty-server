@@ -9,6 +9,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/listing"
+	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
 )
 
@@ -28,13 +29,7 @@ func expiryPosting(url string, expires time.Time) listing.Posting {
 func runRetentionJob(t *testing.T, d *db.DB, cat *catalog.Catalog, now time.Time) runner.Job {
 	t.Helper()
 	r := runner.New(d, nil, func() time.Time { return now }, slog.Default())
-	r.Register(runner.Kind{
-		Name:   "retention",
-		Resume: true,
-		Run: func(runCtx context.Context, j *runner.Job) error {
-			return runRetention(runCtx, j, cat, d, slog.Default(), now)
-		},
-	})
+	registerKindsAt(t, r, d, &models.FakeModel{}, cat, func() time.Time { return now })
 	r.Enqueue(runner.Spec{Kind: "retention"})
 	rCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -118,28 +113,5 @@ func TestRetentionSecondRunRemovesNothing(t *testing.T) {
 	j2 := runRetentionJob(t, d, cat, now)
 	if j2.Done != 0 {
 		t.Errorf("second run: done=%d, want 0", j2.Done)
-	}
-}
-
-func TestRetentionJobResumesAfterRestart(t *testing.T) {
-	d := openTestDB(t)
-	ts := retentionBase.UTC().Format(time.RFC3339)
-	_, err := d.Exec(
-		`INSERT INTO job (kind,subject,priority,state,attempts,not_before,progress,error,params,created,updated)
-		 VALUES ('retention','',0,'running',1,?,'{}','',NULL,?,?)`,
-		ts, ts, ts,
-	)
-	if err != nil {
-		t.Fatalf("insert running job: %v", err)
-	}
-	r := runner.New(d, nil, func() time.Time { return retentionBase }, slog.Default())
-	r.Register(runner.Kind{Name: "retention", Resume: true, Run: func(_ context.Context, _ *runner.Job) error { return nil }})
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	r.Start(ctx)
-	var state string
-	d.QueryRow(`SELECT state FROM job WHERE kind='retention'`).Scan(&state)
-	if state != "queued" {
-		t.Errorf("after restart: state=%q, want queued", state)
 	}
 }

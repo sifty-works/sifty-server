@@ -71,17 +71,6 @@ func runReadVacancyDirect(t *testing.T, d *db.DB, vacancyID, version int64, m mo
 	return specs, err
 }
 
-func registerReadVacancyKind(r *runner.Runner, d *db.DB, m *models.FakeModel) {
-	r.Register(runner.Kind{
-		Name:   "read_vacancy",
-		Resume: true,
-		Serial: true,
-		Run: func(runCtx context.Context, j *runner.Job) error {
-			return runReadVacancy(runCtx, j, d, func(_ int64) models.Model { return m }, r.Enqueue)
-		},
-	})
-}
-
 type readVacancyFix struct {
 	d  *db.DB
 	id int64
@@ -95,7 +84,7 @@ func newReadVacancyFix(t *testing.T, url string) readVacancyFix {
 	id := insertFullVacancy(t, d, url, "Backend Engineer", "Stackworks")
 	fm := &models.FakeModel{}
 	r := runner.New(d, nil, time.Now, slog.Default())
-	registerReadVacancyKind(r, d, fm)
+	registerKindsWith(t, r, d, fm)
 	return readVacancyFix{d: d, id: id, fm: fm, r: r}
 }
 
@@ -213,7 +202,7 @@ func TestReadVacancy_three_model_errors_fail_job(t *testing.T) {
 
 	clk := newTestClock()
 	r := runner.New(fix.d, nil, clk.Now, slog.Default())
-	registerReadVacancyKind(r, fix.d, fix.fm)
+	registerKindsWith(t, r, fix.d, fix.fm)
 
 	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", fix.id)})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -245,6 +234,28 @@ func TestReadVacancy_three_model_errors_fail_job(t *testing.T) {
 	}
 }
 
+type concurrencyModel struct {
+	models.Model
+	mu      sync.Mutex
+	current int
+	max     int
+}
+
+func (c *concurrencyModel) Complete(ctx context.Context, r models.Request) (models.Response, error) {
+	c.mu.Lock()
+	c.current++
+	if c.current > c.max {
+		c.max = c.current
+	}
+	c.mu.Unlock()
+	time.Sleep(100 * time.Millisecond)
+	resp, err := c.Model.Complete(ctx, r)
+	c.mu.Lock()
+	c.current--
+	c.mu.Unlock()
+	return resp, err
+}
+
 func TestReadVacancy_two_jobs_run_one_after_the_other(t *testing.T) {
 	d := openTestDB(t)
 	id1 := insertFullVacancy(t, d, "https://jobs.example.com/rv7a", "Senior Engineer", "Alpha")
@@ -253,30 +264,10 @@ func TestReadVacancy_two_jobs_run_one_after_the_other(t *testing.T) {
 	fm := &models.FakeModel{}
 	fm.AddReply(models.Response{Text: emptyReadingReply()})
 	fm.AddReply(models.Response{Text: emptyReadingReply()})
-
-	var maxConcurrent int
-	var current int
-	var mu sync.Mutex
+	cm := &concurrencyModel{Model: fm}
 
 	r := runner.New(d, nil, time.Now, slog.Default())
-	r.Register(runner.Kind{
-		Name:   "read_vacancy",
-		Resume: true,
-		Serial: true,
-		Run: func(runCtx context.Context, j *runner.Job) error {
-			mu.Lock()
-			current++
-			if current > maxConcurrent {
-				maxConcurrent = current
-			}
-			mu.Unlock()
-			err := runReadVacancy(runCtx, j, d, func(_ int64) models.Model { return fm }, r.Enqueue)
-			mu.Lock()
-			current--
-			mu.Unlock()
-			return err
-		},
-	})
+	registerKindsWith(t, r, d, cm)
 
 	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", id1)})
 	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", id2)})
@@ -285,20 +276,17 @@ func TestReadVacancy_two_jobs_run_one_after_the_other(t *testing.T) {
 	defer cancel()
 	go r.Start(ctx)
 
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		calls := len(fm.Calls())
-		if calls >= 2 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	waitFor(t, 10*time.Second, func() bool {
+		var done int
+		d.QueryRow(`SELECT count(*) FROM job WHERE kind='read_vacancy' AND state='done'`).Scan(&done)
+		return done == 2
+	})
 
-	mu.Lock()
-	max := maxConcurrent
-	mu.Unlock()
-	if max > 1 {
-		t.Errorf("max concurrent = %d, want 1 (serial)", max)
+	cm.mu.Lock()
+	max := cm.max
+	cm.mu.Unlock()
+	if max != 1 {
+		t.Errorf("max concurrent readings = %d, want 1 (serial)", max)
 	}
 }
 

@@ -138,51 +138,10 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	cat := catalog.New(database, time.Now)
 	r := runner.New(database, map[string]int{"browser": 1, "net": 4, "cpu": 1}, time.Now, logger)
 
-	rules := func() fit.Rules { c := store.Get(); return fit.Rules{Weights: c.Weights, Rates: c.Rates} }
+	registerJobKinds(r, database, store, gate, cat, logger, offline, time.Now)
+	rules := fitRules(store)
 	recomputeFit := func() { r.Enqueue(runner.Spec{Kind: "recompute_fit"}) }
-	r.Register(runner.Kind{
-		Name:   "recompute_fit",
-		Resume: true,
-		Run: func(runCtx context.Context, j *runner.Job) error {
-			rel, err := j.Lane(runCtx, "cpu")
-			if err != nil {
-				return err
-			}
-			defer rel()
-			if err := fit.Recompute(runCtx, database, rules, j.Progress); err != nil {
-				return err
-			}
-			return queueReadings(runCtx, database, r.Enqueue, store, offline, reading.ReaderVersion())
-		},
-	})
-
-	r.Register(runner.Kind{
-		Name:   "read_vacancy",
-		Resume: true,
-		Serial: true,
-		Run: func(runCtx context.Context, j *runner.Job) error {
-			return runReadVacancy(runCtx, j, database,
-				func(vid int64) models.Model { return gate.For("reading", "background", vid) },
-				r.Enqueue)
-		},
-	})
 	recomputeFit()
-
-	r.Register(runner.Kind{
-		Name:   "analyze_document",
-		Resume: false,
-		Run: func(runCtx context.Context, j *runner.Job) error {
-			return runAnalyzeDocument(runCtx, j, database, gate.For("reading", "background"))
-		},
-	})
-
-	r.Register(runner.Kind{
-		Name:   "retention",
-		Resume: true,
-		Run: func(runCtx context.Context, j *runner.Job) error {
-			return runRetention(runCtx, j, cat, database, logger, time.Now())
-		},
-	})
 
 	blocked := offline && flags.replayDir == ""
 	col := collect.New(store, cat, r, fetcher, database, blocked, nil, logger)
@@ -342,4 +301,57 @@ func retentionDue(now time.Time, r *runner.Runner) bool {
 		return true
 	}
 	return now.After(last.Created.Add(24 * time.Hour))
+}
+
+type modelSource interface {
+	For(kind, class string, vacancy ...int64) models.Model
+}
+
+func fitRules(store *config.Store) func() fit.Rules {
+	return func() fit.Rules { c := store.Get(); return fit.Rules{Weights: c.Weights, Rates: c.Rates} }
+}
+
+func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, gate modelSource, cat *catalog.Catalog, logger *slog.Logger, offline bool, now func() time.Time) {
+	r.Register(runner.Kind{
+		Name:   "recompute_fit",
+		Resume: true,
+		Run: func(runCtx context.Context, j *runner.Job) error {
+			rel, err := j.Lane(runCtx, "cpu")
+			if err != nil {
+				return err
+			}
+			defer rel()
+			if err := fit.Recompute(runCtx, database, fitRules(store), j.Progress); err != nil {
+				return err
+			}
+			return queueReadings(runCtx, database, r.Enqueue, store, offline, reading.ReaderVersion())
+		},
+	})
+
+	r.Register(runner.Kind{
+		Name:   "read_vacancy",
+		Resume: true,
+		Serial: true,
+		Run: func(runCtx context.Context, j *runner.Job) error {
+			return runReadVacancy(runCtx, j, database,
+				func(vid int64) models.Model { return gate.For("reading", "background", vid) },
+				r.Enqueue)
+		},
+	})
+
+	r.Register(runner.Kind{
+		Name:   "analyze_document",
+		Resume: false,
+		Run: func(runCtx context.Context, j *runner.Job) error {
+			return runAnalyzeDocument(runCtx, j, database, gate.For("reading", "background"))
+		},
+	})
+
+	r.Register(runner.Kind{
+		Name:   "retention",
+		Resume: true,
+		Run: func(runCtx context.Context, j *runner.Job) error {
+			return runRetention(runCtx, j, cat, database, logger, now())
+		},
+	})
 }
