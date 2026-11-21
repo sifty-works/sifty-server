@@ -8,10 +8,13 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -51,57 +54,49 @@ type documentRow struct {
 	CreatedAt   string
 }
 
-func kindFromName(name string) (string, bool) {
-	switch strings.ToLower(filepath.Ext(name)) {
-	case ".pdf":
-		return "pdf", true
-	case ".docx":
-		return "docx", true
-	case ".md":
-		return "md", true
-	case ".txt":
-		return "txt", true
-	}
-	return "", false
+type documentKind struct {
+	ext      string
+	kind     string
+	detected string
+	refusal  string
+	read     func(context.Context, TextSource, *slog.Logger, []byte) (string, string, string)
 }
 
-func checkDocumentBytes(kind string, body []byte) error {
-	detected := http.DetectContentType(body)
-	switch kind {
-	case "txt":
-		if !strings.HasPrefix(detected, "text/plain") {
-			return apperr.Invalid{Message: "The file must be a plain text file."}
+var documentKinds = []documentKind{
+	{".pdf", "pdf", "application/pdf", "The file must be a PDF document.", extractPDF},
+	{".md", "md", "text/plain", "The file must be a plain text file.", readPlainText},
+	{".txt", "txt", "text/plain", "The file must be a plain text file.", readPlainText},
+}
+
+const notADocumentKind = "The file must be a PDF, Markdown or plain text file."
+
+func kindFromName(name string) (documentKind, bool) {
+	ext := strings.ToLower(filepath.Ext(name))
+	for _, k := range documentKinds {
+		if k.ext == ext {
+			return k, true
 		}
-	case "md":
-		if !strings.HasPrefix(detected, "text/plain") {
-			return apperr.Invalid{Message: "The file must be a plain text file."}
-		}
-	case "pdf":
-		if detected != "application/pdf" {
-			return apperr.Invalid{Message: "The file must be a PDF document."}
-		}
-	case "docx":
-		if detected != "application/zip" {
-			return apperr.Invalid{Message: "The file must be a Word document."}
-		}
+	}
+	return documentKind{}, false
+}
+
+func (k documentKind) check(body []byte) error {
+	if !strings.HasPrefix(http.DetectContentType(body), k.detected) {
+		return apperr.Invalid{Message: k.refusal}
 	}
 	return nil
 }
 
-func extractText(ctx context.Context, src TextSource, logger *slog.Logger, kind string, body []byte) (text, state, stateReason string) {
-	switch kind {
-	case "txt", "md":
-		return string(body), "ready", ""
-	case "docx":
-		t, err := extractDocx(body)
-		if err != nil {
-			return "", "error", "The document could not be read."
-		}
-		return t, "ready", ""
-	case "pdf":
-		return extractPDF(ctx, src, logger, body)
+func readPlainText(_ context.Context, _ TextSource, _ *slog.Logger, body []byte) (string, string, string) {
+	return string(body), "ready", ""
+}
+
+func readWordDocument(_ context.Context, _ TextSource, _ *slog.Logger, body []byte) (string, string, string) {
+	t, err := extractDocx(body)
+	if err != nil {
+		return "", "error", "The document could not be read."
 	}
-	return "", "error", "Unknown document kind."
+	return t, "ready", ""
 }
 
 const (
@@ -109,23 +104,95 @@ const (
 	mcNS   = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 )
 
+const docxMain = "word/document.xml"
+
 func extractDocx(body []byte) (string, error) {
 	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 	if err != nil {
 		return "", fmt.Errorf("not a valid Word document")
 	}
-	for _, f := range zr.File {
-		if f.Name != "word/document.xml" {
+	if _, err := fs.Stat(zr, docxMain); err != nil {
+		return "", fmt.Errorf("not a valid Word document")
+	}
+	targets := map[string]string{}
+	for _, e := range docxElements(zr, "word/_rels/document.xml.rels", "Relationship") {
+		targets[xmlAttr(e, "Id")] = xmlAttr(e, "Target")
+	}
+	var around [2][]string
+	for _, e := range docxElements(zr, docxMain, "headerReference", "footerReference") {
+		target := targets[xmlAttr(e, "id")]
+		if target == "" {
 			continue
 		}
-		rc, err := f.Open()
-		if err != nil {
-			return "", fmt.Errorf("could not read document content")
+		name := path.Join("word", target)
+		if strings.HasPrefix(target, "/") {
+			name = target[1:]
 		}
-		defer rc.Close()
-		return parseDocxXML(rc)
+		side := 0
+		if e.Name.Local == "footerReference" {
+			side = 1
+		}
+		around[side] = append(around[side], name)
 	}
-	return "", fmt.Errorf("not a valid Word document")
+	var texts []string
+	seen := map[string]bool{}
+	collect := func(names []string) {
+		for _, name := range names {
+			t, err := docxText(zr, name)
+			if err != nil || t == "" || seen[t] {
+				continue
+			}
+			seen[t] = true
+			texts = append(texts, t)
+		}
+	}
+	collect(around[0])
+	main, err := docxText(zr, docxMain)
+	if err != nil {
+		return "", err
+	}
+	if main != "" {
+		texts = append(texts, main)
+	}
+	collect(around[1])
+	return strings.Join(texts, "\n"), nil
+}
+
+func docxText(zr *zip.Reader, name string) (string, error) {
+	f, err := zr.Open(name)
+	if err != nil {
+		return "", fmt.Errorf("could not read document content")
+	}
+	defer f.Close()
+	return parseDocxXML(f)
+}
+
+func docxElements(zr *zip.Reader, name string, locals ...string) []xml.StartElement {
+	f, err := zr.Open(name)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	var out []xml.StartElement
+	dec := xml.NewDecoder(f)
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return out
+		}
+		if t, ok := tok.(xml.StartElement); ok && slices.Contains(locals, t.Name.Local) {
+			out = append(out, t.Copy())
+		}
+	}
+}
+
+func xmlAttr(e xml.StartElement, local string) string {
+	for _, a := range e.Attr {
+		if a.Name.Local == local {
+			return a.Value
+		}
+	}
+	return ""
 }
 
 func parseDocxXML(r io.Reader) (string, error) {
@@ -156,7 +223,7 @@ func parseDocxXML(r io.Reader) (string, error) {
 					inText = true
 				case "tab":
 					sb.WriteByte('\t')
-				case "br":
+				case "br", "cr":
 					sb.WriteByte('\n')
 				}
 			}

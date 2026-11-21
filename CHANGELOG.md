@@ -4,7 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-- Documents: a CV or a note arrives as a file (pdf, docx, md or txt, at most 2 MiB) or as pasted text, keeps its extracted text and its original, is listed newest first, can be marked "Use as evidence" and can be deleted with its file; the text of a pdf is read by the `pdftotext` program of poppler when it is installed, and a pdf stored before that is read again by `POST /api/documents/{id}/refresh`; when the program is missing the document says how to install it, and nothing is analysed by a model.
+- Documents: a CV or a note arrives as a file (pdf, md or txt, at most 2 MiB) or as pasted text, keeps its extracted text and its original, is listed newest first, can be marked "Use as evidence" and can be deleted with its file; the text of a pdf is read by the `pdftotext` program of poppler when it is installed, and a pdf stored before that is read again by `POST /api/documents/{id}/refresh`; when the program is missing the document says how to install it, and nothing is analysed by a model.
 - Web client 0.11.1: the interface description is in step with the server; the client itself is unchanged.
 - The budget of the backend code is 18,500 lines instead of 16,000: the capabilities already delivered are 2,294 lines above the estimates they were given, and the estimates of the capabilities still to come were left as they are.
 - Web client 0.11.0: Settings has a Models section with the kind of model work and its provider, the providers with their cost and state, and the background work switches, the daily limit and the day's count; a settings file restored from a backup is named under the header.

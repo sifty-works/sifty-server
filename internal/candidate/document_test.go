@@ -1,7 +1,6 @@
 package candidate_test
 
 import (
-	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -69,21 +68,6 @@ func pasteDoc(t *testing.T, ts *httptest.Server, name, text string) (map[string]
 	return send(t, ts, http.MethodPost, "/api/documents", map[string]any{"name": name, "text": text})
 }
 
-func buildDocx(t *testing.T, text string) []byte {
-	t.Helper()
-	var buf bytes.Buffer
-	w := zip.NewWriter(&buf)
-	f, err := w.Create("word/document.xml")
-	if err != nil {
-		t.Fatalf("build docx: %v", err)
-	}
-	fmt.Fprintf(f, `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>%s</w:t></w:r></w:p></w:body></w:document>`, text)
-	if err := w.Close(); err != nil {
-		t.Fatalf("build docx close: %v", err)
-	}
-	return buf.Bytes()
-}
-
 func buildPDF() []byte {
 	return []byte("%PDF-1.4 fake pdf content for testing purposes only")
 }
@@ -94,9 +78,6 @@ func getDoc(t *testing.T, ts *httptest.Server, path string) (map[string]any, int
 }
 
 func TestUploadKindsTable(t *testing.T) {
-	docxText := "Engineer"
-	docxCharCount := float64(len([]rune(docxText)))
-
 	cases := []struct {
 		name          string
 		filename      string
@@ -124,15 +105,6 @@ func TestUploadKindsTable(t *testing.T) {
 			wantState:     "ready",
 			wantCharCount: float64(len([]rune("# Title"))),
 		},
-		{
-			name:          "docx kind state and exact charCount",
-			filename:      "cv.docx",
-			body:          nil,
-			ct:            "application/zip",
-			wantKind:      "docx",
-			wantState:     "ready",
-			wantCharCount: docxCharCount,
-		},
 	}
 
 	d := openTestDB(t)
@@ -140,11 +112,7 @@ func TestUploadKindsTable(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			body := tc.body
-			if tc.filename == "cv.docx" {
-				body = buildDocx(t, docxText)
-			}
-			out, status := uploadDoc(t, ts, tc.filename, body, tc.ct)
+			out, status := uploadDoc(t, ts, tc.filename, tc.body, tc.ct)
 			if status != http.StatusOK {
 				t.Fatalf("upload %s: status %d, body: %v", tc.filename, status, out)
 			}
@@ -158,71 +126,6 @@ func TestUploadKindsTable(t *testing.T) {
 				t.Errorf("charCount = %v, want %v", out["charCount"], tc.wantCharCount)
 			}
 		})
-	}
-}
-
-func TestDocxExtractionMultipleStructures(t *testing.T) {
-	docXML := `<?xml version="1.0" encoding="UTF-8"?>` +
-		`<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"` +
-		` xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
-		`<w:body>` +
-		`<w:p><w:r><w:t>FirstParagraph</w:t></w:r></w:p>` +
-		`<w:p><w:r><w:t>SecondParagraph</w:t></w:r></w:p>` +
-		`<w:tbl><w:tr>` +
-		`<w:tc><w:p><w:r><w:t>CellAlpha</w:t></w:r></w:p></w:tc>` +
-		`<w:tc><w:p><w:r><w:t>CellBeta</w:t></w:r></w:p></w:tc>` +
-		`</w:tr></w:tbl>` +
-		`<w:p><w:r><w:t>Tab</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t>Separated</w:t></w:r></w:p>` +
-		`<mc:AlternateContent>` +
-		`<mc:Choice Requires="wps"><w:p><w:r><w:t>TextBoxContent</w:t></w:r></w:p></mc:Choice>` +
-		`<mc:Fallback><w:p><w:r><w:t>TextBoxContent</w:t></w:r></w:p></mc:Fallback>` +
-		`</mc:AlternateContent>` +
-		`</w:body></w:document>`
-
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	f, err := zw.Create("word/document.xml")
-	if err != nil {
-		t.Fatalf("build docx: %v", err)
-	}
-	fmt.Fprint(f, docXML)
-	if err := zw.Close(); err != nil {
-		t.Fatalf("build docx close: %v", err)
-	}
-
-	d := openTestDB(t)
-	ts := newDocServer(t, d)
-
-	out, status := uploadDoc(t, ts, "complex.docx", buf.Bytes(), "application/zip")
-	if status != http.StatusOK {
-		t.Fatalf("upload complex docx: status %d, body: %v", status, out)
-	}
-	id := out["id"]
-	idStr := fmt.Sprintf("%.0f", id)
-
-	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/documents/"+idStr+"/text", nil)
-	req.Host = "127.0.0.1:9999"
-	resp, err := ts.Client().Do(req)
-	if err != nil {
-		t.Fatalf("GET /text: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("text endpoint: status %d, want 200", resp.StatusCode)
-	}
-	got, _ := io.ReadAll(resp.Body)
-	text := string(got)
-
-	for _, want := range []string{"FirstParagraph", "SecondParagraph", "CellAlpha", "CellBeta", "Tab", "Separated", "TextBoxContent"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("extracted text missing %q; got: %q", want, text)
-		}
-	}
-	if strings.Contains(text, "TabSeparated") {
-		t.Errorf("tab did not separate words: got %q", text)
-	}
-	if n := strings.Count(text, "TextBoxContent"); n != 1 {
-		t.Errorf("TextBoxContent appears %d times, want exactly 1 (AlternateContent fallback must be skipped); got: %q", n, text)
 	}
 }
 
@@ -623,33 +526,14 @@ func TestWrongExtensionIsRefused(t *testing.T) {
 	d := openTestDB(t)
 	ts := newDocServer(t, d)
 
-	_, status := uploadDoc(t, ts, "document.exe", []byte("some bytes"), "application/octet-stream")
-	if status != http.StatusUnprocessableEntity {
-		t.Errorf("wrong extension: status %d, want 422", status)
-	}
-}
-
-func TestZipWithoutDocumentXmlIsStoredWithErrorState(t *testing.T) {
-	d := openTestDB(t)
-	ts := newDocServer(t, d)
-
-	var buf bytes.Buffer
-	w := zip.NewWriter(&buf)
-	f, err := w.Create("not_a_word_file.txt")
-	if err != nil {
-		t.Fatalf("build zip: %v", err)
-	}
-	fmt.Fprint(f, "not a docx")
-	if err := w.Close(); err != nil {
-		t.Fatalf("build zip close: %v", err)
-	}
-
-	out, status := uploadDoc(t, ts, "fake.docx", buf.Bytes(), "application/zip")
-	if status != http.StatusOK {
-		t.Fatalf("zip without document.xml: status %d, body: %v", status, out)
-	}
-	if out["state"] != "error" {
-		t.Errorf("state = %v, want error for zip without word/document.xml", out["state"])
+	for _, name := range []string{"document.exe", "cv.docx"} {
+		out, status := uploadDoc(t, ts, name, []byte("some bytes"), "application/octet-stream")
+		if status != http.StatusUnprocessableEntity {
+			t.Errorf("%s: status %d, want 422", name, status)
+		}
+		if msg, _ := out["error"].(string); msg != "The file must be a PDF, Markdown or plain text file." {
+			t.Errorf("%s: error = %q", name, msg)
+		}
 	}
 }
 

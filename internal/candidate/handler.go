@@ -676,9 +676,9 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, pdfTex
 			server.MapError(w, apperr.Invalid{Message: "Name must not be empty."}, logger)
 			return
 		}
-		kind, ok := kindFromName(name)
+		k, ok := kindFromName(name)
 		if !ok {
-			server.MapError(w, apperr.Invalid{Message: "The file must be a PDF, Word document, Markdown or plain text file."}, logger)
+			server.MapError(w, apperr.Invalid{Message: notADocumentKind}, logger)
 			return
 		}
 		body, err := io.ReadAll(r.Body)
@@ -690,12 +690,12 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, pdfTex
 			server.MapError(w, apperr.Invalid{Message: "The file is empty."}, logger)
 			return
 		}
-		if err := checkDocumentBytes(kind, body); err != nil {
+		if err := k.check(body); err != nil {
 			server.MapError(w, err, logger)
 			return
 		}
-		text, state, stateReason := extractText(r.Context(), pdfText, logger, kind, body)
-		item, err := saveDocument(r.Context(), database, filesDir, name, kind, body, text, state, stateReason)
+		text, state, stateReason := k.read(r.Context(), pdfText, logger, body)
+		item, err := saveDocument(r.Context(), database, filesDir, name, k.kind, body, text, state, stateReason)
 		if server.MapError(w, err, logger) {
 			return
 		}
@@ -799,7 +799,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, pdfTex
 		if err != nil {
 			return DocumentItem{}, apperr.NotFound{Message: "No original file for this document."}
 		}
-		text, state, stateReason := extractText(ctx, pdfText, logger, row.Kind, body)
+		text, state, stateReason := extractPDF(ctx, pdfText, logger, body)
 		if err := updateDocumentText(ctx, database, id, text, state, stateReason); err != nil {
 			return DocumentItem{}, err
 		}
