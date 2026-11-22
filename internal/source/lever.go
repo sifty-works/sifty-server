@@ -11,15 +11,12 @@ import (
 	"github.com/sifty-works/sifty-server/internal/listing"
 )
 
-var srcLever Module = &leverSource{}
+var srcLever Module = &leverSource{board{hosts: []string{"jobs.lever.co", "jobs.eu.lever.co"}, depth: 2}}
 
-type leverSource struct{}
+type leverSource struct{ board }
 
-func (s *leverSource) Name() string { return "lever" }
-func (s *leverSource) Match(u *url.URL) bool {
-	h := strings.ToLower(u.Host)
-	return (h == "jobs.lever.co" || h == "jobs.eu.lever.co") && isRoot(u)
-}
+func (s *leverSource) Name() string          { return "lever" }
+func (s *leverSource) Match(u *url.URL) bool { return s.owns(u) && isRoot(u) }
 
 func (s *leverSource) Group(u *url.URL) string {
 	return "api." + strings.ToLower(u.Host)[5:]

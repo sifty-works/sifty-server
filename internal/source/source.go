@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -41,7 +42,42 @@ type Grouper interface {
 	Group(u *url.URL) string
 }
 
-var apiModules = []Module{srcGreenhouse, srcLever, srcAshby, srcHN}
+type Vacancier interface {
+	Vacancy(u *url.URL) (string, bool)
+}
+
+type board struct {
+	hosts []string
+	depth int
+	mid   string
+}
+
+func (b board) owns(u *url.URL) bool { return slices.Contains(b.hosts, strings.ToLower(u.Host)) }
+
+func (b board) Vacancy(u *url.URL) (string, bool) {
+	path := strings.TrimRight(strings.TrimSuffix(strings.TrimSuffix(u.Path, "/application"), "/apply"), "/")
+	segs := strings.Split(strings.TrimPrefix(path, "/"), "/")
+	if !b.owns(u) || len(segs) != b.depth || (b.mid != "" && segs[1] != b.mid) || slices.Contains(segs, "") {
+		return "", false
+	}
+	canon, err := listing.Canonical(strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host) + path)
+	return canon, err == nil
+}
+
+var apiModules = []Module{srcGreenhouse, srcLever, srcAshby, srcWorkable, srcHN}
+
+func ConcreteATS(raw string) (string, bool) {
+	if u, err := url.Parse(raw); err == nil {
+		for _, m := range apiModules {
+			if v, ok := m.(Vacancier); ok {
+				if canon, ok := v.Vacancy(u); ok {
+					return canon, true
+				}
+			}
+		}
+	}
+	return "", false
+}
 
 func canonHost(u *url.URL) string {
 	return strings.TrimPrefix(strings.ToLower(u.Host), "www.")

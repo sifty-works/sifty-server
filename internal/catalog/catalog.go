@@ -17,6 +17,7 @@ import (
 
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/listing"
+	"github.com/sifty-works/sifty-server/internal/source"
 )
 
 type Outcome int
@@ -98,7 +99,7 @@ func resolve(ctx context.Context, tx *sql.Tx, p listing.Posting) (resolved, erro
 	var apply string
 	for _, raw := range []string{p.ApplyURL, p.URL} {
 		if raw != "" {
-			if ca, ok := listing.ConcreteATS(raw); ok {
+			if ca, ok := source.ConcreteATS(raw); ok {
 				apply = ca
 				break
 			}
@@ -550,7 +551,7 @@ func tombstoneKeys(canonURL, rawURL, applyURL string) []string {
 		if lk := listing.LegacyKey(applyURL); lk != "" {
 			keys = append(keys, "legacy:"+lk)
 		}
-		if ca, ok := listing.ConcreteATS(applyURL); ok {
+		if ca, ok := source.ConcreteATS(applyURL); ok {
 			keys = append(keys, "url:"+ca)
 		}
 	}

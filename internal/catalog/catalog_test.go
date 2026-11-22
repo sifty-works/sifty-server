@@ -577,6 +577,23 @@ func TestUpsert_CrossATSApplyRules(t *testing.T) {
 	}
 }
 
+func TestUpsert_SameEuropeanGreenhouseVacancyFromTwoSourcesIsOne(t *testing.T) {
+	d := openTestDB(t)
+	cat := catalog.New(d, fixedNow())
+	p1 := posting("https://acme.com/jobs/a", "Platform Engineer", "Acme Corp")
+	p1.ApplyURL = "https://boards.eu.greenhouse.io/acme/jobs/77/apply"
+	id1, _, _ := cat.Upsert(context.Background(), p1, "src1")
+	p2 := posting("https://anotherjobs.com/b", "Platform Developer", "Other Name")
+	p2.ApplyURL = "https://boards.eu.greenhouse.io/acme/jobs/77"
+	if id2, _, err := cat.Upsert(context.Background(), p2, "src2"); err != nil || id2 != id1 {
+		t.Errorf("second upsert: id %d (want %d), err %v", id2, id1, err)
+	}
+	d.Exec(`INSERT INTO exclusion (kind,value,norm,profile_id,created) VALUES ('company','acme','acme',0,datetime('now'))`)
+	if ok, _ := catalog.Excluded(context.Background(), d, "Role", "Unrelated", p1.ApplyURL); !ok {
+		t.Error("company exclusion does not match the apply address on a European board")
+	}
+}
+
 func TestUpsert_GuessedCompanyRules(t *testing.T) {
 	for _, tc := range []struct{ init, next, want string }{
 		{"Acme Corp", "acme-board", "Acme Corp"},

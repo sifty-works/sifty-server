@@ -744,7 +744,7 @@ func doImport(ctx context.Context, copyDB *sql.DB, newDB *db.DB, store *config.S
 
 		applyURL := ""
 		if j.applyURL.Valid && j.applyURL.String != "" {
-			if ca, ok := listing.ConcreteATS(j.applyURL.String); ok {
+			if ca, ok := source.ConcreteATS(j.applyURL.String); ok {
 				applyURL = ca
 			}
 		}

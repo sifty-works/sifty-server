@@ -10,14 +10,12 @@ import (
 	"github.com/sifty-works/sifty-server/internal/listing"
 )
 
-var srcAshby Module = &ashbySource{}
+var srcAshby Module = &ashbySource{board{hosts: []string{"jobs.ashbyhq.com"}, depth: 2}}
 
-type ashbySource struct{}
+type ashbySource struct{ board }
 
-func (s *ashbySource) Name() string { return "ashby" }
-func (s *ashbySource) Match(u *url.URL) bool {
-	return strings.ToLower(u.Host) == "jobs.ashbyhq.com" && isRoot(u)
-}
+func (s *ashbySource) Name() string          { return "ashby" }
+func (s *ashbySource) Match(u *url.URL) bool { return s.owns(u) && isRoot(u) }
 
 func (s *ashbySource) Group(u *url.URL) string {
 	return "api." + strings.ToLower(u.Host)[5:]

@@ -44,7 +44,7 @@ func parseLinks(body []byte, base string, s Site) []listing.Posting {
 		key := u.String()
 		isVacancy := linkRE != nil && linkRE.MatchString(u.Path)
 		if !isVacancy {
-			_, isVacancy = listing.ConcreteATS(u.String())
+			_, isVacancy = ConcreteATS(u.String())
 		}
 		if !isVacancy {
 			isVacancy = vacancyPathRE.MatchString(u.Path)

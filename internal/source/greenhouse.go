@@ -11,16 +11,13 @@ import (
 	"github.com/sifty-works/sifty-server/internal/listing"
 )
 
-var srcGreenhouse Module = &greenhouseSource{}
+var srcGreenhouse Module = &greenhouseSource{board{
+	[]string{"boards.greenhouse.io", "job-boards.greenhouse.io", "boards.eu.greenhouse.io", "job-boards.eu.greenhouse.io"}, 3, "jobs"}}
 
-type greenhouseSource struct{}
+type greenhouseSource struct{ board }
 
-func (s *greenhouseSource) Name() string { return "greenhouse" }
-func (s *greenhouseSource) Match(u *url.URL) bool {
-	h := strings.ToLower(u.Host)
-	return (h == "boards.greenhouse.io" || h == "job-boards.greenhouse.io" ||
-		h == "boards.eu.greenhouse.io" || h == "job-boards.eu.greenhouse.io") && isRoot(u)
-}
+func (s *greenhouseSource) Name() string          { return "greenhouse" }
+func (s *greenhouseSource) Match(u *url.URL) bool { return s.owns(u) && isRoot(u) }
 
 func (s *greenhouseSource) Group(u *url.URL) string {
 	return "boards-api." + strings.SplitN(strings.ToLower(u.Host), ".", 2)[1]

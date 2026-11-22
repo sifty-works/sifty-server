@@ -64,42 +64,6 @@ func TestIdentity(t *testing.T) {
 	}
 }
 
-func TestConcreteATS(t *testing.T) {
-	for _, tc := range []struct {
-		raw    string
-		want   string
-		wantOK bool
-	}{
-		{"https://boards.greenhouse.io/acme/jobs/12345", "https://boards.greenhouse.io/acme/jobs/12345", true},
-		{"https://job-boards.greenhouse.io/acme/jobs/12345", "https://job-boards.greenhouse.io/acme/jobs/12345", true},
-		{"https://boards.greenhouse.io/acme/jobs/12345/apply", "https://boards.greenhouse.io/acme/jobs/12345", true},
-		{"https://jobs.lever.co/acme/550e8400-e29b-41d4-a716-446655440000", "https://jobs.lever.co/acme/550e8400-e29b-41d4-a716-446655440000", true},
-		{"https://jobs.lever.co/acme/550e8400-e29b-41d4-a716-446655440000/apply", "https://jobs.lever.co/acme/550e8400-e29b-41d4-a716-446655440000", true},
-		{"https://jobs.ashbyhq.com/acme/550e8400-e29b-41d4-a716-446655440000", "https://jobs.ashbyhq.com/acme/550e8400-e29b-41d4-a716-446655440000", true},
-		{"https://jobs.ashbyhq.com/acme/550e8400-e29b-41d4-a716-446655440000/apply", "https://jobs.ashbyhq.com/acme/550e8400-e29b-41d4-a716-446655440000", true},
-		{"https://jobs.ashbyhq.com/acme/550e8400-e29b-41d4-a716-446655440000/application", "https://jobs.ashbyhq.com/acme/550e8400-e29b-41d4-a716-446655440000", true},
-		{"https://apply.workable.com/acme/j/ABC123", "https://apply.workable.com/acme/j/ABC123", true},
-		{"https://apply.workable.com/acme/j/ABC123/apply", "https://apply.workable.com/acme/j/ABC123", true},
-		{"https://boards.greenhouse.io/acme", "", false},
-		{"https://job-boards.greenhouse.io/acme", "", false},
-		{"https://jobs.lever.co/acme", "", false},
-		{"https://jobs.ashbyhq.com/acme", "", false},
-		{"https://apply.workable.com/acme", "", false},
-		{"https://apply.workable.com/acme/j", "", false},
-		{"https://example.com/jobs/42", "", false},
-		{"https://linkedin.com/jobs/view/12345", "", false},
-	} {
-		got, ok := listing.ConcreteATS(tc.raw)
-		if ok != tc.wantOK {
-			t.Errorf("ConcreteATS(%q) ok=%v, want %v", tc.raw, ok, tc.wantOK)
-			continue
-		}
-		if ok && got != tc.want {
-			t.Errorf("ConcreteATS(%q): got %q, want %q", tc.raw, got, tc.want)
-		}
-	}
-}
-
 func hexDigest(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])

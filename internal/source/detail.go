@@ -164,7 +164,7 @@ func Detail(ctx context.Context, f fetch.Fetcher, p listing.Posting, s Site) (li
 			}
 			for _, a := range n.Attr {
 				if a.Key == "href" {
-					if u, ok := listing.ConcreteATS(resolveURL(a.Val, base)); ok {
+					if u, ok := ConcreteATS(resolveURL(a.Val, base)); ok {
 						p.ApplyURL = u
 						return false
 					}
