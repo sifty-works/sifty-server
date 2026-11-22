@@ -55,7 +55,7 @@ func cliGate(t *testing.T, pc config.ProviderConfig) *models.Gate {
 	t.Helper()
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"p": pc}
-	cfg.Work = &config.WorkConfig{Reading: "p"}
+	cfg.Work = config.WorkConfig{"reading": "p"}
 	store := openTestStore(t, cfg)
 	gate := models.NewGate(openTestDB(t), store, false, nil)
 	t.Cleanup(func() { gate.Stop(context.Background()) })

@@ -110,31 +110,23 @@ func importProviders(ctx context.Context, fromDir string, database *db.DB, store
 		report.SettingsCarried = append(report.SettingsCarried, fmt.Sprintf("providers.%s: type=%s cost=%s", name, newType, cost))
 	}
 
-	work := config.WorkConfig{}
-	hasWork := false
 	reading := prov.Stages.Assessment
 	if reading == "" {
 		reading = prov.Stages.Extraction
 	}
-	if reading != "" {
-		if _, ok := providers[reading]; ok {
-			work.Reading = reading
-			hasWork = true
-			report.SettingsCarried = append(report.SettingsCarried, fmt.Sprintf("work.reading: %s", reading))
-		}
-	}
-	if prov.Stages.Preparation != "" {
-		if _, ok := providers[prov.Stages.Preparation]; ok {
-			work.Preparation = prov.Stages.Preparation
-			hasWork = true
-			report.SettingsCarried = append(report.SettingsCarried, fmt.Sprintf("work.preparation: %s", prov.Stages.Preparation))
+	stages := map[string]string{"reading": reading, "preparation": prov.Stages.Preparation}
+	work := config.WorkConfig{}
+	for _, kind := range config.WorkKinds {
+		if _, ok := providers[stages[kind]]; ok && stages[kind] != "" {
+			work[kind] = stages[kind]
+			report.SettingsCarried = append(report.SettingsCarried, fmt.Sprintf("work.%s: %s", kind, stages[kind]))
 		}
 	}
 
 	if err := store.Update(func(c *config.Config) error {
 		c.Providers = providers
-		if hasWork {
-			c.Work = &work
+		if len(work) > 0 {
+			c.Work = work
 		}
 		if rt.QuickMatch.ModelPasses.AllowPaidBulkProvider {
 			c.AllowPaidBulk = true

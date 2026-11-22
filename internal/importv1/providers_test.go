@@ -136,14 +136,11 @@ func TestImportProviders_WorkStagesMapped(t *testing.T) {
 	}
 	cfg := store.Get()
 
-	if cfg.Work == nil {
-		t.Fatal("work config is nil")
+	if cfg.Work["reading"] != "localmodel" {
+		t.Errorf("work.reading: got %q, want localmodel (from assessment stage)", cfg.Work["reading"])
 	}
-	if cfg.Work.Reading != "localmodel" {
-		t.Errorf("work.reading: got %q, want localmodel (from assessment stage)", cfg.Work.Reading)
-	}
-	if cfg.Work.Preparation != "remotemodel" {
-		t.Errorf("work.preparation: got %q, want remotemodel", cfg.Work.Preparation)
+	if cfg.Work["preparation"] != "remotemodel" {
+		t.Errorf("work.preparation: got %q, want remotemodel", cfg.Work["preparation"])
 	}
 }
 
@@ -210,7 +207,7 @@ providers:
 		t.Fatal(err)
 	}
 	cfg := store.Get()
-	if cfg.Work == nil || cfg.Work.Reading != "mymodel" {
+	if cfg.Work["reading"] != "mymodel" {
 		t.Errorf("work.reading: got %v, want mymodel (from extraction)", cfg.Work)
 	}
 }

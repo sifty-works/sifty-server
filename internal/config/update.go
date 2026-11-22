@@ -27,10 +27,7 @@ func (s *Store) Update(fn func(c *Config) error) error {
 	}
 	newCfg.Weights, newCfg.Rates = maps.Clone(s.cfg.Weights), maps.Clone(s.cfg.Rates)
 	newCfg.Providers = maps.Clone(s.cfg.Providers)
-	if s.cfg.Work != nil {
-		w := *s.cfg.Work
-		newCfg.Work = &w
-	}
+	newCfg.Work = maps.Clone(s.cfg.Work)
 	if err := fn(&newCfg); err != nil {
 		switch err.(type) {
 		case apperr.Invalid, apperr.NotFound, apperr.Conflict, apperr.Busy:
@@ -120,7 +117,7 @@ func applyDiff(root *yaml.Node, old, new Config) {
 	if !maps.Equal(old.Providers, new.Providers) {
 		applyProviders(root, new.Providers)
 	}
-	if !(old.Work == nil && new.Work == nil) && (old.Work == nil || new.Work == nil || *old.Work != *new.Work) {
+	if !maps.Equal(old.Work, new.Work) {
 		applyWork(root, new.Work)
 	}
 	if old.AllowPaidBulk != new.AllowPaidBulk {
@@ -141,13 +138,15 @@ func applyProviders(root *yaml.Node, providers map[string]ProviderConfig) {
 	setNodeValue(root, "providers", &doc)
 }
 
-func applyWork(root *yaml.Node, work *WorkConfig) {
-	if work == nil || (*work == WorkConfig{}) {
+func applyWork(root *yaml.Node, work WorkConfig) {
+	var doc yaml.Node
+	if len(work) > 0 {
+		doc.Encode(work)
+	}
+	if len(doc.Content) == 0 {
 		removeMappingKey(root, "work")
 		return
 	}
-	var doc yaml.Node
-	doc.Encode(work)
 	setNodeValue(root, "work", &doc)
 }
 

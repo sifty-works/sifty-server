@@ -393,3 +393,39 @@ func TestUpdateWritesOnlyChangedWeights(t *testing.T) {
 		t.Error("an update changed the defaults")
 	}
 }
+
+func TestWorkProvidersKeepTheirShapeInTheFileWhenSaved(t *testing.T) {
+	s, dir := openStoreWith(t, "providers:\n  a: {type: ollama}\n  b: {type: ollama}\nwork:\n  preparation: a\n  dreaming: a\n  reading: b\n")
+	before := s.Get()
+	if got := before.WorkProviderFor("preparation"); got != "a" {
+		t.Errorf("preparation before saving: %q", got)
+	}
+	err := s.Update(func(c *config.Config) error {
+		for _, kind := range []string{"reading", "shortlist_check", "preparation"} {
+			if !c.SetWorkProvider(kind, "b") {
+				t.Errorf("kind %s refused", kind)
+			}
+		}
+		if c.SetWorkProvider("dreaming", "b") {
+			t.Error("an unknown kind was accepted")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "sifty.yaml"))
+	if want := "work:\n  reading: b\n  shortlist_check: b\n  preparation: b\n"; !strings.Contains(string(data), want) {
+		t.Errorf("work block after saving:\n%s", data)
+	}
+	reopened, _, err := config.Open(filepath.Join(dir, "sifty.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := reopened.Get()
+	for _, kind := range config.WorkKinds {
+		if got := after.WorkProviderFor(kind); got != "b" {
+			t.Errorf("%s after reopening: %q", kind, got)
+		}
+	}
+}

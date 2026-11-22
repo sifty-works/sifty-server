@@ -73,7 +73,7 @@ func TestOllamaAdapterLoadsOnce(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
-	cfg.Work = &config.WorkConfig{Reading: "local"}
+	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
 	gate := models.NewGate(openTestDB(t), store, false, nil)
 	defer gate.Stop(context.Background())
@@ -103,7 +103,7 @@ func TestOllamaRefusesOverContextPrompt(t *testing.T) {
 		pc.Context = 10
 		return pc
 	}()
-	cfg.Work = &config.WorkConfig{Reading: "local"}
+	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
 	gate := models.NewGate(openTestDB(t), store, false, nil)
 	defer gate.Stop(context.Background())
@@ -122,7 +122,7 @@ func TestOllamaHonoursContext(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
-	cfg.Work = &config.WorkConfig{Reading: "local"}
+	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
 	gate := models.NewGate(openTestDB(t), store, false, nil)
 	defer gate.Stop(context.Background())
@@ -154,7 +154,7 @@ func TestOpenAISendsKeyAndParsesAnswer(t *testing.T) {
 	pc := providerConfig("openai", srv.URL+"/v1", "gpt-4o-mini", "paid")
 	pc.KeyEnv = "TESTPROVIDER_KEY"
 	cfg.Providers = map[string]config.ProviderConfig{"remote": pc}
-	cfg.Work = &config.WorkConfig{Reading: "remote"}
+	cfg.Work = config.WorkConfig{"reading": "remote"}
 	cfg.AllowPaidBulk = true
 	store := openTestStore(t, cfg)
 	secrets := map[string]string{"TESTPROVIDER_KEY": "sk-test-key"}
@@ -199,7 +199,7 @@ func TestUserCallBeforeBackgroundCall(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
-	cfg.Work = &config.WorkConfig{Reading: "local", ShortlistCheck: "local"}
+	cfg.Work = config.WorkConfig{"reading": "local", "shortlist_check": "local"}
 	store := openTestStore(t, cfg)
 	gate := models.NewGate(openTestDB(t), store, false, nil)
 	defer gate.Stop(context.Background())
@@ -228,7 +228,7 @@ func TestBackgroundWaitsWhilePaused(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
-	cfg.Work = &config.WorkConfig{Reading: "local"}
+	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
 	d := openTestDB(t)
 	gate := models.NewGate(d, store, false, nil)
@@ -253,7 +253,7 @@ func TestBackgroundWaitsAtDailyLimit(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
-	cfg.Work = &config.WorkConfig{Reading: "local"}
+	cfg.Work = config.WorkConfig{"reading": "local"}
 	cfg.DailyModelLimit = 2
 	store := openTestStore(t, cfg)
 	d := openTestDB(t)
@@ -278,7 +278,7 @@ func TestDailyLimitOfZeroAllowsUnlimitedBackgroundCalls(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
-	cfg.Work = &config.WorkConfig{Reading: "local"}
+	cfg.Work = config.WorkConfig{"reading": "local"}
 	cfg.DailyModelLimit = 0
 	store := openTestStore(t, cfg)
 	d := openTestDB(t)
@@ -301,7 +301,7 @@ func TestDailyLimitReducedOnRunningGateIsEnforced(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
-	cfg.Work = &config.WorkConfig{Reading: "local"}
+	cfg.Work = config.WorkConfig{"reading": "local"}
 	cfg.DailyModelLimit = 0
 	store := openTestStore(t, cfg)
 	d := openTestDB(t)
@@ -332,7 +332,7 @@ func TestBulkOnPaidRefusedUnlessAllowed(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"remote": providerConfig("openai", srv.URL, "gpt-4o", "paid")}
-	cfg.Work = &config.WorkConfig{Reading: "remote"}
+	cfg.Work = config.WorkConfig{"reading": "remote"}
 	store := openTestStore(t, cfg)
 	gate := models.NewGate(openTestDB(t), store, false, nil)
 	defer gate.Stop(context.Background())
@@ -364,7 +364,7 @@ func TestRevokedPaidBulkPermissionRefusesNextCallOnSameGate(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"remote": providerConfig("openai", srv.URL, "gpt-4o", "paid")}
-	cfg.Work = &config.WorkConfig{Reading: "remote"}
+	cfg.Work = config.WorkConfig{"reading": "remote"}
 	cfg.AllowPaidBulk = true
 	store := openTestStore(t, cfg)
 	gate := models.NewGate(openTestDB(t), store, false, nil)
@@ -399,7 +399,7 @@ func TestModelCallJournalRecorded(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"remote": providerConfig("openai", srv.URL, "gpt-4o-mini", "paid")}
-	cfg.Work = &config.WorkConfig{Reading: "remote"}
+	cfg.Work = config.WorkConfig{"reading": "remote"}
 	cfg.AllowPaidBulk = true
 	store := openTestStore(t, cfg)
 	d := openTestDB(t)
@@ -425,7 +425,7 @@ func TestOfflineMakesNoRequest(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
-	cfg.Work = &config.WorkConfig{Reading: "local"}
+	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
 	gate := models.NewGate(openTestDB(t), store, true, nil)
 	defer gate.Stop(context.Background())
@@ -485,7 +485,7 @@ func TestOllamaSendsFormatAndThink(t *testing.T) {
 
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
-	cfg.Work = &config.WorkConfig{Reading: "local"}
+	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
 	gate := models.NewGate(openTestDB(t), store, false, nil)
 	defer gate.Stop(context.Background())

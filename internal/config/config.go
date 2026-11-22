@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -90,10 +91,16 @@ type ProviderConfig struct {
 	KeyEnv   string   `yaml:"key_env,omitempty"`
 }
 
-type WorkConfig struct {
-	Reading        string `yaml:"reading,omitempty"`
-	ShortlistCheck string `yaml:"shortlist_check,omitempty"`
-	Preparation    string `yaml:"preparation,omitempty"`
+type WorkConfig map[string]string
+
+func (w WorkConfig) MarshalYAML() (any, error) {
+	n := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	for _, kind := range WorkKinds {
+		if w[kind] != "" {
+			setScalar(n, kind, w[kind], "!!str")
+		}
+	}
+	return n, nil
 }
 
 type Config struct {
@@ -104,7 +111,7 @@ type Config struct {
 	Weights         map[string]float64        `yaml:"weights"`
 	Rates           map[string]float64        `yaml:"rates"`
 	Providers       map[string]ProviderConfig `yaml:"providers,omitempty"`
-	Work            *WorkConfig               `yaml:"work,omitempty"`
+	Work            WorkConfig                `yaml:"work,omitempty"`
 	AllowPaidBulk   bool                      `yaml:"allow_paid_bulk,omitempty"`
 	DailyModelLimit int                       `yaml:"daily_model_limit,omitempty"`
 }
@@ -127,26 +134,21 @@ func Defaults() Config {
 var WorkKinds = []string{"reading", "shortlist_check", "preparation"}
 
 func (c *Config) WorkProviderFor(kind string) string {
-	if c.Work == nil {
-		return ""
-	}
-	return map[string]string{"reading": c.Work.Reading, "shortlist_check": c.Work.ShortlistCheck, "preparation": c.Work.Preparation}[kind]
+	return c.Work[kind]
 }
 
 func (c *Config) SetWorkProvider(kind, provider string) bool {
-	if c.Work == nil {
-		c.Work = &WorkConfig{}
-	}
-	switch kind {
-	case "reading":
-		c.Work.Reading = provider
-	case "shortlist_check":
-		c.Work.ShortlistCheck = provider
-	case "preparation":
-		c.Work.Preparation = provider
-	default:
+	if !slices.Contains(WorkKinds, kind) {
 		return false
 	}
+	if provider == "" {
+		delete(c.Work, kind)
+		return true
+	}
+	if c.Work == nil {
+		c.Work = WorkConfig{}
+	}
+	c.Work[kind] = provider
 	return true
 }
 
@@ -189,7 +191,6 @@ func parse(data []byte) (Config, []string, error) {
 	knownCollection := map[string]bool{"auto": true, "interval": true}
 	knownSource := map[string]bool{"name": true, "url": true, "enabled": true}
 	knownProvider := map[string]bool{"type": true, "model": true, "endpoint": true, "cost": true, "timeout": true, "context": true, "key_env": true}
-	knownWork := map[string]bool{"reading": true, "shortlist_check": true, "preparation": true}
 	var unknown []string
 	for i := 0; i+1 < len(root.Content); i += 2 {
 		k, v := root.Content[i].Value, root.Content[i+1]
@@ -209,7 +210,7 @@ func parse(data []byte) (Config, []string, error) {
 		case "work":
 			if v.Kind == yaml.MappingNode {
 				for j := 0; j+1 < len(v.Content); j += 2 {
-					if wk := v.Content[j].Value; !knownWork[wk] {
+					if wk := v.Content[j].Value; !slices.Contains(WorkKinds, wk) {
 						unknown = append(unknown, "work."+wk)
 					}
 				}
@@ -289,10 +290,9 @@ func Validate(c Config) error {
 			return fmt.Errorf("providers.%s: cost must be local, free or paid", name)
 		}
 	}
-	if c.Work != nil {
-		for kind, pname := range map[string]string{
-			"reading": c.Work.Reading, "shortlist_check": c.Work.ShortlistCheck, "preparation": c.Work.Preparation,
-		} {
+	{
+		for _, kind := range WorkKinds {
+			pname := c.Work[kind]
 			if pname == "" {
 				continue
 			}
