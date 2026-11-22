@@ -19,3 +19,5 @@ The order in which Sifty is built. Each slice delivers behaviour the user can se
 ## Status
 
 Slices 1 to 7 are accepted. Slice 7 was accepted on its own measure: a new vacancy text costs one model call and a change of profile costs none. Slice 8 is next.
+
+Two refinements of slice 7 are queued beside slice 8 and are not part of slice 7's acceptance: an undecided requirement row carries one + and one -, with the choice between the skills it names offered as a list rather than a button each; and the Models section of Settings shows the answer to the change made last rather than whichever answer arrives last.
