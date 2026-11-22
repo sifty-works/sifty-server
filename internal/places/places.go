@@ -272,3 +272,13 @@ func splitLabel(label string) []string {
 	}
 	return parts
 }
+
+const Separator = " · "
+
+func Short(locations []string) (shown, full string) {
+	joined := strings.Join(locations, Separator)
+	if len(locations) <= 3 {
+		return joined, ""
+	}
+	return strings.Join(locations[:2], Separator) + fmt.Sprintf(" +%d more", len(locations)-2), joined
+}

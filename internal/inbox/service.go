@@ -16,6 +16,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/fit"
 	"github.com/sifty-works/sifty-server/internal/listing"
+	"github.com/sifty-works/sifty-server/internal/places"
 )
 
 type Filters struct {
@@ -159,7 +160,10 @@ func toRow(rr repoRow, now time.Time, inputs int64, readingSet map[int64]bool) R
 	if industries == nil {
 		industries = []string{}
 	}
-	loc, full := shortLocation(rr.location)
+	loc, full := "Location unstated", ""
+	if rr.location != "" {
+		loc, full = places.Short(strings.Split(rr.location, places.Separator))
+	}
 	return Row{
 		ID:           rr.id,
 		Company:      rr.company,
@@ -336,19 +340,6 @@ func validateMove(from, to, reason string, confirmed bool) error {
 		return nil
 	}
 	return inv
-}
-
-const locationSeparator = " · "
-
-func shortLocation(loc string) (shown, full string) {
-	if loc == "" {
-		return "Location unstated", ""
-	}
-	parts := strings.Split(loc, locationSeparator)
-	if len(parts) <= 3 {
-		return loc, ""
-	}
-	return strings.Join(parts[:2], locationSeparator) + fmt.Sprintf(" +%d more", len(parts)-2), loc
 }
 
 func publicationLine(publishedAt, publishedBasis string, now time.Time) string {

@@ -64,6 +64,7 @@ type Tile struct {
 	Name      string `json:"name"`
 	Value     string `json:"value"`
 	Converted string `json:"converted,omitempty"`
+	Full      string `json:"full,omitempty"`
 	Line      string `json:"line"`
 	Verdict   string `json:"verdict"`
 }
@@ -173,9 +174,9 @@ func Score(p ProfileView, v reading.VacancyReading, r Rules) Fit {
 		f.State, f.Score = Scored, int(math.Round(num/den*100))
 		f.Bucket = Bucket(f.Score)
 	}
-	values, converted, lines := texts(p, v, open, r.Rates)
+	values, converted, lines, full := texts(p, v, open, r.Rates)
 	for i, t := range tiles {
-		f.Tiles = append(f.Tiles, Tile{t.name, values[i], converted[i], lines[i], verdict(f.Criteria, t.criteria)})
+		f.Tiles = append(f.Tiles, Tile{t.name, values[i], converted[i], full[i], lines[i], verdict(f.Criteria, t.criteria)})
 	}
 	return f
 }
@@ -372,10 +373,11 @@ func has(xs []string, x string) bool {
 	return false
 }
 
-func texts(p ProfileView, v reading.VacancyReading, open bool, rates map[string]float64) ([]string, []string, []string) {
+func texts(p ProfileView, v reading.VacancyReading, open bool, rates map[string]float64) ([]string, []string, []string, []string) {
 	g := p.Goals
 	val := []string{"Not stated", "Not stated", list(v.WorkModes, "Not stated"), "Not stated"}
 	conv := []string{"", "", "", ""}
+	full := []string{"", "", "", ""}
 	line := []string{"No minimum stated", "No preference stated", "You want: " + list(g.WorkModes, "not stated"), "You want: not stated"}
 	if m := v.Money; m != nil {
 		val[0] = symbol(m.Currency) + cash(m.Min, m.Max) + per(m.Period)
@@ -387,7 +389,7 @@ func texts(p ProfileView, v reading.VacancyReading, open bool, rates map[string]
 		line[0] = "Your minimum: " + strings.TrimSpace(c.Currency+" "+amount(*c.CashMin)+per(c.Period)+" "+c.GrossNet)
 	}
 	if len(v.Locations) > 0 {
-		val[1] = strings.Join(v.Locations, " · ")
+		val[1], full[1] = places.Short(v.Locations)
 	} else if open {
 		val[1] = "Remote, anywhere"
 	}
@@ -416,7 +418,7 @@ func texts(p ProfileView, v reading.VacancyReading, open bool, rates map[string]
 		goal = append(goal, h.Mode)
 	}
 	val[3], line[3] = list(contract, "Not stated"), "You want: "+list(goal, "not stated")
-	return val, conv, line
+	return val, conv, line, full
 }
 
 func symbol(currency string) string {
