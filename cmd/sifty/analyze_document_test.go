@@ -248,7 +248,7 @@ func TestAnalyzeDuplicateFilterCoverage(t *testing.T) {
 		},
 		{
 			name:   "experience company already in me experience",
-			meJSON: `{"skills":[],"languages":[],"experience":[{"company":"Acme Corp","role":"Engineer","start":"2020-01","current":true}]}`,
+			meJSON: `{"skills":[],"languages":[],"experience":[{"company":"Acme Corp","title":"Engineer","start":"2020-01","current":true}]}`,
 			field:  "experience", value: "Engineer at Acme Corp, 2020-present", quote: "Engineer at Acme Corp, 2020-present.",
 			docText: "Engineer at Acme Corp, 2020-present.",
 		},

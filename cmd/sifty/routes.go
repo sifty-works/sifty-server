@@ -15,6 +15,10 @@ import (
 	"github.com/sifty-works/sifty-server/internal/server"
 )
 
+func enqueueRecomputeFit(r *runner.Runner) func() {
+	return func() { r.Enqueue(runner.Spec{Kind: "recompute_fit"}) }
+}
+
 func registerAllRoutes(
 	mux *http.ServeMux,
 	logger *slog.Logger,

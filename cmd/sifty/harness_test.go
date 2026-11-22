@@ -116,7 +116,7 @@ func newRouteServerWithPDF(t *testing.T, d *db.DB, r *runner.Runner, pdfText can
 		Logger:            logger,
 		BinaryUploadPaths: []string{"/api/documents"},
 	}, func(mux *http.ServeMux) {
-		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, nil, t.TempDir(), pdfText, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r)
+		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, enqueueRecomputeFit(r), t.TempDir(), pdfText, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r)
 	})
 	ts := httptest.NewUnstartedServer(h)
 	ts.Listener = l

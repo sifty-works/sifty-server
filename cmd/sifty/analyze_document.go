@@ -113,13 +113,14 @@ func runAnalyzeDocument(
 
 	filtered := candidate.FilterFacts(text, cp.Facts, me, profile)
 
-	if err := candidate.SaveProposals(ctx, database, docID, filtered); err != nil {
+	saved, err := candidate.SaveProposals(ctx, database, docID, filtered)
+	if err != nil {
 		if catalog.IsFKError(err) {
 			return nil
 		}
 		return err
 	}
-	return candidate.UpdateDocumentAnalysed(ctx, database, docID, len(filtered))
+	return candidate.UpdateDocumentAnalysed(ctx, database, docID, saved)
 }
 
 func userFriendlyAnalyzeError(err error) string {

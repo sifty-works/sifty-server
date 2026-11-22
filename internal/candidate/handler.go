@@ -134,7 +134,7 @@ func LoadMe(ctx context.Context, database *db.DB) (MeData, error) {
 	return me, nil
 }
 
-func saveMeData(ctx context.Context, database *db.DB, me MeData) error {
+func saveMeData(ctx context.Context, database execer, me MeData) error {
 	NormalizeMeData(&me)
 	data, err := json.Marshal(me)
 	if err != nil {
@@ -195,7 +195,7 @@ func loadProfileRow(ctx context.Context, database *db.DB, id int64) (ProfileData
 	return pd, nil
 }
 
-func saveProfileRow(ctx context.Context, database *db.DB, id int64, pd ProfileData) error {
+func saveProfileRow(ctx context.Context, database execer, id int64, pd ProfileData) error {
 	NormalizeProfileData(&pd)
 	data, err := json.Marshal(pd)
 	if err != nil {
@@ -839,6 +839,9 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, pdfTex
 	server.Handle(mux, "GET /api/proposals", logger, func(r *http.Request, _ struct{}) (ProposalListResp, error) {
 		return listProposals(r.Context(), database)
 	})
+
+	server.Handle(mux, "POST /api/proposals/{id}/accept", logger, AcceptProposalHandler(database, changed))
+	server.Handle(mux, "POST /api/proposals/{id}/reject", logger, RejectProposalHandler(database))
 }
 
 func listProfiles(ctx context.Context, database *db.DB) (ProfileListResp, error) {

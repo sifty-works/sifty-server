@@ -146,7 +146,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		logger.Info("interrupted analyses set back to ready", "count", n)
 	}
 	rules := fitRules(store)
-	recomputeFit := func() { r.Enqueue(runner.Spec{Kind: "recompute_fit"}) }
+	recomputeFit := enqueueRecomputeFit(r)
 	recomputeFit()
 
 	blocked := offline && flags.replayDir == ""
