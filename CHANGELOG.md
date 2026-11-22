@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Web client 0.15.0: hovering a shortened Location tile in the Fits you band shows the full list of places.
+- The Location tile of the Fits you band uses the same short form as a list row, "AD · AE +195 more", instead of listing every place; the full text comes with it for hover, and the verdict and the score are unchanged.
 - Web client 0.14.0: hovering a shortened location in a list row shows the full list of places.
 - A location that lists more than three places is shown as its first two and "+N more", for example "Remote · AD +196 more", instead of filling the row; the full text comes with it for hover, and filtering still reads all of it.
 - Links become documents: "+ Add link" takes an address and makes a document from the text of the page behind it, read at the address as you typed it, with no model call; the same page added again in another spelling (tracking parameters, `www.`, a trailing slash) returns the document you already have, and two adds at the same moment give one document; a private address, a page behind a login or refusing automatic reading, a page that is not found or not loaded, one that is not a web page and one without text each say so and make no document; "Refresh source" reads the page again, writes nothing when its text is unchanged, and when it changed replaces the text so that the next Analyze starts from the beginning of the new text; pasted text and md or txt files say they have no source to read again.
