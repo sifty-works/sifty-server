@@ -53,7 +53,9 @@ There is one list of exclusions, managed in Settings.
 
 **Decisions in this session.** A vacancy shortlisted or dismissed from Inbox stays in the list until reload, shown as decided, and can be undone. Under the list: "N dismissed this session — they disappear next time." The selection moves to the next undecided vacancy, wrapping around.
 
-**When a vacancy leaves the open list** — moved to another stage, deleted, or hidden by blocking its company — the selection moves to the next vacancy below it, or to the one above when it was the last. The working area is left empty only when no vacancy is left.
+**When a vacancy leaves the open list** — moved to another stage, deleted, or hidden by blocking its company — the selection moves to the next vacancy below it, or to the one above when it was the last.
+
+**The working area always shows a vacancy while the list holds one.** On start, and whenever the list changes stage, profile, query or filters and no vacancy is open, the first vacancy of the list opens by itself; opening it this way does not mark it read, since the user did not choose it. When the list holds nothing, the working area reads "No roles" and "This stage has no visible roles. Change stage or filters, or collect jobs in Sources."; while the list is loading, and while the server does not answer, it shows nothing.
 
 **Empty states:**
 

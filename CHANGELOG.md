@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Web client 0.17.0: the first role of the list opens by itself, so the working area no longer stands empty with roles in the list; an empty list reads "No roles".
 - Web client 0.16.0: when the open role leaves the list — moved to another stage, deleted, or hidden by blocking its company — the next role opens instead of an empty working area.
 - Web client 0.15.0: hovering a shortened Location tile in the Fits you band shows the full list of places.
 - The Location tile of the Fits you band uses the same short form as a list row, "AD · AE +195 more", instead of listing every place; the full text comes with it for hover, and the verdict and the score are unchanged.
