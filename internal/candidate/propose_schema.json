@@ -6,7 +6,7 @@
       "items": {
         "type": "object",
         "properties": {
-          "field": {"type": "string", "enum": ["skill","language","targetRole","experience"]},
+          "field": {"type": "string", "enum": "{{fields}}"},
           "value": {"type": "string"},
           "quote": {"type": "string"}
         },
