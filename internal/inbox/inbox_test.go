@@ -455,10 +455,6 @@ func TestExclusions_Validation(t *testing.T) {
 	if excls, _ := body["exclusions"].([]any); len(excls) != 1 {
 		t.Fatalf("duplicate: want 1, got %d", len(excls))
 	}
-	_, status = apiJSON(t, ts, http.MethodPost, "/api/exclusions", map[string]any{"kind": "company", "value": "Unknown"})
-	if status != http.StatusUnprocessableEntity {
-		t.Fatalf("Unknown company: status %d, want 422", status)
-	}
 }
 
 func TestExclusions_Preview(t *testing.T) {
@@ -519,22 +515,6 @@ func TestExclusions_Filter(t *testing.T) {
 	exclude("company", "widgetboard")
 	if rows() != 2 {
 		t.Errorf("greenhouse rule: rows %d", rows())
-	}
-}
-
-func TestExclusions_UnknownPlaceholderNotMatchedByWord(t *testing.T) {
-	d := openTestDB(t)
-	setProfileData(t, d, nil, []string{"description"}, nil)
-	cat := newCat(d)
-	add(t, cat, post("https://example.com/jobs/unk1", "Frontend Developer", ""))
-	add(t, cat, post("https://example.com/jobs/unk2", "Unknown Role", "Nexus"))
-	ts := newTestServer(t, d)
-
-	apiJSON(t, ts, http.MethodPost, "/api/exclusions", map[string]any{"kind": "word", "value": "unknown"})
-
-	rs := getRows(apiGet(t, ts, "/api/vacancies"))
-	if len(rs) != 1 {
-		t.Fatalf("rows: got %d, want 1 (placeholder company not matched by word exclusion)", len(rs))
 	}
 }
 

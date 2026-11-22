@@ -13,6 +13,7 @@ type sourceRunRec struct {
 	status  string
 	found   int
 	newCnt  int
+	refused int
 	errText string
 }
 
@@ -30,14 +31,14 @@ func sourceRunStatus(listErr error, found int) (string, string) {
 }
 
 func (c *Collector) writeSourceRun(jobID int64, key string, started, finished time.Time,
-	status, errText string, found, newCount, updated, unchanged, excluded, removed int) {
+	status, errText string, found, newCount, updated, unchanged, excluded, removed, refused int) {
 	_, err := c.db.Exec(
 		`INSERT OR REPLACE INTO source_run
-		 (job_id, source, started, finished, status, found, new, updated, unchanged, excluded, removed, error)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 (job_id, source, started, finished, status, found, new, updated, unchanged, excluded, removed, refused, error)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		jobID, key,
 		started.UTC().Format(time.RFC3339), finished.UTC().Format(time.RFC3339),
-		status, found, newCount, updated, unchanged, excluded, removed, errText,
+		status, found, newCount, updated, unchanged, excluded, removed, refused, errText,
 	)
 	if err != nil {
 		c.log.Warn("collect: write source_run", "key", key, "error", err)
@@ -46,7 +47,7 @@ func (c *Collector) writeSourceRun(jobID int64, key string, started, finished ti
 
 func (c *Collector) querySourceRuns(key string) []sourceRunRec {
 	rows, err := c.db.Query(
-		`SELECT started, status, found, new, error
+		`SELECT started, status, found, new, refused, error
 		 FROM source_run WHERE source = ? ORDER BY job_id DESC`,
 		key,
 	)
@@ -58,7 +59,7 @@ func (c *Collector) querySourceRuns(key string) []sourceRunRec {
 	for rows.Next() {
 		var r sourceRunRec
 		var startedStr string
-		if err := rows.Scan(&startedStr, &r.status, &r.found, &r.newCnt, &r.errText); err != nil {
+		if err := rows.Scan(&startedStr, &r.status, &r.found, &r.newCnt, &r.refused, &r.errText); err != nil {
 			continue
 		}
 		r.started, _ = time.Parse(time.RFC3339, startedStr)

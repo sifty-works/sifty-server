@@ -506,27 +506,41 @@ func TestImport_PublicationRules(t *testing.T) {
 	}
 }
 
-func TestImport_EmptyCompanyStoredEmpty(t *testing.T) {
+func TestImport_VacancyWithoutEmployerIsLeftOutWithItsDecisionAndCounted(t *testing.T) {
 	fromDir := makeOldDir(t, "")
 	oldDB := openOldDB(t, fromDir)
+	insertProfile(t, oldDB, "pa", "Alice", "2024-01-01T00:00:00Z", false)
 
 	_, err := oldDB.Exec(`
 		INSERT INTO jobs (id, identity, title, company, original_url,
 		  description, description_status, first_seen, last_seen)
 		VALUES (1, 'unknown|engineer', 'Engineer', 'Unknown', 'https://example.com/jobs/1',
+		  't', 'available', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'),
+		  (2, 'northwind|engineer', 'Engineer', 'Northwind', 'https://example.com/jobs/2',
 		  't', 'available', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')`)
 	if err != nil {
 		t.Fatalf("insert: %v", err)
 	}
+	insertStage(t, oldDB, "pa", 1, "saved", "", "2024-06-02T10:00:00Z")
+	insertStage(t, oldDB, "pa", 2, "saved", "", "2024-06-02T10:00:00Z")
 
 	targetDir := t.TempDir()
-	runImport(t, fromDir, targetDir)
+	report := runImport(t, fromDir, targetDir)
 	newDB := openNewDB(t, targetDir)
 
-	var company string
-	newDB.QueryRow(`SELECT company FROM vacancy WHERE id=1`).Scan(&company)
-	if company != "" {
-		t.Errorf("company: got %q, want %q (the old placeholder is stored as empty)", company, "")
+	var vacancies, decisions int
+	newDB.QueryRow(`SELECT count(*) FROM vacancy WHERE id=1`).Scan(&vacancies)
+	newDB.QueryRow(`SELECT count(*) FROM decision WHERE vacancy=1`).Scan(&decisions)
+	if vacancies != 0 || decisions != 0 {
+		t.Errorf("vacancy without employer: got %d vacancies and %d decisions, want none", vacancies, decisions)
+	}
+	newDB.QueryRow(`SELECT count(*) FROM vacancy WHERE id=2`).Scan(&vacancies)
+	newDB.QueryRow(`SELECT count(*) FROM decision WHERE vacancy=2`).Scan(&decisions)
+	if vacancies != 1 || decisions != 1 {
+		t.Errorf("vacancy with employer: got %d vacancies and %d decisions, want 1 and 1", vacancies, decisions)
+	}
+	if !strings.Contains(report, "dropped (no employer found): 1") {
+		t.Errorf("report does not count the vacancy left out: %s", report)
 	}
 }
 
@@ -1780,6 +1794,9 @@ func TestImport_CompanyRecovery(t *testing.T) {
 		{11, "Blockchain Dev", "", "https://weworkremotely.com/remote-jobs/acme-co-blockchain-dev-1", "Acme Co"},
 		{12, "Frontend Dev", "", "https://weworkremotely.com/remote-jobs/acme-corp-different-job", "Acme Corp"},
 		{13, "Frontend Dev", "", "https://weworkremotely.com/remote-jobs/unknown-vendor-some-job", ""},
+		{14, "Platform Engineer [Contract] (Europe)", "", "https://weworkremotely.com/remote-jobs/orbit-labs-platform-engineer", "Orbit Labs"},
+		{15, "Développeur Sénior | Données", "", "https://weworkremotely.com/remote-jobs/orbit-labs-developpeur-senior-donnees", "Orbit Labs"},
+		{16, "Développeur Sénior | Données", "", "https://weworkremotely.com/remote-jobs/orbit-labs-developpeur-senior-donnees-4821", "Orbit Labs"},
 	}
 
 	fromDir := makeOldDir(t, "")
@@ -1797,7 +1814,11 @@ func TestImport_CompanyRecovery(t *testing.T) {
 	newDB := openNewDB(t, targetDir)
 	for _, c := range cases {
 		var got string
-		if err := newDB.QueryRow(`SELECT company FROM vacancy WHERE id=?`, c.id).Scan(&got); err != nil {
+		err := newDB.QueryRow(`SELECT company FROM vacancy WHERE id=?`, c.id).Scan(&got)
+		if err == sql.ErrNoRows && c.want == "" {
+			continue
+		}
+		if err != nil {
 			t.Errorf("id=%d: query: %v", c.id, err)
 			continue
 		}

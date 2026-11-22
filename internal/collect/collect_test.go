@@ -163,7 +163,7 @@ const ghBoardResponse = `{"company":{"name":"Acme Corp"},
 
 const feedXML = `<?xml version="1.0"?>
 <rss version="2.0"><channel>
-<item><title>Go Developer</title><link>https://feeds.example.com/jobs/3</link><description><![CDATA[<p>Feed job</p>]]></description></item>
+<item><title>Go Developer</title><company>Northwind</company><link>https://feeds.example.com/jobs/3</link><description><![CDATA[<p>Feed job</p>]]></description></item>
 </channel></rss>`
 
 const emptyFeedXML = `<?xml version="1.0"?>
@@ -221,8 +221,8 @@ func TestRunAllFailingEndsFailed(t *testing.T) {
 
 func TestRunDeduplicatesPostingsWithinOneRun(t *testing.T) {
 	sameURL := "https://feeds.example.com/jobs/shared"
-	xmlA := fmt.Sprintf(`<rss version="2.0"><channel><item><title>Shared Job</title><link>%s</link><description>text</description></item></channel></rss>`, sameURL)
-	xmlB := fmt.Sprintf(`<rss version="2.0"><channel><item><title>Shared Job</title><link>%s</link><description>other</description></item></channel></rss>`, sameURL)
+	xmlA := fmt.Sprintf(`<rss version="2.0"><channel><item><title>Shared Job</title><company>Northwind</company><link>%s</link><description>text</description></item></channel></rss>`, sameURL)
+	xmlB := fmt.Sprintf(`<rss version="2.0"><channel><item><title>Shared Job</title><company>Northwind</company><link>%s</link><description>other</description></item></channel></rss>`, sameURL)
 	e := newEnv(t)
 	e.fm.Set("https://feeds.example.com/a.xml", fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "application/xml", Body: []byte(xmlA)}})
 	e.fm.Set("https://feeds2.example.com/b.xml", fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "application/xml", Body: []byte(xmlB)}})
@@ -647,6 +647,10 @@ func htmlListing(u string) []byte {
 	return []byte(`<html><body><a href="` + u + `">Senior Engineer</a></body></html>`)
 }
 
+func companyFeedListing(u string) []byte {
+	return []byte(`<rss version="2.0"><channel><item><title>Senior Engineer</title><company>Northwind</company><link>` + u + `</link></item></channel></rss>`)
+}
+
 func TestRunDetailFetchesTextForNewPostingWithoutText(t *testing.T) {
 	e := newEnv(t)
 	const vacURL = "https://generic.example.com/jobs/1"
@@ -679,7 +683,7 @@ func TestRunDetailSkipsWithin7DaysAndRetriesAfter(t *testing.T) {
 	nowTime := base
 	e := newEnvClock(t, func() time.Time { mu.Lock(); defer mu.Unlock(); return nowTime }, false)
 	const listURL, vacURL = "https://generic.example.com/jobs", "https://generic.example.com/jobs/2"
-	e.fm.Set(listURL, fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "text/html", Body: htmlListing(vacURL)}})
+	e.fm.Set(listURL, fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "application/xml", Body: companyFeedListing(vacURL)}})
 	e.fm.Set(vacURL, fetchtest.MapEntry{Err: fetch.ErrNotFound})
 	addSource(t, e, listURL)
 	run := func(want int) {
@@ -715,7 +719,7 @@ func TestRunRemovedAddressGetsNoRequest(t *testing.T) {
 func TestRunBlockedDetailSavesPostingAsBlocked(t *testing.T) {
 	e := newEnv(t)
 	const vacURL = "https://generic.example.com/jobs/4"
-	e.fm.Set("https://generic.example.com/jobs", fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "text/html", Body: htmlListing(vacURL)}})
+	e.fm.Set("https://generic.example.com/jobs", fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "application/xml", Body: companyFeedListing(vacURL)}})
 	e.fm.Set(vacURL, fetchtest.MapEntry{Err: fetch.ErrBlocked})
 	addSource(t, e, "https://generic.example.com/jobs")
 	runCollect(t, e)
@@ -796,7 +800,7 @@ func TestCollect_BoardIndustriesFillPostingWithoutOwnIndustries(t *testing.T) {
 	listBody := `<html><body><a href="` + vacURL + `">Chain Developer</a></body></html>`
 	e := newEnv(t)
 	e.fm.Set(listURL, fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "text/html", Body: []byte(listBody)}})
-	e.fm.Set(vacURL, fetchtest.MapEntry{Err: fetch.ErrNotFound})
+	e.fm.Set(vacURL, fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "text/html", Body: []byte(exclusionDetailPage)}})
 	addSource(t, e, listURL)
 	runCollect(t, e)
 	var industries string
@@ -805,5 +809,128 @@ func TestCollect_BoardIndustriesFillPostingWithoutOwnIndustries(t *testing.T) {
 	}
 	if !strings.Contains(industries, "Web3") {
 		t.Errorf("board industries: got %q, want Web3 for web3.career posting", industries)
+	}
+}
+
+const (
+	noEmployerListURL = "https://feeds.example.com/openings.xml"
+	noEmployerURL     = "https://feeds.example.com/openings/101"
+	pageNamesEmployer = `<html><head><script type="application/ld+json">{"@type":"JobPosting","title":"Data Engineer","hiringOrganization":{"name":"Harbor Works"},"description":"<p>Page text.</p>"}</script></head></html>`
+	pageNamesNone     = `<html><head><title>Data Engineer</title></head><body><p>Page text.</p></body></html>`
+)
+
+func openingsFeed(company string) fetchtest.MapEntry {
+	co := ""
+	if company != "" {
+		co = "<company>" + company + "</company>"
+	}
+	body := `<rss version="2.0"><channel><item><title>Data Engineer</title>` + co +
+		`<link>` + noEmployerURL + `</link><description>Listing text</description></item></channel></rss>`
+	return fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "application/xml", Body: []byte(body)}}
+}
+
+func TestCollect_PostingWithoutEmployerIsStoredOnlyWhenAnEmployerIsFound(t *testing.T) {
+	stored := base.Add(-72 * time.Hour)
+	later := base.Add(48 * time.Hour)
+	pageNames := fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "text/html", Body: []byte(pageNamesEmployer)}}
+	pageNone := fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "text/html", Body: []byte(pageNamesNone)}}
+	pageGone := fetchtest.MapEntry{Err: fetch.ErrNotFound}
+
+	for _, tc := range []struct {
+		name         string
+		before       string
+		listing      string
+		page         fetchtest.MapEntry
+		wantRequests int
+		wantStored   int
+		wantCompany  string
+		wantRefused  int
+		wantExcluded int
+		wantLastSeen time.Time
+	}{
+		{"new, page names the employer", "", "", pageNames, 2, 1, "Harbor Works", 0, 0, later},
+		{"new, page names none", "", "", pageNone, 2, 0, "", 1, 0, time.Time{}},
+		{"new, page cannot be read", "", "", pageGone, 2, 0, "", 1, 0, time.Time{}},
+		{"stored with employer, listing names none", "with", "", pageGone, 1, 1, "Harbor Works", 0, 0, later},
+		{"stored without employer, page names none", "without", "", pageNone, 2, 1, "", 1, 0, stored},
+		{"stored without employer, page names one", "without", "", pageNames, 2, 1, "Harbor Works", 0, 0, later},
+		{"new, no employer and an exclusion hides it", "excluded", "", pageNone, 1, 0, "", 0, 1, time.Time{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			now := base
+			e := newEnvClock(t, func() time.Time { mu.Lock(); defer mu.Unlock(); return now }, false)
+			addSource(t, e, noEmployerListURL)
+			switch tc.before {
+			case "with":
+				e.fm.Set(noEmployerListURL, openingsFeed("Harbor Works"))
+				runCollect(t, e)
+			case "excluded":
+				if _, err := e.db.Exec(`INSERT INTO exclusion (kind,value,norm,profile_id,created) VALUES ('word','engineer','engineer',0,?)`,
+					stored.Format(time.RFC3339)); err != nil {
+					t.Fatal(err)
+				}
+			case "without":
+				res, err := e.db.Exec(`INSERT INTO vacancy (identity, title, company, url, first_seen, last_seen, text_state)
+					VALUES ('|data engineer', 'Data Engineer', '', ?, ?, ?, 'summary')`,
+					noEmployerURL, stored.Format(time.RFC3339), stored.Format(time.RFC3339))
+				if err != nil {
+					t.Fatal(err)
+				}
+				id, _ := res.LastInsertId()
+				if _, err := e.db.Exec(`INSERT INTO vacancy_source (vacancy_id, source, url, seen_at) VALUES (?, 'feeds.example.com', ?, ?)`,
+					id, noEmployerURL, stored.Format(time.RFC3339)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			mu.Lock()
+			now = later
+			mu.Unlock()
+			e.fm.Set(noEmployerListURL, openingsFeed(tc.listing))
+			e.fm.Set(noEmployerURL, tc.page)
+			requestsBefore := len(e.fm.Requests())
+			runCollect(t, e)
+
+			if got := len(e.fm.Requests()) - requestsBefore; got != tc.wantRequests {
+				t.Errorf("requests in the run: got %d, want %d", got, tc.wantRequests)
+			}
+			var count int
+			e.db.QueryRow(`SELECT count(*) FROM vacancy`).Scan(&count)
+			if count != tc.wantStored {
+				t.Errorf("vacancies stored: got %d, want %d", count, tc.wantStored)
+			}
+			if tc.wantStored > 0 {
+				var company, lastSeen string
+				if err := e.db.QueryRow(`SELECT company, last_seen FROM vacancy`).Scan(&company, &lastSeen); err != nil {
+					t.Fatal(err)
+				}
+				if company != tc.wantCompany {
+					t.Errorf("company: got %q, want %q", company, tc.wantCompany)
+				}
+				if want := tc.wantLastSeen.UTC().Format(time.RFC3339); lastSeen != want {
+					t.Errorf("last_seen: got %q, want %q", lastSeen, want)
+				}
+			}
+			if tc.wantRefused > 0 && tc.wantStored > 0 {
+				var reqAt string
+				e.db.QueryRow(`SELECT detail_requested_at FROM vacancy`).Scan(&reqAt)
+				if want := later.UTC().Format(time.RFC3339); reqAt != want {
+					t.Errorf("detail_requested_at: got %q, want %q", reqAt, want)
+				}
+			}
+			var refused, excluded int
+			e.db.QueryRow(`SELECT refused, excluded FROM source_run ORDER BY job_id DESC LIMIT 1`).Scan(&refused, &excluded)
+			if refused != tc.wantRefused {
+				t.Errorf("refused: got %d, want %d", refused, tc.wantRefused)
+			}
+			if excluded != tc.wantExcluded {
+				t.Errorf("excluded: got %d, want %d", excluded, tc.wantExcluded)
+			}
+			srcs := e.get(t, "/api/sources")["sources"].([]any)
+			text := srcs[0].(map[string]any)["status"].(map[string]any)["text"].(string)
+			if has := strings.Contains(text, fmt.Sprintf("%d without an employer", tc.wantRefused)); has != (tc.wantRefused > 0) {
+				t.Errorf("status text %q: count shown is %v, want %v", text, has, tc.wantRefused > 0)
+			}
+		})
 	}
 }

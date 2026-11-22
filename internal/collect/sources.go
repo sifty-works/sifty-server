@@ -254,6 +254,9 @@ func (c *Collector) buildSourceStatus(key string) *SourceStatus {
 		text = "Last success " + lastSuccess.started.Local().Format("2 Jan 15:04") +
 			" · " + strconv.Itoa(lastSuccess.found) + " seen · " +
 			strconv.Itoa(lastSuccess.newCnt) + " new"
+		if lastSuccess.refused > 0 {
+			text += " · " + strconv.Itoa(lastSuccess.refused) + " without an employer"
+		}
 	}
 
 	return &SourceStatus{Text: text, Attention: needsAttention(history)}

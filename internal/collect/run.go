@@ -113,7 +113,7 @@ func (c *Collector) run(ctx context.Context, j *runner.Job) error {
 				srcStarted := c.now()
 				postings, listErr := c.listSource(ctx, s)
 
-				var cntNew, cntUpdated, cntUnchanged, cntRemoved, cntExcluded int
+				var cntNew, cntUpdated, cntUnchanged, cntRemoved, cntExcluded, cntRefused int
 				if listErr == nil {
 					for _, p := range postings {
 						canon, err := listing.Canonical(p.URL)
@@ -144,12 +144,27 @@ func (c *Collector) run(ctx context.Context, j *runner.Job) error {
 						} else {
 							excluded = excl
 						}
+						noCompany := p.Company == "" && (k.New || !k.HasCompany)
 						if !excluded {
-							needDetail := p.Text == "" && (k.New || (!k.HasText &&
-								(k.Requested.IsZero() || c.now().Sub(k.Requested) > 7*24*time.Hour)))
+							askAgain := k.New || k.Requested.IsZero() || c.now().Sub(k.Requested) > 7*24*time.Hour
+							needDetail := (p.Text == "" && (k.New || (!k.HasText && askAgain))) ||
+								(noCompany && askAgain)
 							if needDetail {
 								p, excluded = c.addVacancyPage(ctx, p, s, excluded)
 							}
+						}
+						if noCompany && p.Company == "" {
+							if k.ID != 0 && p.Requested {
+								if err := c.catalog.MarkRequested(ctx, k.ID, c.now()); err != nil {
+									c.log.Warn("collect: mark requested", "url", p.URL, "error", err)
+								}
+							}
+							if excluded {
+								cntExcluded++
+							} else {
+								cntRefused++
+							}
+							continue
 						}
 						_, outcome, upsertErr := c.catalog.Upsert(ctx, p, key)
 						if upsertErr != nil {
@@ -182,7 +197,7 @@ func (c *Collector) run(ctx context.Context, j *runner.Job) error {
 
 				runStatus, errText := sourceRunStatus(listErr, len(postings))
 				c.writeSourceRun(j.ID, key, srcStarted, c.now(), runStatus, errText,
-					len(postings), cntNew, cntUpdated, cntUnchanged, cntExcluded, cntRemoved)
+					len(postings), cntNew, cntUpdated, cntUnchanged, cntExcluded, cntRemoved, cntRefused)
 
 				mu.Lock()
 				doneCount++

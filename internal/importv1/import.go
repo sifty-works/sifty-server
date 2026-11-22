@@ -84,6 +84,7 @@ type importReport struct {
 	TextlessDroppedSummary    int
 	TextlessDroppedNotFetched int
 	TextlessDroppedBlocked    int
+	NoCompanyDropped          int
 
 	StagesRead      int
 	StagesNew       int
@@ -701,6 +702,26 @@ func doImport(ctx context.Context, copyDB *sql.DB, newDB *db.DB, store *config.S
 		}
 	}
 
+	companyByID := make(map[int64]string)
+	for _, vj := range validJobs {
+		if !keepIDs[vj.job.id] {
+			continue
+		}
+		company := vj.job.company
+		if strings.EqualFold(company, "Unknown") {
+			company = ""
+		}
+		if company == "" {
+			company = companyFromCanonURL(vj.canonURL, vj.job.title, slugCompanyMap)
+		}
+		if company == "" {
+			delete(keepIDs, vj.job.id)
+			report.NoCompanyDropped++
+			continue
+		}
+		companyByID[vj.job.id] = company
+	}
+
 	sightingsByJob := make(map[int64][]oldSighting)
 	for _, s := range sightings {
 		sightingsByJob[s.jobID] = append(sightingsByJob[s.jobID], s)
@@ -718,13 +739,7 @@ func doImport(ctx context.Context, copyDB *sql.DB, newDB *db.DB, store *config.S
 			continue
 		}
 		md := mergedData[j.id]
-		company := j.company
-		if strings.EqualFold(company, "Unknown") {
-			company = ""
-		}
-		if company == "" {
-			company = companyFromCanonURL(vj.canonURL, j.title, slugCompanyMap)
-		}
+		company := companyByID[j.id]
 		identity := listing.Identity(company, j.title)
 
 		applyURL := ""
@@ -2545,9 +2560,14 @@ func trimTitleSuffix(slug, title string, slugMap map[string]string) string {
 			slug = slug[:i]
 		}
 	}
-	if title != "" {
-		if ts := slugifyTitle(title); ts != "" && strings.HasSuffix(slug, "-"+ts) {
-			return slug[:len(slug)-len(ts)-1]
+	if ts := slugifyTitle(title); ts != "" {
+		for i := 0; i < len(slug); i++ {
+			if slug[i] != '-' || i == 0 {
+				continue
+			}
+			if end := slug[i+1:]; end == ts || strings.HasPrefix(ts, end+"-") {
+				return slug[:i]
+			}
 		}
 	}
 	best := ""
@@ -2610,8 +2630,27 @@ func stripGetroDisambig(slug string) string {
 	return strings.Join(parts[:end], "-")
 }
 
+var accentFold = strings.NewReplacer(
+	"à", "a", "á", "a", "â", "a", "ã", "a", "ä", "a", "å", "a", "ā", "a", "ă", "a", "ą", "a",
+	"ç", "c", "ć", "c", "č", "c",
+	"ď", "d", "đ", "d",
+	"è", "e", "é", "e", "ê", "e", "ë", "e", "ē", "e", "ė", "e", "ę", "e", "ě", "e",
+	"ğ", "g",
+	"ì", "i", "í", "i", "î", "i", "ï", "i", "ī", "i", "ı", "i",
+	"ł", "l", "ĺ", "l", "ľ", "l",
+	"ñ", "n", "ń", "n", "ň", "n",
+	"ò", "o", "ó", "o", "ô", "o", "õ", "o", "ö", "o", "ø", "o", "ō", "o", "ő", "o",
+	"ŕ", "r", "ř", "r",
+	"ś", "s", "š", "s", "ş", "s", "ș", "s",
+	"ť", "t", "ţ", "t", "ț", "t",
+	"ù", "u", "ú", "u", "û", "u", "ü", "u", "ū", "u", "ů", "u", "ű", "u",
+	"ý", "y", "ÿ", "y",
+	"ź", "z", "ž", "z", "ż", "z",
+	"ß", "ss", "æ", "ae", "œ", "oe",
+)
+
 func slugifyTitle(s string) string {
-	s = strings.ToLower(s)
+	s = accentFold.Replace(strings.ToLower(s))
 	var b strings.Builder
 	hyphen := false
 	for _, r := range s {
@@ -2638,6 +2677,9 @@ func formatReport(r *importReport) string {
 	if textlessTotal > 0 {
 		fmt.Fprintf(&sb, "  dropped (no full text, no decision): %d (summary: %d, not_fetched: %d, blocked: %d)\n",
 			textlessTotal, r.TextlessDroppedSummary, r.TextlessDroppedNotFetched, r.TextlessDroppedBlocked)
+	}
+	if r.NoCompanyDropped > 0 {
+		fmt.Fprintf(&sb, "  dropped (no employer found): %d\n", r.NoCompanyDropped)
 	}
 	if len(r.Duplicates) > 0 {
 		fmt.Fprintf(&sb, "  duplicate canonical address pairs (%d):\n", len(r.Duplicates))

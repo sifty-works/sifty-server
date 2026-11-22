@@ -150,10 +150,6 @@ type Counts struct {
 }
 
 func toRow(rr repoRow, now time.Time, inputs int64, readingSet map[int64]bool) Row {
-	company := rr.company
-	if company == "" {
-		company = "Unknown"
-	}
 	nowStr := now.UTC().Format(time.RFC3339)
 	var industries []string
 	if rr.industries != "" && rr.industries != "[]" {
@@ -164,7 +160,7 @@ func toRow(rr repoRow, now time.Time, inputs int64, readingSet map[int64]bool) R
 	}
 	return Row{
 		ID:         rr.id,
-		Company:    company,
+		Company:    rr.company,
 		Title:      rr.title,
 		Location:   locationText(rr.location),
 		Published:  publicationLine(rr.publishedAt, rr.publishedBasis, now),
@@ -659,7 +655,7 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time,
 		Sources:  sources,
 		Original: vd.url,
 		Status:   statusText(stage, row.reason, row.appliedAt, t),
-		Actions:  stageActions(stage, vd.url, vd.applyURL, row.company),
+		Actions:  stageActions(stage, vd.url, vd.applyURL, apiRow.Company),
 		Listing:  lv,
 		Band:     band,
 		Offer:    offerView(html, f.Tiles),

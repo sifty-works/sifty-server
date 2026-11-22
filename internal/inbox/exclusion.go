@@ -60,9 +60,6 @@ func addExclusion(ctx context.Context, database *db.DB, kind, value string, prof
 	if kind == "company" && profileID != 0 {
 		return nil, apperr.Invalid{Message: "Company exclusions apply to all profiles."}
 	}
-	if kind == "company" && strings.EqualFold(value, "Unknown") {
-		return nil, apperr.Invalid{Message: "This vacancy has no company name."}
-	}
 	_, err := database.ExecContext(ctx,
 		`INSERT OR IGNORE INTO exclusion (kind,value,norm,profile_id,created) VALUES (?,?,?,?,?)`,
 		kind, value, normFor(kind, value), profileID, time.Now().UTC().Format(time.RFC3339))

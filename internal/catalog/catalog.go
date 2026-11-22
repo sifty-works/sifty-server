@@ -603,10 +603,12 @@ func (c *Catalog) Delete(ctx context.Context, id int64) error {
 }
 
 type Known struct {
-	Removed   bool
-	New       bool
-	HasText   bool
-	Requested time.Time
+	ID         int64
+	Removed    bool
+	New        bool
+	HasText    bool
+	HasCompany bool
+	Requested  time.Time
 }
 
 func (c *Catalog) Known(ctx context.Context, p listing.Posting) (Known, error) {
@@ -627,10 +629,10 @@ func (c *Catalog) Known(ctx context.Context, p listing.Posting) (Known, error) {
 		return Known{New: true}, nil
 	}
 	sort.Slice(r.matchIDs, func(i, j int) bool { return r.matchIDs[i] < r.matchIDs[j] })
-	var textState, requestedAt string
+	var textState, requestedAt, company string
 	if err := tx.QueryRowContext(ctx,
-		`SELECT text_state, detail_requested_at FROM vacancy WHERE id = ?`, r.matchIDs[0]).
-		Scan(&textState, &requestedAt); err != nil {
+		`SELECT text_state, detail_requested_at, company FROM vacancy WHERE id = ?`, r.matchIDs[0]).
+		Scan(&textState, &requestedAt, &company); err != nil {
 		return Known{}, fmt.Errorf("catalog: known: load: %w", err)
 	}
 	hasText := textState == string(listing.TextFull) || textState == string(listing.TextSummary)
@@ -638,7 +640,16 @@ func (c *Catalog) Known(ctx context.Context, p listing.Posting) (Known, error) {
 	if requestedAt != "" {
 		requested, _ = time.Parse(time.RFC3339, requestedAt)
 	}
-	return Known{HasText: hasText, Requested: requested}, nil
+	return Known{ID: r.matchIDs[0], HasText: hasText, HasCompany: company != "", Requested: requested}, nil
+}
+
+func (c *Catalog) MarkRequested(ctx context.Context, id int64, at time.Time) error {
+	_, err := c.db.ExecContext(ctx,
+		`UPDATE vacancy SET detail_requested_at=? WHERE id=?`, at.UTC().Format(time.RFC3339), id)
+	if err != nil {
+		return fmt.Errorf("catalog: mark requested: %w", err)
+	}
+	return nil
 }
 
 func anyTombstoned(ctx context.Context, tx *sql.Tx, keys []string) (bool, error) {
