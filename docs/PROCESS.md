@@ -99,7 +99,7 @@ Tests check behaviour through public boundaries, so the code behind those bounda
 
 - Test names contain no card names, card numbers, rule numbers or section numbers.
 - Behaviour that needs a job site is checked against recorded responses behind the fake `Fetcher`.
-- `make check` runs every test, and tests are never selected by name.
+- `make check` runs every test; selecting a test by name is for showing that it catches a break, and for nothing else.
 
 ## Budgets
 

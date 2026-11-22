@@ -30,6 +30,9 @@ These are the rules for every coding agent working in this repository. `docs/ARC
 - Name each test by the behaviour it checks.
 - Use the fakes behind `Fetcher` and `Model`. Tests make no network request and no model call.
 - Do not write tests that read source files or check that some code exists.
+- Run only what the step needs: `go test ./internal/<package>/` for the package you changed, and `make check` once, before you report. Do not run the whole set after every step, and do not pass `-count=1` in ordinary work: it throws the cache away and runs everything again.
+- To show that a test catches a break, break one thing and run that one test: `go test -count=1 -run '^TestName$' ./internal/<package>/`.
+- Before you finish, stop what you started: servers, test binaries, `caffeinate`. Stop a process together with its children, or a test binary is left holding a core.
 
 ## Critical behaviour
 
