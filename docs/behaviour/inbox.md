@@ -53,6 +53,8 @@ There is one list of exclusions, managed in Settings.
 
 **Decisions in this session.** A vacancy shortlisted or dismissed from Inbox stays in the list until reload, shown as decided, and can be undone. Under the list: "N dismissed this session — they disappear next time." The selection moves to the next undecided vacancy, wrapping around.
 
+**When a vacancy leaves the open list** — moved to another stage, deleted, or hidden by blocking its company — the selection moves to the next vacancy below it, or to the one above when it was the last. The working area is left empty only when no vacancy is left.
+
 **Empty states:**
 
 - with a query or filters: "No matching roles. Adjust your filters." and a "Reset filters" button;
