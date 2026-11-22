@@ -45,7 +45,7 @@ There is one list of exclusions, managed in Settings.
 - in Applied, ◷ "Listing expired" when the vacancy is past its expiry date; ✓ "Shortlisted" for a vacancy shortlisted from Inbox in this session;
 - in every list, Fits you and the requirements counter (see `assessment.md`);
 - the title;
-- the location in short form: "Remote · …", "Worldwide", "EU · N countries", or "Location unstated", with the full text on hover when shortened;
+- the location: as stored when it has no more than three entries separated by " · ", otherwise the first two and "+N more" ("Remote · AD +188 more"), with the full text on hover when shortened; "Location unstated" when empty;
 - in Applied, "· Applied <date>"; in the other lists, "Applied <date> from <profile>" when the user applied to this vacancy from any profile (a deleted profile is named by its last name);
 - the publication line: "Published <date> · <age>", "Source date … (unverified)" or "Publication date not reported".
 

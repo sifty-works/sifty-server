@@ -99,6 +99,7 @@ func TestFilter_Remote(t *testing.T) {
 		{"Anywhere Engineer", "Worldwide – anywhere", ""},
 		{"Telecommute Engineer", "Telecommute · US", ""},
 		{"City Engineer", "San Francisco", ""},
+		{"Many Places Engineer", "Berlin · Paris · Madrid · Rome · Remote", ""},
 	} {
 		id := addAtLocation(t, cat, fmt.Sprintf("https://example.com/jobs/rm%d", i), tc.title, tc.location)
 		if tc.industry != "" {
@@ -106,7 +107,7 @@ func TestFilter_Remote(t *testing.T) {
 		}
 	}
 	body := apiGet(t, newTestServer(t, d), "/api/vacancies?remote=true")
-	want := "Anywhere Engineer,Hybrid Engineer,Remote EU Engineer,Telecommute Engineer"
+	want := "Anywhere Engineer,Hybrid Engineer,Many Places Engineer,Remote EU Engineer,Telecommute Engineer"
 	if got := sortedTitles(body); got != want {
 		t.Errorf("remote rows: got %q, want %q", got, want)
 	}

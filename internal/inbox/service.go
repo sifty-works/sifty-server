@@ -45,18 +45,19 @@ const (
 )
 
 type Row struct {
-	ID         int64    `json:"id"`
-	Company    string   `json:"company"`
-	Title      string   `json:"title"`
-	Location   string   `json:"location"`
-	Published  string   `json:"published"`
-	Industries []string `json:"industries"`
-	Unread     bool     `json:"unread"`
-	Stage      Stage    `json:"stage"`
-	Reason     string   `json:"reason,omitempty"`
-	Applied    string   `json:"applied,omitempty"`
-	Expired    bool     `json:"expired,omitempty"`
-	Fit        FitMark  `json:"fit"`
+	ID           int64    `json:"id"`
+	Company      string   `json:"company"`
+	Title        string   `json:"title"`
+	Location     string   `json:"location"`
+	LocationFull string   `json:"locationFull,omitempty"`
+	Published    string   `json:"published"`
+	Industries   []string `json:"industries"`
+	Unread       bool     `json:"unread"`
+	Stage        Stage    `json:"stage"`
+	Reason       string   `json:"reason,omitempty"`
+	Applied      string   `json:"applied,omitempty"`
+	Expired      bool     `json:"expired,omitempty"`
+	Fit          FitMark  `json:"fit"`
 }
 
 type FitMark struct {
@@ -158,19 +159,21 @@ func toRow(rr repoRow, now time.Time, inputs int64, readingSet map[int64]bool) R
 	if industries == nil {
 		industries = []string{}
 	}
+	loc, full := shortLocation(rr.location)
 	return Row{
-		ID:         rr.id,
-		Company:    rr.company,
-		Title:      rr.title,
-		Location:   locationText(rr.location),
-		Published:  publicationLine(rr.publishedAt, rr.publishedBasis, now),
-		Industries: industries,
-		Unread:     rr.unread,
-		Stage:      Stage(rr.stage),
-		Reason:     rr.reason,
-		Applied:    appliedText(rr.appliedAt, rr.appliedName, rr.stage, now),
-		Expired:    rr.expiresAt != "" && rr.expiresAt <= nowStr,
-		Fit:        fitMark(rr.fit, inputs, rr.id, readingSet),
+		ID:           rr.id,
+		Company:      rr.company,
+		Title:        rr.title,
+		Location:     loc,
+		LocationFull: full,
+		Published:    publicationLine(rr.publishedAt, rr.publishedBasis, now),
+		Industries:   industries,
+		Unread:       rr.unread,
+		Stage:        Stage(rr.stage),
+		Reason:       rr.reason,
+		Applied:      appliedText(rr.appliedAt, rr.appliedName, rr.stage, now),
+		Expired:      rr.expiresAt != "" && rr.expiresAt <= nowStr,
+		Fit:          fitMark(rr.fit, inputs, rr.id, readingSet),
 	}
 }
 
@@ -335,11 +338,17 @@ func validateMove(from, to, reason string, confirmed bool) error {
 	return inv
 }
 
-func locationText(loc string) string {
+const locationSeparator = " · "
+
+func shortLocation(loc string) (shown, full string) {
 	if loc == "" {
-		return "Location unstated"
+		return "Location unstated", ""
 	}
-	return loc
+	parts := strings.Split(loc, locationSeparator)
+	if len(parts) <= 3 {
+		return loc, ""
+	}
+	return strings.Join(parts[:2], locationSeparator) + fmt.Sprintf(" +%d more", len(parts)-2), loc
 }
 
 func publicationLine(publishedAt, publishedBasis string, now time.Time) string {
