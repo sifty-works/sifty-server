@@ -70,7 +70,7 @@ func newAnalyzeFixWithPDF(t *testing.T, pdfText candidate.TextSource) analyzeFix
 	r := runner.New(d, nil, time.Now, slog.Default())
 	fm := &models.FakeModel{}
 	registerKindsWith(t, r, d, fm)
-	base := newRouteServerWithPDF(t, d, r, pdfText)
+	base := newRouteServerWithReaders(t, d, r, candidate.Readers{PDF: pdfText})
 	return analyzeFix{d: d, r: r, fm: fm, base: base}
 }
 

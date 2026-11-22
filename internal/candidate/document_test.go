@@ -30,6 +30,11 @@ func newDocServerWithFiles(t *testing.T, d *db.DB, filesDir string) *httptest.Se
 
 func newDocServerWithPDF(t *testing.T, d *db.DB, filesDir string, pdfText candidate.TextSource) *httptest.Server {
 	t.Helper()
+	return newDocServerWithReaders(t, d, filesDir, candidate.Readers{PDF: pdfText})
+}
+
+func newDocServerWithReaders(t *testing.T, d *db.DB, filesDir string, readers candidate.Readers) *httptest.Server {
+	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := server.New(server.Options{
 		Version:           "test",
@@ -37,7 +42,7 @@ func newDocServerWithPDF(t *testing.T, d *db.DB, filesDir string, pdfText candid
 		Logger:            logger,
 		BinaryUploadPaths: []string{"/api/me/photo", "/api/documents"},
 	}, func(mux *http.ServeMux) {
-		candidate.RegisterRoutes(mux, d, filesDir, pdfText, logger, nil, nil)
+		candidate.RegisterRoutes(mux, d, filesDir, readers, logger, nil, nil)
 	})
 	ts := httptest.NewServer(h)
 	t.Cleanup(ts.Close)
@@ -227,6 +232,19 @@ func TestRefreshReadsAStoredPdfOnceTheProgramIsInstalled(t *testing.T) {
 	refreshDoc(t, ts, out["id"])
 	if calls, _ := os.ReadFile(filepath.Join(work, "calls")); strings.Count(string(calls), "run") != 1 {
 		t.Errorf("program ran %q times, want once: a document with text is not read again", calls)
+	}
+}
+
+func TestRefreshSaysADocumentWithNoSourceCannotBeReadAgain(t *testing.T) {
+	ts := newDocServer(t, openTestDB(t))
+	pasted, _ := pasteDoc(t, ts, "Notes", "Some text")
+	uploaded, _ := uploadDoc(t, ts, "notes.md", []byte("# Notes"), "text/plain")
+
+	for name, doc := range map[string]map[string]any{"pasted text": pasted, "markdown file": uploaded} {
+		out, status := send(t, ts, http.MethodPost, fmt.Sprintf("/api/documents/%.0f/refresh", doc["id"]), map[string]any{})
+		if status != http.StatusUnprocessableEntity || out["error"] != "This document cannot be read again." {
+			t.Errorf("%s: status %d, body %v; want 422 saying it cannot be read again", name, status, out)
+		}
 	}
 }
 

@@ -30,7 +30,7 @@ func registerAllRoutes(
 	rules func() fit.Rules,
 	recomputeFit func(),
 	filesDir string,
-	pdfText candidate.TextSource,
+	readers candidate.Readers,
 	col *collect.Collector,
 	r *runner.Runner,
 ) {
@@ -61,7 +61,7 @@ func registerAllRoutes(
 	server.Handle(mux, "PATCH /api/models", logger, models.PatchModelsHandler(gate))
 	inbox.RegisterRoutes(mux, database, now, logger, collectActive, sourceNames, rules, recomputeFit)
 	inbox.RegisterIndustryRoutes(mux, logger)
-	candidate.RegisterRoutes(mux, database, filesDir, pdfText, logger, recomputeFit, enqueue)
+	candidate.RegisterRoutes(mux, database, filesDir, readers, logger, recomputeFit, enqueue)
 	server.Handle(mux, "POST /api/documents/{id}/cancel", logger, candidate.CancelAnalysisHandler(database, cancel))
 	col.RegisterRoutes(mux)
 }

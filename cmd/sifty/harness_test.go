@@ -99,10 +99,10 @@ func registerKindsAt(t *testing.T, r *runner.Runner, d *db.DB, m models.Model, c
 
 func newRouteServer(t *testing.T, d *db.DB, r *runner.Runner) string {
 	t.Helper()
-	return newRouteServerWithPDF(t, d, r, candidate.ProgramText{Program: filepath.Join(t.TempDir(), "absent")})
+	return newRouteServerWithReaders(t, d, r, candidate.Readers{PDF: candidate.ProgramText{Program: filepath.Join(t.TempDir(), "absent")}})
 }
 
-func newRouteServerWithPDF(t *testing.T, d *db.DB, r *runner.Runner, pdfText candidate.TextSource) string {
+func newRouteServerWithReaders(t *testing.T, d *db.DB, r *runner.Runner, readers candidate.Readers) string {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -116,7 +116,7 @@ func newRouteServerWithPDF(t *testing.T, d *db.DB, r *runner.Runner, pdfText can
 		Logger:            logger,
 		BinaryUploadPaths: []string{"/api/documents"},
 	}, func(mux *http.ServeMux) {
-		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, enqueueRecomputeFit(r), t.TempDir(), pdfText, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r)
+		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, enqueueRecomputeFit(r), t.TempDir(), readers, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r)
 	})
 	ts := httptest.NewUnstartedServer(h)
 	ts.Listener = l

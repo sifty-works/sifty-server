@@ -199,7 +199,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			}
 			return m
 		}
-		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, col, r)
+		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r)
 	})
 
 	srv := &http.Server{

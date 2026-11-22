@@ -61,7 +61,7 @@ func newServer(t *testing.T, d *db.DB, o serverOpts) *httptest.Server {
 				func() bool { return o.collecting }, o.sourceNames, o.rules, o.changed)
 			inbox.RegisterIndustryRoutes(mux, logger)
 			if o.withCandidate {
-				candidate.RegisterRoutes(mux, d, "", nil, logger, nil, nil)
+				candidate.RegisterRoutes(mux, d, "", candidate.Readers{}, logger, nil, nil)
 			}
 		})
 	ts := httptest.NewServer(h)

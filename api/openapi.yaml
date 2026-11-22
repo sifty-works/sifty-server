@@ -311,6 +311,8 @@ components:
             type: object
         DocumentItem:
             properties:
+                address:
+                    type: string
                 charCount:
                     format: int64
                     type: integer

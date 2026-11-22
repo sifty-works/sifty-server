@@ -319,7 +319,7 @@ func photoPath(filesDir string) string {
 	return filepath.Join(filesDir, "me_photo")
 }
 
-func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, pdfText TextSource, logger *slog.Logger, changed func(), enqueue func(kind, subject string) (int64, error)) {
+func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, readers Readers, logger *slog.Logger, changed func(), enqueue func(kind, subject string) (int64, error)) {
 	notify := func() {
 		if changed != nil {
 			changed()
@@ -646,56 +646,46 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, pdfTex
 			server.MapError(w, fmt.Errorf("candidate: no files dir configured"), logger)
 			return
 		}
-		ct := r.Header.Get("Content-Type")
-		if strings.HasPrefix(ct, "application/json") {
-			var req struct {
-				Name string `json:"name"`
-				Text string `json:"text"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var k documentKind
+		var name string
+		var source []byte
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				server.MapError(w, apperr.Invalid{Message: "Invalid request body."}, logger)
 				return
 			}
-			req.Name = strings.TrimSpace(req.Name)
-			req.Text = strings.TrimSpace(req.Text)
-			if req.Name == "" {
+			var text string
+			var ok bool
+			k, text, ok = kindFromBody(body)
+			if !ok {
+				server.MapError(w, apperr.Invalid{Message: "Send the text of the document."}, logger)
+				return
+			}
+			name, _ = body["name"].(string)
+			name, source = strings.TrimSpace(name), []byte(strings.TrimSpace(text))
+		} else {
+			name = strings.TrimSpace(r.URL.Query().Get("name"))
+			if name == "" {
 				server.MapError(w, apperr.Invalid{Message: "Name must not be empty."}, logger)
 				return
 			}
-			item, err := saveDocument(r.Context(), database, filesDir, req.Name, "text", nil, req.Text, "ready", "")
-			if server.MapError(w, err, logger) {
+			var ok bool
+			if k, ok = kindFromName(name); !ok {
+				server.MapError(w, apperr.Invalid{Message: notADocumentKind}, logger)
 				return
 			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(item)
-			return
+			var err error
+			if source, err = io.ReadAll(r.Body); err != nil {
+				server.MapError(w, apperr.Invalid{Message: "Could not read the upload."}, logger)
+				return
+			}
+			if len(source) == 0 {
+				server.MapError(w, apperr.Invalid{Message: "The file is empty."}, logger)
+				return
+			}
 		}
-		name := strings.TrimSpace(r.URL.Query().Get("name"))
-		if name == "" {
-			server.MapError(w, apperr.Invalid{Message: "Name must not be empty."}, logger)
-			return
-		}
-		k, ok := kindFromName(name)
-		if !ok {
-			server.MapError(w, apperr.Invalid{Message: notADocumentKind}, logger)
-			return
-		}
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			server.MapError(w, apperr.Invalid{Message: "Could not read the upload."}, logger)
-			return
-		}
-		if len(body) == 0 {
-			server.MapError(w, apperr.Invalid{Message: "The file is empty."}, logger)
-			return
-		}
-		if err := k.check(body); err != nil {
-			server.MapError(w, err, logger)
-			return
-		}
-		text, state, stateReason := k.read(r.Context(), pdfText, logger, body)
-		item, err := saveDocument(r.Context(), database, filesDir, name, k.kind, body, text, state, stateReason)
+		item, err := addDocument(r.Context(), database, filesDir, readers, logger, k, name, source)
 		if server.MapError(w, err, logger) {
 			return
 		}
@@ -789,25 +779,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, pdfTex
 		if err != nil {
 			return DocumentItem{}, err
 		}
-		if row.Kind != "pdf" || strings.TrimSpace(row.Text) != "" {
-			return rowToItem(row), nil
-		}
-		if row.FileName == "" || filesDir == "" {
-			return DocumentItem{}, apperr.NotFound{Message: "No original file for this document."}
-		}
-		body, err := os.ReadFile(filepath.Join(filesDir, row.FileName))
-		if err != nil {
-			return DocumentItem{}, apperr.NotFound{Message: "No original file for this document."}
-		}
-		text, state, stateReason := extractPDF(ctx, pdfText, logger, body)
-		if err := updateDocumentText(ctx, database, id, text, state, stateReason); err != nil {
-			return DocumentItem{}, err
-		}
-		row, err = loadDocumentRow(ctx, database, id)
-		if err != nil {
-			return DocumentItem{}, err
-		}
-		return rowToItem(row), nil
+		return refreshDocument(ctx, database, filesDir, readers, logger, row)
 	})
 
 	server.Handle(mux, "POST /api/documents/{id}/analyze", logger, func(r *http.Request, _ struct{}) (DocumentItem, error) {
