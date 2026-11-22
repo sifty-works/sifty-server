@@ -18,6 +18,6 @@ The order in which Sifty is built. Each slice delivers behaviour the user can se
 
 ## Status
 
-Slices 1 to 7 are accepted. Slice 7 was accepted on its own measure: a new vacancy text costs one model call and a change of profile costs none. Slice 8 is next.
+Slices 1 to 7 are accepted, and the two refinements carried past slice 7 are merged: a requirement row carries one + and one -, each offering the skills it names as a list, and the Models section of Settings shows the answer to the change made last.
 
-Two refinements of slice 7 are queued beside slice 8 and are not part of slice 7's acceptance: an undecided requirement row carries one + and one -, with the choice between the skills it names offered as a list rather than a button each; and the Models section of Settings shows the answer to the change made last rather than whichever answer arrives last.
+Slice 8 is in progress. The server half is merged: a document arrives as a file, as pasted text or as a link, keeps its extracted text, is analysed into proposed facts, and takes Accept and Reject with their conflicts. What remains before the slice is accepted: the Files tab and the Suggestions section of the web client, and the import of documents and open suggestions.
