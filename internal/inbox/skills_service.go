@@ -34,7 +34,8 @@ func applySkillsDecision(ctx context.Context, database *db.DB, vacancyID int64, 
 		return skillsResult{}, err
 	}
 	ans := skills.Answer(vr.Requirements[reqIndex], have, chosenSkill, me)
-	if len(ans.AddedSkills)+len(ans.AddedConfirmed) > 0 {
+	changed := len(ans.AddedSkills)+len(ans.MovedSkills)+len(ans.AddedConfirmed) > 0
+	if changed {
 		if err := candidate.SaveMe(ctx, database, ans.Me); err != nil {
 			return skillsResult{}, err
 		}
@@ -42,23 +43,34 @@ func applySkillsDecision(ctx context.Context, database *db.DB, vacancyID int64, 
 			return skillsResult{}, err
 		}
 	}
-	return skillsResult{notice: buildNotice(ans.AddedSkills, ans.AddedConfirmed, have), added: len(ans.AddedSkills)+len(ans.AddedConfirmed) > 0}, nil
+	return skillsResult{notice: buildNotice(ans.AddedSkills, ans.MovedSkills, ans.AddedConfirmed, have), added: changed}, nil
 }
 
-func buildNotice(skillItems, confirmedItems []string, have bool) string {
-	if len(skillItems)+len(confirmedItems) == 0 {
+func buildNotice(addedSkills, movedSkills, confirmedItems []string, have bool) string {
+	if len(addedSkills)+len(movedSkills)+len(confirmedItems) == 0 {
 		return "Nothing new to add; your data is already up to date."
 	}
 	var parts []string
-	for _, item := range skillItems {
+	for _, item := range addedSkills {
 		if have {
 			parts = append(parts, fmt.Sprintf("Added %q to your skills (level Proficient; change in your profile).", item))
 		} else {
 			parts = append(parts, fmt.Sprintf("Added %q to skills you do not have (change in your profile).", item))
 		}
 	}
+	for _, item := range movedSkills {
+		if have {
+			parts = append(parts, fmt.Sprintf("Moved %q from skills you do not have to your skills (level Proficient; change in your profile).", item))
+		} else {
+			parts = append(parts, fmt.Sprintf("Moved %q from your skills to skills you do not have (change in your profile).", item))
+		}
+	}
+	statement := "something you do not have"
+	if have {
+		statement = "something you have"
+	}
 	for _, item := range confirmedItems {
-		parts = append(parts, fmt.Sprintf("Added %q to Confirmed by you (change in your profile).", item))
+		parts = append(parts, fmt.Sprintf("Added %q to Confirmed by you as %s (change in your profile).", item, statement))
 	}
 	return strings.Join(parts, " ")
 }

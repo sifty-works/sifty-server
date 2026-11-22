@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
@@ -230,5 +231,97 @@ func TestSkillsDecision_requirementGroupsInBand(t *testing.T) {
 	band, _ := resp["band"].(map[string]any)
 	if groups, _ := band["groups"].([]any); len(groups) == 0 {
 		t.Error("band.groups should not be empty when requirements are read")
+	}
+}
+
+func seedMe(t *testing.T, d *db.DB, skills []candidate.Skill, absent []candidate.AbsentSkill) {
+	t.Helper()
+	me, err := candidate.LoadMe(context.Background(), d)
+	if err != nil {
+		t.Fatalf("LoadMe: %v", err)
+	}
+	me.Skills = skills
+	me.AbsentSkills = absent
+	if err := candidate.SaveMe(context.Background(), d, me); err != nil {
+		t.Fatalf("SaveMe: %v", err)
+	}
+}
+
+func skillNames(me candidate.MeData) (have, absent []string) {
+	for _, s := range me.Skills {
+		have = append(have, s.Name)
+	}
+	for _, a := range me.AbsentSkills {
+		absent = append(absent, a.Name)
+	}
+	return
+}
+
+func TestSkillsDecision_skillTakenFromOppositeListIsReportedAsMoved(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		text       string
+		have       bool
+		skills     []candidate.Skill
+		absent     []candidate.AbsentSkill
+		want       string
+		wantHave   []string
+		wantAbsent []string
+	}{
+		{name: "plus on a skill the user did not have", text: "Go", have: true,
+			absent:   []candidate.AbsentSkill{{Name: "Go"}},
+			want:     `Moved "Go" from skills you do not have to your skills (level Proficient; change in your profile).`,
+			wantHave: []string{"Go"}},
+		{name: "minus on a skill the user had", text: "SQL", have: false,
+			skills:     []candidate.Skill{{Name: "SQL", Level: "Expert"}},
+			want:       `Moved "SQL" from your skills to skills you do not have (change in your profile).`,
+			wantAbsent: []string{"SQL"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := openTestDB(t)
+			id := addVacancyWithReading(t, d, "https://example.com/jobs/mv-"+tc.name, "Role",
+				[]reading.Requirement{{Text: tc.text, Kind: "skill", Level: "required"}})
+			seedMe(t, d, tc.skills, tc.absent)
+			queued := 0
+			ts := newSkillsServer(t, d, func() { queued++ })
+
+			resp, _ := postSkills(t, ts, id, 0, tc.have, "")
+			if got, _ := resp["notice"].(string); got != tc.want {
+				t.Errorf("notice: got %q, want %q", got, tc.want)
+			}
+			if queued != 1 {
+				t.Errorf("recompute_fit queued: %d times, want 1", queued)
+			}
+			me, _ := candidate.LoadMe(context.Background(), d)
+			have, absent := skillNames(me)
+			if fmt.Sprint(have) != fmt.Sprint(tc.wantHave) || fmt.Sprint(absent) != fmt.Sprint(tc.wantAbsent) {
+				t.Errorf("skills %v, absent %v; want %v, %v", have, absent, tc.wantHave, tc.wantAbsent)
+			}
+		})
+	}
+}
+
+func TestSkillsDecision_minusOnRequirementReportsEverySkillTakenFromSkills(t *testing.T) {
+	d := openTestDB(t)
+	id := addVacancyWithReading(t, d, "https://example.com/jobs/both", "Platform",
+		[]reading.Requirement{{Text: "Docker and Kubernetes in production", Kind: "skill", Level: "required"}})
+	ts := newSkillsServer(t, d, nil)
+	postSkills(t, ts, id, 0, true, "Docker")
+	postSkills(t, ts, id, 0, true, "Kubernetes")
+
+	resp, _ := postSkills(t, ts, id, 0, false, "")
+	notice, _ := resp["notice"].(string)
+	for _, want := range []string{
+		`Moved "Docker" from your skills to skills you do not have (change in your profile).`,
+		`Moved "Kubernetes" from your skills to skills you do not have (change in your profile).`,
+	} {
+		if !strings.Contains(notice, want) {
+			t.Errorf("notice %q does not contain %q", notice, want)
+		}
+	}
+	me, _ := candidate.LoadMe(context.Background(), d)
+	have, absent := skillNames(me)
+	if len(have) != 0 || len(absent) != 2 {
+		t.Errorf("skills %v, absent %v; want no skills and both absent", have, absent)
 	}
 }

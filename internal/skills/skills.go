@@ -383,6 +383,7 @@ func verdictForGroups(gs []string, anyOf bool, idx *Index) string {
 type AnswerResult struct {
 	Me             candidate.MeData
 	AddedSkills    []string
+	MovedSkills    []string
 	AddedConfirmed []string
 }
 
@@ -398,7 +399,7 @@ func Answer(req reading.Requirement, have bool, chosenSkill string, me candidate
 	eqAbsent := func(n string) func(candidate.AbsentSkill) bool {
 		return func(a candidate.AbsentSkill) bool { return strings.EqualFold(a.Name, n) }
 	}
-	var addedSkills, addedConfirmed []string
+	var addedSkills, movedSkills, addedConfirmed []string
 	addConfirmed := func() {
 		eqText := func(f candidate.ConfirmedFact) bool { return f.Text == req.Text }
 		if !slices.ContainsFunc(me.ConfirmedFacts, eqText) {
@@ -409,17 +410,31 @@ func Answer(req reading.Requirement, have bool, chosenSkill string, me candidate
 	if len(toAct) > 0 {
 		for _, name := range toAct {
 			if have {
-				if !slices.ContainsFunc(me.Skills, eqName(name)) {
+				alreadyHeld := slices.ContainsFunc(me.Skills, eqName(name))
+				if !alreadyHeld {
 					me.Skills = append(me.Skills, candidate.Skill{Name: name, Level: "Proficient"})
-					addedSkills = append(addedSkills, name)
 				}
+				before := len(me.AbsentSkills)
 				me.AbsentSkills = slices.DeleteFunc(me.AbsentSkills, eqAbsent(name))
-			} else {
-				if !slices.ContainsFunc(me.AbsentSkills, eqAbsent(name)) {
-					me.AbsentSkills = append(me.AbsentSkills, candidate.AbsentSkill{Name: name})
+				switch {
+				case len(me.AbsentSkills) < before:
+					movedSkills = append(movedSkills, name)
+				case !alreadyHeld:
 					addedSkills = append(addedSkills, name)
 				}
+			} else {
+				alreadyAbsent := slices.ContainsFunc(me.AbsentSkills, eqAbsent(name))
+				if !alreadyAbsent {
+					me.AbsentSkills = append(me.AbsentSkills, candidate.AbsentSkill{Name: name})
+				}
+				before := len(me.Skills)
 				me.Skills = slices.DeleteFunc(me.Skills, eqName(name))
+				switch {
+				case len(me.Skills) < before:
+					movedSkills = append(movedSkills, name)
+				case !alreadyAbsent:
+					addedSkills = append(addedSkills, name)
+				}
 			}
 		}
 		if chosenSkill == "" || len(named) <= 1 {
@@ -434,5 +449,5 @@ func Answer(req reading.Requirement, have bool, chosenSkill string, me candidate
 	} else {
 		addConfirmed()
 	}
-	return AnswerResult{Me: me, AddedSkills: addedSkills, AddedConfirmed: addedConfirmed}
+	return AnswerResult{Me: me, AddedSkills: addedSkills, MovedSkills: movedSkills, AddedConfirmed: addedConfirmed}
 }
