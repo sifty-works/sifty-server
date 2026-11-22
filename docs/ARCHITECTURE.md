@@ -232,7 +232,6 @@ These are targets the coordinator checks at acceptance of every change (see `PRO
 |---|---|
 | Backend code | at most 18,500 lines |
 | Frontend code | at most 6,000 lines |
-| Tests | no more lines than the code they test |
 | Database per vacancy | at most 18 KB |
 | Model calls for a new vacancy text | 1 |
 | Model calls for a change of profile or My data | 0 for Fits you and the counter; Shortlist checks become outdated and run again only when their vacancy is opened |

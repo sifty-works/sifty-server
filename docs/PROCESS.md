@@ -40,7 +40,7 @@ A card is one file with the following sections, in this order. It carries no tim
 1. **Reason** holds the owner's words as the owner gave them, or the review decision or the defect that started the card.
 2. **Result** says what the user sees or gets when the card is done, in the terms of `docs/behaviour/`. For internal work, it says what changes in the code.
 3. **Replaces and removes** names the existing code, tables, settings and text that the change replaces, and what is deleted in the same change. An answer of "nothing" needs a reason.
-4. **Budget change** gives the expected change of each budget the card touches, code and tests apart, such as "backend code +250, tests +200, one table fewer". The coordinator adds the measured change at acceptance and returns a card whose tests grew more than its code.
+4. **Budget change** gives the expected change of each budget the card touches, code and tests apart, such as "backend code +250, tests +200, one table fewer". The coordinator adds the measured change at acceptance.
 5. **Packages** lists the packages and documents that the card changes.
 6. **Checks** says how the result is checked through public boundaries.
 7. **Preview** is "yes" when the owner wants to see the result before the merge, and "no" otherwise.
