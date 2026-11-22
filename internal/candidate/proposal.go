@@ -99,6 +99,19 @@ func CancelAnalysisHandler(database *db.DB, cancel func(kind, subject string) er
 	}
 }
 
+func ResetInterruptedAnalyses(ctx context.Context, database *db.DB) (int64, error) {
+	res, err := database.ExecContext(ctx,
+		`UPDATE document SET state='ready', state_reason='Analysis was interrupted. Press Analyze to continue.'
+		 WHERE state='analysing'
+		   AND NOT EXISTS (
+		     SELECT 1 FROM job
+		     WHERE kind='analyze_document' AND subject=CAST(document.id AS TEXT) AND state='queued')`)
+	if err != nil {
+		return 0, fmt.Errorf("candidate: reset interrupted analyses: %w", err)
+	}
+	return res.RowsAffected()
+}
+
 func updateDocumentError(ctx context.Context, database *db.DB, docID int64, reason string) error {
 	_, err := database.ExecContext(ctx,
 		`UPDATE document SET state='error', state_reason=? WHERE id=?`, reason, docID)

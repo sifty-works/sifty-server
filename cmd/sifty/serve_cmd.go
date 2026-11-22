@@ -140,6 +140,11 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	r := runner.New(database, map[string]int{"browser": 1, "net": 4, "cpu": 1}, time.Now, logger)
 
 	registerJobKinds(r, database, store, gate, cat, logger, offline, time.Now)
+	if n, err := candidate.ResetInterruptedAnalyses(ctx, database); err != nil {
+		logger.Warn("interrupted analyses not reset", "err", err)
+	} else if n > 0 {
+		logger.Info("interrupted analyses set back to ready", "count", n)
+	}
 	rules := fitRules(store)
 	recomputeFit := func() { r.Enqueue(runner.Spec{Kind: "recompute_fit"}) }
 	recomputeFit()
