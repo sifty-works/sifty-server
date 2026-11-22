@@ -10,7 +10,8 @@ What the user gets: for the chosen profile, the vacancies that fit its search, i
 - Opening a profile or Settings replaces the working area. Changing the stage clears the selected vacancy, the held Unread row, the error and the notice; Archive opens on Applied.
 - Changing the profile reloads the list for that profile.
 - The list width is changed by dragging its edge within limits; a double click resets it; the width is remembered in the browser.
-- When the server does not answer, a banner reads "Sifty server is not responding. Retrying…". Notices close with a cross.
+- When the server does not answer, a banner reads "Sifty server is not responding. Retrying…".
+- Every message the client shows is of one of two kinds. A notice reporting something done disappears by itself after five seconds; a failure stays until it is dismissed or the action is tried again. Both close with a cross, and Escape closes the newest message on the page. A new message in the same place replaces the one standing there, so messages never stack up. An action the user asked for that fails always says so; a background load or refresh that fails stays silent.
 - While a local model loads, a strip reads "Loading model <name> · m:ss", or "Model load failed: …".
 
 ## Which vacancies a profile sees
