@@ -9,10 +9,9 @@ import (
 	"strings"
 )
 
-var srcLinks Module = &pageModule{"links", parseLinks}
 var vacancyPathRE = regexp.MustCompile(`(?i)/(?:job|jobs|career|position)/[^/?]+`)
 
-func parseLinks(body []byte, base string, s Site) []listing.Posting {
+func parseLinks(body []byte, base string, s Site) ([]listing.Posting, bool) {
 	var linkRE *regexp.Regexp
 	if s.LinkPattern != "" {
 		linkRE, _ = regexp.Compile(s.LinkPattern)
@@ -99,5 +98,5 @@ func parseLinks(body []byte, base string, s Site) []listing.Posting {
 		out = append(out, listing.Posting{URL: key, Title: title, Company: company, TextState: listing.TextNotFetched})
 		return true
 	})
-	return out
+	return out, len(out) > 0
 }

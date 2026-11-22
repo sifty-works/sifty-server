@@ -8,10 +8,29 @@ import (
 	"strings"
 )
 
-type pageModule struct {
-	name  string
-	parse func([]byte, string, Site) []listing.Posting
+type pageParser struct {
+	name    string
+	parse   func(body []byte, base string, s Site) ([]listing.Posting, bool)
+	generic bool
+	when    func(s Site, ct string, body []byte) bool
 }
+
+var pageParsers = []pageParser{
+	{"feed", func(body []byte, base string, _ Site) ([]listing.Posting, bool) {
+		ps, err := parseFeedXML(body, base)
+		return ps, err == nil
+	}, true, func(_ Site, ct string, body []byte) bool { return isXMLContent(ct, body) }},
+	{"a16z", parseA16Z, true, func(s Site, _ string, _ []byte) bool { return s.ScriptVar != "" }},
+	{"", func(body []byte, base string, _ Site) ([]listing.Posting, bool) {
+		ps := parseJSONLD(body, base, false)
+		return ps, len(ps) > 0
+	}, true, func(s Site, _ string, _ []byte) bool { return !s.SkipJSONLD }},
+	{"getro", parseGetro, true, nil},
+	{"links", parseLinks, true, nil},
+	{"paradigm", parseParadigm, false, nil},
+}
+
+type pageModule struct{ pageParser }
 
 func (m *pageModule) Name() string { return m.name }
 func (m *pageModule) List(ctx context.Context, f fetch.Fetcher, s Site) ([]listing.Posting, error) {
@@ -19,7 +38,7 @@ func (m *pageModule) List(ctx context.Context, f fetch.Fetcher, s Site) ([]listi
 	if err != nil {
 		return nil, err
 	}
-	if ps := m.parse(body, base, s); len(ps) > 0 {
+	if ps, _ := m.parse(body, base, s); len(ps) > 0 {
 		return ps, nil
 	}
 	return nil, ErrNothingRecognised
@@ -51,26 +70,12 @@ func (g *genericModule) List(ctx context.Context, f fetch.Fetcher, s Site) ([]li
 	if err != nil {
 		return nil, err
 	}
-	if isXMLContent(ct, body) {
-		if ps, err := parseFeedXML(body, base); err != ErrNothingRecognised {
-			return ps, err
+	for _, p := range pageParsers {
+		if p.generic && (p.when == nil || p.when(s, ct, body)) {
+			if ps, ok := p.parse(body, base, s); ok {
+				return ps, nil
+			}
 		}
-	}
-	if s.ScriptVar != "" {
-		if ps := parseA16Z(body, base, s); len(ps) > 0 {
-			return ps, nil
-		}
-	}
-	if !s.SkipJSONLD {
-		if ps := parseJSONLD(body, base, false); len(ps) > 0 {
-			return ps, nil
-		}
-	}
-	if ps := parseGetro(body, base, s); len(ps) > 0 {
-		return ps, nil
-	}
-	if ps := parseLinks(body, base, s); len(ps) > 0 {
-		return ps, nil
 	}
 	return nil, ErrNothingRecognised
 }

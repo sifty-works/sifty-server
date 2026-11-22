@@ -8,11 +8,6 @@ import (
 	"github.com/sifty-works/sifty-server/internal/listing"
 )
 
-var srcFeed Module = &pageModule{"feed", func(body []byte, base string, _ Site) []listing.Posting {
-	ps, _ := parseFeedXML(body, base)
-	return ps
-}}
-
 func parseFeedXML(body []byte, base string) ([]listing.Posting, error) {
 	dec := xml.NewDecoder(bytes.NewReader(body))
 	dec.Strict = false

@@ -9,8 +9,6 @@ import (
 	"github.com/sifty-works/sifty-server/internal/listing"
 )
 
-var srcGetro Module = &pageModule{"getro", parseGetro}
-
 type ndLocationDetail struct {
 	Name string `json:"name"`
 }
@@ -34,7 +32,7 @@ type ndJob struct {
 	} `json:"organization"`
 }
 
-func parseGetro(body []byte, base string, _ Site) []listing.Posting {
+func parseGetro(body []byte, base string, _ Site) ([]listing.Posting, bool) {
 	raw := findScript(body, `id="__NEXT_DATA__"`)
 	var nd struct {
 		Props struct {
@@ -48,7 +46,7 @@ func parseGetro(body []byte, base string, _ Site) []listing.Posting {
 		} `json:"props"`
 	}
 	if raw == "" || json.Unmarshal([]byte(raw), &nd) != nil {
-		return nil
+		return nil, false
 	}
 	var out []listing.Posting
 	for _, f := range nd.Props.PageProps.InitialState.Jobs.Found {
@@ -85,5 +83,5 @@ func parseGetro(body []byte, base string, _ Site) []listing.Posting {
 			out = append(out, p)
 		}
 	}
-	return out
+	return out, len(out) > 0
 }

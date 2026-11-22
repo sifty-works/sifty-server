@@ -531,3 +531,27 @@ func TestList_links_title_extraction(t *testing.T) {
 		})
 	}
 }
+
+func TestList_generic_prefers_jsonld_over_links(t *testing.T) {
+	const body = `<html><head><script type="application/ld+json">
+{"@type":"JobPosting","title":"Structured Engineer","url":"https://board.example.com/jobs/structured","hiringOrganization":{"name":"Acme"}}
+</script></head><body><a href="https://board.example.com/jobs/linked"><h3>Linked Engineer</h3></a></body></html>`
+	addr := "https://board.example.com/"
+	m := fetchtest.NewMap()
+	m.Set(addr, fetchtest.MapEntry{Response: fetch.Response{URL: addr, Status: 200, ContentType: "text/html", Body: []byte(body)}})
+	ps, err := listGeneric(t, m, addr)
+	if err != nil || len(ps) != 1 || ps[0].Title != "Structured Engineer" {
+		t.Fatalf("List err=%v postings=%+v, want the JSON-LD posting only", err, ps)
+	}
+}
+
+func TestList_generic_xml_that_is_not_a_feed_falls_to_links(t *testing.T) {
+	const body = `<?xml version="1.0"?><html><body><a href="https://board.example.com/jobs/linked"><h3>Linked Engineer</h3></a></body></html>`
+	addr := "https://board.example.com/"
+	m := fetchtest.NewMap()
+	m.Set(addr, fetchtest.MapEntry{Response: fetch.Response{URL: addr, Status: 200, ContentType: "application/xml", Body: []byte(body)}})
+	ps, err := listGeneric(t, m, addr)
+	if err != nil || len(ps) != 1 || ps[0].Title != "Linked Engineer" {
+		t.Fatalf("List err=%v postings=%+v, want the link posting", err, ps)
+	}
+}

@@ -1,12 +1,15 @@
 package source_test
 
 import (
+	"context"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/sifty-works/sifty-server/internal/fetch"
+	"github.com/sifty-works/sifty-server/internal/fetch/fetchtest"
 	"github.com/sifty-works/sifty-server/internal/source"
 )
 
@@ -141,5 +144,56 @@ func TestLoadSites_UnknownIndustryRenamesFile(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown industry") {
 		t.Errorf("error should mention 'unknown industry': %s", err)
+	}
+}
+
+func listNamedFeed(t *testing.T, contentType, body string) ([]string, error) {
+	t.Helper()
+	t.Cleanup(func() { resetSites(t) })
+	if _, err := source.LoadSites(writeSitesYAML(t, "sites:\n  - host: feedboard.example.com\n    module: feed\n")); err != nil {
+		t.Fatal(err)
+	}
+	addr := "https://feedboard.example.com/"
+	m := fetchtest.NewMap()
+	m.Set(addr, fetchtest.MapEntry{Response: fetch.Response{URL: addr, Status: 200, ContentType: contentType, Body: []byte(body)}})
+	u, _ := url.Parse(addr)
+	mod, site := source.For(u)
+	if mod.Name() != "feed" {
+		t.Fatalf("module = %q, want feed", mod.Name())
+	}
+	ps, err := mod.List(context.Background(), m, site)
+	var urls []string
+	for _, p := range ps {
+		urls = append(urls, p.URL)
+	}
+	return urls, err
+}
+
+func TestNamedFeedSourceWithNoItemsRecognisesNothing(t *testing.T) {
+	_, err := listNamedFeed(t, "application/rss+xml", `<rss version="2.0"><channel></channel></rss>`)
+	if err != source.ErrNothingRecognised {
+		t.Errorf("error = %v, want ErrNothingRecognised", err)
+	}
+}
+
+func TestNamedFeedSourceReadsFeedWhateverTheContentType(t *testing.T) {
+	urls, err := listNamedFeed(t, "text/html", `<rss version="2.0"><channel><item><title>Engineer at Acme</title><link>https://feedboard.example.com/jobs/1</link></item></channel></rss>`)
+	if err != nil || len(urls) != 1 {
+		t.Fatalf("List err=%v urls=%v", err, urls)
+	}
+}
+
+func TestLoadSitesRefusesMissingEmptyAndJSONLDModule(t *testing.T) {
+	for name, yaml := range map[string]string{
+		"missing key": "sites:\n  - host: board.example.com\n",
+		"empty name":  "sites:\n  - host: board.example.com\n    module: \"\"\n",
+		"json-ld":     "sites:\n  - host: board.example.com\n    module: json-ld\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(func() { resetSites(t) })
+			if _, err := source.LoadSites(writeSitesYAML(t, yaml)); err == nil {
+				t.Error("module should be refused")
+			}
+		})
 	}
 }

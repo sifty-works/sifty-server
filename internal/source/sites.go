@@ -31,11 +31,16 @@ type sitesFile struct {
 	Sites []siteEntry `yaml:"sites"`
 }
 
-var knownSiteModules = map[string]Module{"links": srcLinks, "feed": srcFeed, "getro": srcGetro, "a16z": srcA16Z, "paradigm": srcParadigm}
+var knownSiteModules = map[string]Module{}
 
 var sitesByHost map[string]knownSite
 
 func init() {
+	for _, p := range pageParsers {
+		if p.name != "" {
+			knownSiteModules[p.name] = &pageModule{p}
+		}
+	}
 	entries, err := parseSites(embeddedSites)
 	if err != nil {
 		panic("source: cannot parse embedded sites.yaml: " + err.Error())
