@@ -127,8 +127,25 @@ func Defaults() Config {
 		Sources: []SourceConfig{},
 		Weights: map[string]float64{"role": 0.25, "money": 0.20, "location": 0.075, "remote_restriction": 0.075,
 			"time_zone": 0.10, "work_mode": 0.04, "engagement": 0.03, "hours": 0.03, "requirements": 0},
-		Rates: map[string]float64{"EUR": 1, "USD": 0.92, "GBP": 1.17, "CAD": 0.68, "AUD": 0.60, "CHF": 1.08, "JPY": 0.0062},
+		Rates: defaultRates(),
 	}
+}
+
+type Currency struct {
+	Code, Symbol string
+	Rate         float64
+}
+
+var Currencies = []Currency{
+	{"USD", "$", 0.92}, {"EUR", "€", 1}, {"GBP", "£", 1.17}, {"CAD", "", 0.68}, {"AUD", "", 0.60}, {"CHF", "", 1.08}, {"JPY", "", 0.0062},
+}
+
+func defaultRates() map[string]float64 {
+	rates := map[string]float64{}
+	for _, c := range Currencies {
+		rates[c.Code] = c.Rate
+	}
+	return rates
 }
 
 var WorkKinds = []string{"reading", "shortlist_check", "preparation"}

@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/sifty-works/sifty-server/internal/config"
 )
 
 type Vacancy struct {
@@ -49,12 +51,12 @@ type VacancyReading struct {
 var wordsYAML []byte
 
 var (
-	labels, modes = loadWords()
-	amountRe      = regexp.MustCompile(`(\d{1,3}(?:[,\s]\d{3})+|\d+(?:\.\d+)?)\s*([kK])?`)
-	currencyRe    = regexp.MustCompile(`(?i)\b(USD|EUR|GBP|CAD|AUD|CHF)\b`)
-	notCashRe     = regexp.MustCompile(`(?i)\b(bonus|equity|stock[- ]option|commission|estimate|survey|ote|allowance|relocation)\b`)
-	weeklyRe      = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)(?:\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?))?\s*(?:h|hr|hrs|hours)\s*(?:/|per)?\s*week`)
-	internRe      = regexp.MustCompile(`\bintern(ship)?\b`)
+	labels, modes       = loadWords()
+	amountRe            = regexp.MustCompile(`(\d{1,3}(?:[,\s]\d{3})+|\d+(?:\.\d+)?)\s*([kK])?`)
+	currencyRe, symbols = currencyPattern()
+	notCashRe           = regexp.MustCompile(`(?i)\b(bonus|equity|stock[- ]option|commission|estimate|survey|ote|allowance|relocation)\b`)
+	weeklyRe            = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)(?:\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?))?\s*(?:h|hr|hrs|hours)\s*(?:/|per)?\s*week`)
+	internRe            = regexp.MustCompile(`\bintern(ship)?\b`)
 )
 
 type Quote struct {
@@ -297,7 +299,7 @@ func money(value, line string) *Money {
 			return nil
 		}
 	case len(amounts) == 2:
-		between := strings.ToLower(strings.Trim(value[idx[0][1]:idx[1][0]], "$€£ \t,"))
+		between := strings.ToLower(strings.Trim(value[idx[0][1]:idx[1][0]], symbols+" \t,"))
 		if between != "-" && between != "–" && between != "—" && between != "to" {
 			return nil
 		}
@@ -319,12 +321,20 @@ func currency(s string) string {
 	if c := currencyRe.FindString(s); c != "" {
 		return strings.ToUpper(c)
 	}
-	for _, sc := range [][2]string{{"$", "USD"}, {"€", "EUR"}, {"£", "GBP"}} {
-		if strings.Contains(s, sc[0]) {
-			return sc[1]
+	for _, c := range config.Currencies {
+		if c.Symbol != "" && strings.Contains(s, c.Symbol) {
+			return c.Code
 		}
 	}
 	return ""
+}
+
+func currencyPattern() (re *regexp.Regexp, symbols string) {
+	var codes []string
+	for _, c := range config.Currencies {
+		codes, symbols = append(codes, c.Code), symbols+c.Symbol
+	}
+	return regexp.MustCompile(`(?i)\b(` + strings.Join(codes, "|") + `)\b`), symbols
 }
 
 func period(low string) string {

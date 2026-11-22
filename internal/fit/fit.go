@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
+	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/places"
 	"github.com/sifty-works/sifty-server/internal/reading"
 	"github.com/sifty-works/sifty-server/internal/skills"
@@ -419,8 +420,10 @@ func texts(p ProfileView, v reading.VacancyReading, open bool, rates map[string]
 }
 
 func symbol(currency string) string {
-	if s := map[string]string{"USD": "$", "EUR": "€", "GBP": "£"}[strings.ToUpper(currency)]; s != "" {
-		return s
+	for _, c := range config.Currencies {
+		if c.Symbol != "" && strings.EqualFold(c.Code, currency) {
+			return c.Symbol
+		}
 	}
 	if currency == "" {
 		return ""

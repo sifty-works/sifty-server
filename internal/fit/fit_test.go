@@ -218,6 +218,7 @@ func TestMoneyTileIsCompactAndKeepsItsConversionApart(t *testing.T) {
 		{"a range of whole thousands", reading.Money{Min: 190000, Max: 225000, Currency: "USD", Period: "year"}, "$190–225k a year", "≈ €207,000"},
 		{"pounds keep their symbol", reading.Money{Min: 40000, Max: 50000, Currency: "GBP", Period: "year"}, "£40–50k a year", "≈ €59,000"},
 		{"a currency without a symbol keeps its code", reading.Money{Max: 120000, Currency: "CHF", Period: "year"}, "CHF 120k a year", "≈ €130,000"},
+		{"yen keep their code and convert at the rate from the settings", reading.Money{Max: 8000000, Currency: "JPY", Period: "year"}, "JPY 8M a year", "≈ €50,000"},
 		{"an amount that is not whole thousands gets one decimal", reading.Money{Max: 7500, Currency: "EUR", Period: "month"}, "€7.5k a month", "≈ €90,000"},
 		{"a million and more is written in millions", reading.Money{Max: 1200000, Currency: "USD", Period: "year"}, "$1.2M a year", "≈ €1,104,000"},
 		{"ends that differ in suffix carry one each", reading.Money{Min: 900, Max: 1200000, Currency: "EUR", Period: "year"}, "€900–1.2M a year", "≈ €1,200,000"},

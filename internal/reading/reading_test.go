@@ -88,15 +88,17 @@ func TestFromCode_salary_k_suffix_range(t *testing.T) {
 
 func TestFromCode_salary_period_variants(t *testing.T) {
 	cases := []struct {
-		name       string
-		salary     string
-		wantPeriod string
+		name         string
+		salary       string
+		wantPeriod   string
+		wantCurrency string
 	}{
-		{"per-year-salary", "180000-220000 USD per-year-salary", "year"},
-		{"yearly", "USD 100000 yearly", "year"},
-		{"bare year", "1 year", "year"},
-		{"bare month", "1 month", "month"},
-		{"bare hour", "1 hour", "hour"},
+		{"per-year-salary", "180000-220000 USD per-year-salary", "year", "USD"},
+		{"yearly", "USD 100000 yearly", "year", "USD"},
+		{"yen by code", "JPY 8,000,000 per year", "year", "JPY"},
+		{"bare year", "1 year", "year", ""},
+		{"bare month", "1 month", "month", ""},
+		{"bare hour", "1 hour", "hour", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -107,6 +109,9 @@ func TestFromCode_salary_period_variants(t *testing.T) {
 			}
 			if r.Money.Period != tc.wantPeriod {
 				t.Errorf("period = %q, want %q", r.Money.Period, tc.wantPeriod)
+			}
+			if r.Money.Currency != tc.wantCurrency {
+				t.Errorf("currency = %q, want %q", r.Money.Currency, tc.wantCurrency)
 			}
 		})
 	}
