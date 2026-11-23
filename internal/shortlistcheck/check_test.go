@@ -130,3 +130,12 @@ func TestRequirementWhoseOwnTextEndsInBracketsIsMatchedWhole(t *testing.T) {
 		t.Errorf("answers = %+v", got.Answers)
 	}
 }
+
+func TestExcerptIsShownWithoutTheListMarkerAndOnOneLine(t *testing.T) {
+	fm := &models.FakeModel{}
+	fm.AddReply(reply(answer("Fluent German", "met", "- German (C1)\n- English (Native)")))
+	got := run(t, fm)
+	if len(got.Answers) != 1 || got.Answers[0].Excerpt != "German (C1) - English (Native)" {
+		t.Errorf("answers = %+v", got.Answers)
+	}
+}

@@ -111,7 +111,7 @@ func validate(in []Answer, open []fit.RequirementLine, evidence string) []Answer
 		if !ok || !found || !located || reason == "" || seen[line.Text] {
 			continue
 		}
-		excerpt := evidence[q.Start:q.End]
+		excerpt := strings.TrimPrefix(strings.Join(strings.Fields(evidence[q.Start:q.End]), " "), "- ")
 		if utf8.RuneCountInString(excerpt) > maxExcerptRunes {
 			continue
 		}
