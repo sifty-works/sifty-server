@@ -20,4 +20,6 @@ The order in which Sifty is built. Each slice delivers behaviour the user can se
 
 Slices 1 to 7 are accepted, and the two refinements carried past slice 7 are merged: a requirement row carries one + and one -, each offering the skills it names as a list, and the Models section of Settings shows the answer to the change made last.
 
-Slice 8 is in progress. The server half is merged: a document arrives as a file, as pasted text or as a link, keeps its extracted text, is analysed into proposed facts, and takes Accept and Reject with their conflicts. What remains before the slice is accepted: the Files tab and the Suggestions section of the web client, and the import of documents and open suggestions.
+Slices 1 to 8 are accepted. A document arrives as a file, as pasted text or as a link, keeps its extracted text, is analysed into proposed facts, and takes Accept and Reject with their conflicts; the Files tab of the profile shows the documents and, beside them, the suggestions to review; the import carries documents with their files and the suggestions nobody has decided.
+
+Slice 9 is next.
