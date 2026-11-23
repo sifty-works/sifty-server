@@ -153,6 +153,8 @@ components:
             type: object
         CheckView:
             properties:
+                active:
+                    type: boolean
                 answers:
                     items:
                         $ref: '#/components/schemas/CheckAnswer'
@@ -170,6 +172,7 @@ components:
             required:
                 - answers
                 - outdated
+                - active
                 - retry
             type: object
         CollectProgress:

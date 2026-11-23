@@ -29,6 +29,7 @@ type CheckView struct {
 	Outdated bool          `json:"outdated"`
 	Note     string        `json:"note,omitempty"`
 	State    string        `json:"state,omitempty"`
+	Active   bool          `json:"active"`
 	Retry    bool          `json:"retry"`
 }
 
@@ -110,6 +111,7 @@ func (cs checkState) view(lines []fit.RequirementLine, queue []int64, now time.T
 	if cs.current {
 		return v
 	}
+	v.Active = cs.jobState == "queued" || cs.jobState == "running"
 	v.Outdated = cs.have
 	if v.Outdated {
 		v.Note = "Based on your data of " + v.Made
