@@ -104,25 +104,29 @@ func reqText(state string, reqRead bool, reqOK, reqNo, reqMaybe int, inReadingSe
 	return fmt.Sprintf("✓ %d · ✕ %d · ? %d", reqOK, reqNo, reqMaybe)
 }
 
-func queryReadingSet(ctx context.Context, database *db.DB) (map[int64]bool, error) {
+func queryReadingSet(ctx context.Context, database *db.DB) (map[int64]bool, []int64, error) {
 	rows, err := database.QueryContext(ctx,
-		`SELECT subject FROM job WHERE kind='read_vacancy' AND state IN ('queued','running')`)
+		`SELECT id, kind, subject FROM job WHERE kind IN ('read_vacancy','shortlist_check') AND state IN ('queued','running')
+		 ORDER BY priority DESC, created ASC, id ASC`)
 	if err != nil {
-		return nil, fmt.Errorf("inbox: reading set: %w", err)
+		return nil, nil, fmt.Errorf("inbox: reading set: %w", err)
 	}
 	defer rows.Close()
 	out := map[int64]bool{}
+	var order []int64
 	for rows.Next() {
-		var subject string
-		if err := rows.Scan(&subject); err != nil {
-			return nil, fmt.Errorf("inbox: reading set: %w", err)
+		var id int64
+		var kind, subject string
+		if err := rows.Scan(&id, &kind, &subject); err != nil {
+			return nil, nil, fmt.Errorf("inbox: reading set: %w", err)
 		}
+		order = append(order, id)
 		part, _, _ := strings.Cut(subject, "/")
-		if id, err := strconv.ParseInt(part, 10, 64); err == nil {
-			out[id] = true
+		if vacancyID, err := strconv.ParseInt(part, 10, 64); err == nil && kind == "read_vacancy" {
+			out[vacancyID] = true
 		}
 	}
-	return out, rows.Close()
+	return out, order, rows.Close()
 }
 
 func fitMark(s fit.Stored, inputs int64, vacancyID int64, readingSet map[int64]bool) FitMark {
@@ -219,7 +223,7 @@ func rowAndCounts(ctx context.Context, database *db.DB, now func() time.Time, pr
 	if err != nil {
 		return Row{}, Counts{}, err
 	}
-	rs, err := queryReadingSet(ctx, database)
+	rs, _, err := queryReadingSet(ctx, database)
 	if err != nil {
 		return Row{}, Counts{}, err
 	}
@@ -242,7 +246,7 @@ func list(ctx context.Context, database *db.DB, now func() time.Time, profileID 
 	if err != nil {
 		return nil, Counts{}, nil, nil, 0, err
 	}
-	rs, err := queryReadingSet(ctx, database)
+	rs, _, err := queryReadingSet(ctx, database)
 	if err != nil {
 		return nil, Counts{}, nil, nil, 0, err
 	}
@@ -258,7 +262,7 @@ func list(ctx context.Context, database *db.DB, now func() time.Time, profileID 
 	return rows, buildCounts(cm), indCounts, srcCounts, total, nil
 }
 
-func applyDecision(ctx context.Context, database *db.DB, now func() time.Time,
+func applyDecision(ctx context.Context, database *db.DB, now func() time.Time, enqueue func(kind, subject string) (int64, error),
 	vacancyID, profileID int64, from, to, reason string, confirmed bool, r fit.Rules) (Row, Counts, error) {
 
 	var currentStage string
@@ -316,6 +320,9 @@ func applyDecision(ctx context.Context, database *db.DB, now func() time.Time,
 
 	if err := tx.Commit(); err != nil {
 		return Row{}, Counts{}, fmt.Errorf("inbox: decision: commit: %w", err)
+	}
+	if to == string(StageShortlist) {
+		loadCheck(ctx, database, enqueue, profileID, vacancyID, to, true)
 	}
 	return rowAndCounts(ctx, database, now, profileID, vacancyID, r)
 }
@@ -459,6 +466,7 @@ type VacancyView struct {
 	Listing  ListingView     `json:"listing"`
 	Band     Band            `json:"band"`
 	Offer    OfferView       `json:"offer"`
+	Check    *CheckView      `json:"check"`
 }
 
 func offerView(body string, tiles []fit.Tile) OfferView {
@@ -592,7 +600,7 @@ func buildApplyAction(vacURL, applyURL string) Action {
 	}
 }
 
-func vacancyView(ctx context.Context, database *db.DB, now func() time.Time,
+func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enqueue func(kind, subject string) (int64, error),
 	vacancyID, profileID int64, sourceNames map[string]string, r fit.Rules) (VacancyView, error) {
 
 	t := now()
@@ -619,7 +627,11 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time,
 	if err != nil {
 		return VacancyView{}, err
 	}
-	rs, err := queryReadingSet(ctx, database)
+	cs, err := loadCheck(ctx, database, enqueue, profileID, vacancyID, stage, false)
+	if err != nil {
+		return VacancyView{}, err
+	}
+	rs, queue, err := queryReadingSet(ctx, database)
 	if err != nil {
 		return VacancyView{}, err
 	}
@@ -659,5 +671,6 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time,
 		Listing:  lv,
 		Band:     band,
 		Offer:    offerView(html, f.Tiles),
+		Check:    cs.view(f.Requirements, queue, t),
 	}, nil
 }

@@ -1,0 +1,104 @@
+package shortlistcheck_test
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/sifty-works/sifty-server/internal/candidate"
+	"github.com/sifty-works/sifty-server/internal/models"
+	"github.com/sifty-works/sifty-server/internal/reading"
+	"github.com/sifty-works/sifty-server/internal/shortlistcheck"
+)
+
+func facts() shortlistcheck.ProfileFacts {
+	return shortlistcheck.ProfileFacts{Skills: []candidate.Skill{{Name: "Go", Level: "Proficient"}}}
+}
+
+func vacancy() reading.VacancyReading {
+	return reading.VacancyReading{Title: "Backend Engineer", Full: true, RequirementsRead: true, Requirements: []reading.Requirement{
+		{Text: "Go", Kind: "skill", Level: "required"},
+		{Text: "Fluent German", Kind: "language", Level: "required"},
+		{Text: "Mentoring experience", Kind: "other", Level: "preferred"},
+	}}
+}
+
+const evidence = "LANGUAGES\n- German (C1)\n- English (Native)\n\nSKILLS\n- Go (Proficient)"
+
+func reply(answers ...map[string]string) models.Response {
+	b, _ := json.Marshal(map[string]any{"answers": answers})
+	return models.Response{Text: string(b)}
+}
+
+func answer(requirement, verdict, excerpt string) map[string]string {
+	return map[string]string{"requirement": requirement, "verdict": verdict, "reason": "The data says so.", "excerpt": excerpt}
+}
+
+func run(t *testing.T, fm *models.FakeModel) shortlistcheck.Check {
+	t.Helper()
+	got, err := shortlistcheck.Checker{Model: fm, Text: "We hire a backend engineer. German is required."}.Check(context.Background(), facts(), evidence, vacancy())
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	return got
+}
+
+func TestOnlyRequirementsCodeLeftUndecidedAreAskedAndLocatedAnswersKept(t *testing.T) {
+	fm := &models.FakeModel{}
+	fm.AddReply(reply(answer("Fluent German", "met", "German (C1)")))
+	got := run(t, fm)
+
+	calls := fm.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("model calls = %d, want 1", len(calls))
+	}
+	asked := calls[0].Prompt[strings.LastIndex(calls[0].Prompt, "\nREQUIREMENTS TO DECIDE\n"):strings.LastIndex(calls[0].Prompt, "\nVACANCY READING")]
+	if !strings.Contains(asked, "Fluent German") || !strings.Contains(asked, "Mentoring experience") {
+		t.Errorf("undecided requirements are not asked: %q", asked)
+	}
+	if strings.Contains(asked, "- Go ") {
+		t.Errorf("a requirement code decided was sent to the model: %q", asked)
+	}
+	if !strings.Contains(calls[0].Prompt, "We hire a backend engineer") || !strings.Contains(calls[0].Prompt, evidence) {
+		t.Error("prompt lacks the vacancy text or the candidate evidence")
+	}
+	if len(got.Answers) != 1 || got.Answers[0].Requirement != "Fluent German" || got.Answers[0].Verdict != "✓" || got.Answers[0].Excerpt != "German (C1)" {
+		t.Errorf("answers = %+v", got.Answers)
+	}
+}
+
+func TestAnswerIsDroppedWhenItsExcerptIsNotInTheEvidence(t *testing.T) {
+	fm := &models.FakeModel{}
+	fm.AddReply(reply(answer("Fluent German", "met", "Native German speaker since birth")))
+	if got := run(t, fm); len(got.Answers) != 0 {
+		t.Errorf("answer with an invented excerpt was kept: %+v", got.Answers)
+	}
+}
+
+func TestAnswerIsDroppedWhenItsRequirementIsNotAnUndecidedOne(t *testing.T) {
+	fm := &models.FakeModel{}
+	fm.AddReply(reply(answer("Go", "met", "Go (Proficient)"), answer("Rust", "not_met", "Go (Proficient)")))
+	if got := run(t, fm); len(got.Answers) != 0 {
+		t.Errorf("answers about decided or unknown requirements were kept: %+v", got.Answers)
+	}
+}
+
+func TestRequirementAndExcerptAreMatchedFoldedAndExcerptIsReturnedAsInTheEvidence(t *testing.T) {
+	fm := &models.FakeModel{}
+	fm.AddReply(reply(answer("Fluent\u00a0 German", "met", "English  (Native)")))
+	got := run(t, fm)
+	if len(got.Answers) != 1 || got.Answers[0].Requirement != "Fluent German" || got.Answers[0].Excerpt != "English (Native)" {
+		t.Errorf("answers = %+v", got.Answers)
+	}
+}
+
+func TestNoModelCallWhenCodeDecidedEveryRequirement(t *testing.T) {
+	fm := &models.FakeModel{}
+	v := vacancy()
+	v.Requirements = v.Requirements[:1]
+	got, err := shortlistcheck.Checker{Model: fm}.Check(context.Background(), facts(), evidence, v)
+	if err != nil || len(got.Answers) != 0 || len(fm.Calls()) != 0 {
+		t.Errorf("answers=%v err=%v calls=%d", got.Answers, err, len(fm.Calls()))
+	}
+}

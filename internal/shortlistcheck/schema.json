@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "requirement": {"type": "string"},
+          "verdict":     {"type": "string", "enum": ["met", "not_met"]},
+          "reason":      {"type": "string"},
+          "excerpt":     {"type": "string"}
+        },
+        "required": ["requirement", "verdict", "reason", "excerpt"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["answers"],
+  "additionalProperties": false
+}

@@ -58,7 +58,7 @@ func newServer(t *testing.T, d *db.DB, o serverOpts) *httptest.Server {
 	h := server.New(server.Options{Version: "test", Port: 9999, Logger: logger},
 		func(mux *http.ServeMux) {
 			inbox.RegisterRoutes(mux, d, testNowFn, logger,
-				func() bool { return o.collecting }, o.sourceNames, o.rules, o.changed)
+				func() bool { return o.collecting }, o.sourceNames, o.rules, o.changed, nil)
 			inbox.RegisterIndustryRoutes(mux, logger)
 			if o.withCandidate {
 				candidate.RegisterRoutes(mux, d, "", candidate.Readers{}, logger, nil, nil)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/collect"
+	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/fit"
 	"github.com/sifty-works/sifty-server/internal/inbox"
@@ -14,6 +15,19 @@ import (
 	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/server"
 )
+
+func modelReady(store *config.Store, offline bool) func(kind string) error {
+	return func(kind string) error {
+		if offline {
+			return models.ErrOffline
+		}
+		cfg := store.Get()
+		if cfg.WorkProviderFor(kind) == "" {
+			return models.ErrNoProvider
+		}
+		return nil
+	}
+}
 
 func enqueueRecomputeFit(r *runner.Runner) func() {
 	return func() { r.Enqueue(runner.Spec{Kind: "recompute_fit"}) }
@@ -33,6 +47,7 @@ func registerAllRoutes(
 	readers candidate.Readers,
 	col *collect.Collector,
 	r *runner.Runner,
+	modelReady func(kind string) error,
 ) {
 	enqueue := func(kind, subject string) (int64, error) {
 		if r == nil {
@@ -56,10 +71,18 @@ func registerAllRoutes(
 		}
 		return nil
 	}
+	enqueueModelWork := func(kind, subject string) (int64, error) {
+		if modelReady != nil {
+			if err := modelReady(kind); err != nil {
+				return 0, err
+			}
+		}
+		return enqueue(kind, subject)
+	}
 	server.Handle(mux, "POST /api/providers/{name}/check", logger, models.CheckProviderHandler(gate))
 	server.Handle(mux, "GET /api/models", logger, models.ModelsHandler(gate))
 	server.Handle(mux, "PATCH /api/models", logger, models.PatchModelsHandler(gate))
-	inbox.RegisterRoutes(mux, database, now, logger, collectActive, sourceNames, rules, recomputeFit)
+	inbox.RegisterRoutes(mux, database, now, logger, collectActive, sourceNames, rules, recomputeFit, enqueueModelWork)
 	inbox.RegisterIndustryRoutes(mux, logger)
 	candidate.RegisterRoutes(mux, database, filesDir, readers, logger, recomputeFit, enqueue)
 	server.Handle(mux, "POST /api/documents/{id}/cancel", logger, candidate.CancelAnalysisHandler(database, cancel))

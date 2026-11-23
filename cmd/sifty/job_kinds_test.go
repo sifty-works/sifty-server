@@ -23,6 +23,7 @@ func TestRunningJobsAfterRestartResumeExceptDocumentAnalysis(t *testing.T) {
 	}{
 		{"recompute_fit", "", "queued"},
 		{"read_vacancy", "1/1", "queued"},
+		{"shortlist_check", "1/1", "queued"},
 		{"retention", "", "queued"},
 		{"analyze_document", "1", "interrupted"},
 	}

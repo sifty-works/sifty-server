@@ -33,7 +33,7 @@ func cmdGenAPI(args []string, stdout, stderr io.Writer) error {
 	devNull := slog.New(slog.NewTextHandler(io.Discard, nil))
 	devColl := collect.New(nil, nil, nil, nil, nil, false, nil, devNull)
 	server.New(server.Options{Logger: devNull}, func(mux *http.ServeMux) {
-		registerAllRoutes(mux, devNull, nil, nil, nil, nil, nil, nil, nil, "", candidate.Readers{}, devColl, nil)
+		registerAllRoutes(mux, devNull, nil, nil, nil, nil, nil, nil, nil, "", candidate.Readers{}, devColl, nil, nil)
 	})
 	routes := server.Routes()
 	data, err := genDoc(routes)

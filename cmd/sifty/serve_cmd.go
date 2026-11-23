@@ -26,6 +26,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/reading"
 	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/server"
+	"github.com/sifty-works/sifty-server/internal/shortlistcheck"
 	"github.com/sifty-works/sifty-server/internal/source"
 	"github.com/sifty-works/sifty-server/web"
 )
@@ -199,7 +200,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			}
 			return m
 		}
-		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r)
+		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r, modelReady(store, offline))
 	})
 
 	srv := &http.Server{
@@ -342,6 +343,15 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 			return runReadVacancy(runCtx, j, database,
 				func(vid int64) models.Model { return gate.For("reading", "background", vid) },
 				r.Enqueue)
+		},
+	})
+
+	r.Register(runner.Kind{
+		Name:   shortlistcheck.Kind,
+		Resume: true,
+		Run: func(runCtx context.Context, j *runner.Job) error {
+			return runShortlistCheck(runCtx, j, database,
+				func(vid int64) models.Model { return gate.For("shortlist_check", "background", vid) }, now)
 		},
 	})
 

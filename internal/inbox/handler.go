@@ -97,7 +97,7 @@ type SkillsDecisionResp struct {
 	VacancyView VacancyView `json:"vacancyView"`
 }
 
-func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, logger *slog.Logger, collectActive func() bool, getSourceNames func() map[string]string, rules func() fit.Rules, changed func()) {
+func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, logger *slog.Logger, collectActive func() bool, getSourceNames func() map[string]string, rules func() fit.Rules, changed func(), enqueue func(kind, subject string) (int64, error)) {
 	cat := catalog.New(database, now)
 	if rules == nil {
 		rules = func() fit.Rules { d := config.Defaults(); return fit.Rules{Weights: d.Weights, Rates: d.Rates} }
@@ -129,7 +129,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		if changed != nil && res.added {
 			changed()
 		}
-		view, err := vacancyView(ctx, database, now, vacancyID, pid, sourceNamesFor(), rules())
+		view, err := vacancyView(ctx, database, now, nil, vacancyID, pid, sourceNamesFor(), rules())
 		if err != nil {
 			return SkillsDecisionResp{}, err
 		}
@@ -204,7 +204,18 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		if err != nil {
 			return VacancyView{}, err
 		}
-		return vacancyView(r.Context(), database, now, vacancyID, pid, sourceNamesFor(), rules())
+		return vacancyView(r.Context(), database, now, enqueue, vacancyID, pid, sourceNamesFor(), rules())
+	})
+
+	server.Handle(mux, "POST /api/vacancies/{id}/shortlist-check/retry", logger, func(r *http.Request, req CheckRetryReq) (VacancyView, error) {
+		vacancyID, pid, err := resolveRequestIDs(r, database, req.Profile)
+		if err != nil {
+			return VacancyView{}, err
+		}
+		if err := retryCheck(r.Context(), database, enqueue, pid, vacancyID); err != nil {
+			return VacancyView{}, err
+		}
+		return vacancyView(r.Context(), database, now, nil, vacancyID, pid, sourceNamesFor(), rules())
 	})
 
 	server.Handle(mux, "POST /api/vacancies/{id}/decision", logger, func(r *http.Request, req DecisionReq) (DecisionResp, error) {
@@ -212,7 +223,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		if err != nil {
 			return DecisionResp{}, err
 		}
-		row, counts, err := applyDecision(r.Context(), database, now, vacancyID, pid, string(req.From), string(req.To), req.Reason, req.Confirmed, rules())
+		row, counts, err := applyDecision(r.Context(), database, now, enqueue, vacancyID, pid, string(req.From), string(req.To), req.Reason, req.Confirmed, rules())
 		if err != nil {
 			return DecisionResp{}, err
 		}
