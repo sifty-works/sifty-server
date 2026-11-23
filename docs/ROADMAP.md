@@ -22,4 +22,6 @@ Slices 1 to 7 are accepted, and the two refinements carried past slice 7 are mer
 
 Slices 1 to 8 are accepted. A document arrives as a file, as pasted text or as a link, keeps its extracted text, is analysed into proposed facts, and takes Accept and Reject with their conflicts; the Files tab of the profile shows the documents and, beside them, the suggestions to review; the import carries documents with their files and the suggestions nobody has decided.
 
-Slice 9 is next.
+Slices 1 to 9 are accepted. A vacancy entering Shortlist is compared with the user's own data in one model call, and the answer stands beside the requirements the code left undecided, with its date, its state and a way to run it again; it runs again only when its inputs change and the vacancy page is opened.
+
+Slice 10 is next. The frontend stands at 5,620 lines of 6,000 and slice 10 is estimated at about 800, so it does not fit: before it starts, the owner decides where those lines come from.
