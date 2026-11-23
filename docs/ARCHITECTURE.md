@@ -235,7 +235,7 @@ These are targets the coordinator checks at acceptance of every change (see `PRO
 | Database per vacancy | at most 18 KB |
 | Model calls for a new vacancy text | 1 |
 | Model calls for a change of profile or My data | 0 for Fits you and the counter; Shortlist checks become outdated and run again only when their vacancy is opened |
-| Shortlist check | at most 1 per shortlisted vacancy on entering Shortlist, and 1 per opening after its inputs changed |
+| Shortlist check | at most 2 per shortlisted vacancy on entering Shortlist, and 2 per opening after its inputs changed (one retry of a reply that decides nothing) |
 | Preparation of one form | 0 to 1 to classify labels, 1 to 2 to draft (one retry of an empty reply); Write and Paste 1 each |
 | Network per collection run | 1 request per source (2 for Hacker News), plus 1 per vacancy without text in the listing that is new, or known without text and not requested in the last 7 days, plus 1 per posting without a company that is new, or whose stored vacancy has none and was not asked in the last 7 days; a posting that is still without a company is not stored, so every run offers it again and requests its page again: a known cost, made visible by the count of postings without an employer on the source |
 | List API | under 50 ms at the 95th percentile for 1,200 rows; vacancy view under 30 ms; decision under 20 ms |

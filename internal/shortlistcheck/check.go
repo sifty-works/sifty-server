@@ -68,15 +68,23 @@ func (c Checker) Check(ctx context.Context, f ProfileFacts, evidence string, v r
 	if len(open) == 0 {
 		return Check{Answers: []Answer{}}, nil
 	}
-	resp, err := c.Model.Complete(ctx, models.Request{Prompt: buildPrompt(v, open, c.Text, evidence), Schema: json.RawMessage(schemaBytes), Think: "off"})
-	if err != nil {
-		return Check{}, err
+	req := models.Request{Prompt: buildPrompt(v, open, c.Text, evidence), Schema: json.RawMessage(schemaBytes), Think: "off"}
+	answers := []Answer{}
+	for attempt := range 2 {
+		resp, err := c.Model.Complete(ctx, req)
+		if err != nil {
+			return Check{}, err
+		}
+		var out Check
+		if err := json.Unmarshal([]byte(resp.Text), &out); err != nil {
+			return Check{}, fmt.Errorf("shortlistcheck: parse: %w", err)
+		}
+		answers = validate(out.Answers, open, evidence)
+		if len(answers) > 0 || attempt == 1 {
+			break
+		}
 	}
-	var out Check
-	if err := json.Unmarshal([]byte(resp.Text), &out); err != nil {
-		return Check{}, fmt.Errorf("shortlistcheck: parse: %w", err)
-	}
-	return Check{Answers: validate(out.Answers, open, evidence)}, nil
+	return Check{Answers: answers}, nil
 }
 
 func buildPrompt(v reading.VacancyReading, open []fit.RequirementLine, text, evidence string) string {

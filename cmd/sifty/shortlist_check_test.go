@@ -235,7 +235,7 @@ func TestMovingOutOfShortlistAndBackWithNothingChangedMakesNoSecondCall(t *testi
 func TestSavingMyDataMakesNoCallMarksTheCheckOutdatedAndOpeningRunsItOnce(t *testing.T) {
 	f := newCheckFix(t, checkOpts{})
 	f.fm.AddReply(germanReply())
-	f.fm.AddReply(germanReply())
+	f.fm.AddReply(checkReply(map[string]string{"requirement": "Fluent German", "verdict": "met", "reason": "The candidate lists German at C2.", "excerpt": "German (C2)"}))
 	f.move(t, "inbox", "shortlist")
 	f.idle(t)
 

@@ -70,15 +70,22 @@ func TestOnlyRequirementsCodeLeftUndecidedAreAskedAndLocatedAnswersKept(t *testi
 
 func TestAnswerIsDroppedWhenItsExcerptIsNotInTheEvidence(t *testing.T) {
 	fm := &models.FakeModel{}
-	fm.AddReply(reply(answer("Fluent German", "met", "Native German speaker since birth")))
+	for range 2 {
+		fm.AddReply(reply(answer("Fluent German", "met", "Native German speaker since birth")))
+	}
 	if got := run(t, fm); len(got.Answers) != 0 {
 		t.Errorf("answer with an invented excerpt was kept: %+v", got.Answers)
+	}
+	if n := len(fm.Calls()); n != 2 {
+		t.Errorf("a reply whose every answer failed validation was not asked again: calls = %d", n)
 	}
 }
 
 func TestAnswerIsDroppedWhenItsRequirementIsNotAnUndecidedOne(t *testing.T) {
 	fm := &models.FakeModel{}
-	fm.AddReply(reply(answer("Go", "met", "Go (Proficient)"), answer("Rust", "not_met", "Go (Proficient)")))
+	for range 2 {
+		fm.AddReply(reply(answer("Go", "met", "Go (Proficient)"), answer("Rust", "not_met", "Go (Proficient)")))
+	}
 	if got := run(t, fm); len(got.Answers) != 0 {
 		t.Errorf("answers about decided or unknown requirements were kept: %+v", got.Answers)
 	}
@@ -136,6 +143,32 @@ func TestExcerptIsShownWithoutTheListMarkerAndOnOneLine(t *testing.T) {
 	fm.AddReply(reply(answer("Fluent German", "met", "- German (C1)\n- English (Native)")))
 	got := run(t, fm)
 	if len(got.Answers) != 1 || got.Answers[0].Excerpt != "German (C1) - English (Native)" {
+		t.Errorf("answers = %+v", got.Answers)
+	}
+}
+
+func TestAReplyThatDecidesNothingIsAskedOnceMoreAndASecondOneIsKept(t *testing.T) {
+	fm := &models.FakeModel{}
+	fm.AddReply(reply())
+	fm.AddReply(reply(answer("Fluent German", "met", "German (C1)")))
+	got := run(t, fm)
+	if n := len(fm.Calls()); n != 2 {
+		t.Fatalf("model calls = %d, want 2", n)
+	}
+	if len(got.Answers) != 1 || got.Answers[0].Requirement != "Fluent German" {
+		t.Errorf("answers = %+v", got.Answers)
+	}
+}
+
+func TestASecondReplyThatDecidesNothingIsTheAnswerAndNothingIsAskedAgain(t *testing.T) {
+	fm := &models.FakeModel{}
+	fm.AddReply(reply())
+	fm.AddReply(reply())
+	got := run(t, fm)
+	if n := len(fm.Calls()); n != 2 {
+		t.Errorf("model calls = %d, want 2", n)
+	}
+	if len(got.Answers) != 0 {
 		t.Errorf("answers = %+v", got.Answers)
 	}
 }

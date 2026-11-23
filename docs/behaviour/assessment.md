@@ -87,7 +87,7 @@ From top to bottom:
 
 ## Shortlist check
 
-- When a vacancy enters Shortlist, one model call compares the user's data with the vacancy's requirements. The model receives the vacancy's reading and text, the accepted data of My data and the profile including other requirements, and the text of documents marked "Use as evidence"; never contacts, legal name or application form answers (see `profiles.md`).
+- When a vacancy enters Shortlist, one model call compares the user's data with the vacancy's requirements. When that call decides no requirement at all, it is made once more, and the second answer is the answer. The model receives the vacancy's reading and text, the accepted data of My data and the profile including other requirements, and the text of documents marked "Use as evidence"; never contacts, legal name or application form answers (see `profiles.md`).
 - Its answer is shown next to the requirements that code left as ?, each with a short reason and the excerpt it relies on. It changes neither Fits you nor the counter.
 - When any of its inputs changes, the check is marked "Based on your data of <date>" and runs again the next time the vacancy page is opened. A change of profile or My data therefore makes no model call by itself.
 - States: "Checking…", "Waiting for the model: N ahead", and "Check failed: <reason>" with a "Retry" button shown only after a failure or an interruption. There is no Assess or Reassess button.
@@ -103,8 +103,8 @@ From top to bottom:
 | + or − on a requirement | this vacancy at once, the rest in the background | none |
 | A change of weights or vocabularies | everything | none |
 | A new version of the application that reads texts differently | requirements of every vacancy are read again, in the background, at low priority | 1 per text |
-| A vacancy enters Shortlist | the Shortlist check | 1 |
-| A shortlisted vacancy with an outdated check is opened | the Shortlist check | 1 |
+| A vacancy enters Shortlist | the Shortlist check | 1, or 2 when the first decides nothing |
+| A shortlisted vacancy with an outdated check is opened | the Shortlist check | 1, or 2 when the first decides nothing |
 
 Fits you is recomputed in the background by code, with no model call: at start, after a collection run, and after My data or a profile is saved or a profile is created. Only results that are missing or out of date are recomputed, and the work repeats until none is left, so a change made while it runs is applied too.
 
