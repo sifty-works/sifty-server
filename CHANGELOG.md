@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Web client 0.19.0: the Files tab shows, beside the documents, the facts an analysis proposes — each with its field, its value, the quote behind it and the document it came from — and takes them into My data with Accept or drops them with Reject; a proposal that contradicts a fact already held shows both values and asks which one stands, and the tab button carries the count still to review. The link row of fetched pages now appears only while Contacts and links is being edited.
 - Web client 0.18.0: the Files tab of the profile lists documents added as files, as pasted text or as links, each card reading its own state and offering Analyze, Cancel analysis, Retry analysis, its text, its original, "Use as evidence" and delete; fetched pages stand inside Contacts and links with "+ Add link" and "Refresh source", and the tab is laid out in two columns, the right one held for the suggestions still to come.
 - Web client 0.17.0: the first role of the list opens by itself, so the working area no longer stands empty with roles in the list; an empty list reads "No roles".
 - Web client 0.16.0: when the open role leaves the list — moved to another stage, deleted, or hidden by blocking its company — the next role opens instead of an empty working area.
