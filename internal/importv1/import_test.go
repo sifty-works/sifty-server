@@ -126,6 +126,35 @@ CREATE TABLE app_settings(
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE profile_documents(
+  id                TEXT PRIMARY KEY,
+  profile_id        TEXT NOT NULL REFERENCES user_profiles(id),
+  kind              TEXT NOT NULL DEFAULT '',
+  original_name     TEXT NOT NULL DEFAULT '',
+  storage_path      TEXT,
+  source_url        TEXT,
+  content_hash      TEXT,
+  processing_state  TEXT NOT NULL DEFAULT 'pending',
+  extracted_text    TEXT,
+  analysis_metadata TEXT,
+  error             TEXT,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+CREATE TABLE profile_facts(
+  id               TEXT PRIMARY KEY,
+  profile_id       TEXT NOT NULL REFERENCES user_profiles(id),
+  document_id      TEXT REFERENCES profile_documents(id),
+  field_key        TEXT NOT NULL,
+  value_json       TEXT NOT NULL,
+  quote            TEXT,
+  source_reference TEXT,
+  origin           TEXT NOT NULL,
+  state            TEXT NOT NULL,
+  supersedes_id    TEXT REFERENCES profile_facts(id),
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
+);
 `
 
 func makeOldDB(t *testing.T, dir, name string, v int) *sql.DB {

@@ -113,12 +113,24 @@ type importReport struct {
 
 	ReadingsWritten int
 
+	DocumentsRead        int
+	DocumentsWritten     int
+	DocumentsDropped     map[string]int
+	DocumentFilesMissing int
+	DocumentFiles        []string
+
+	ProposalsRead       int
+	ProposalsWritten    int
+	ProposalsDropped    map[string]int
+	ProposalKeysDropped map[string]int
+
 	LegacyFolded  []string
 	LegacyDropped []string
 
 	SettingsCarried []string
 	Fit             fitComparison
 	profileIDs      map[string]int64
+	activeProfileID int64
 }
 
 type oldUser struct {
@@ -410,6 +422,9 @@ func runImport(ctx context.Context, fromDir, dbPath, settingsPath, dataDir strin
 	report, err := doImport(ctx, copyDB, newDB, store, oldCfg)
 	if err != nil {
 		return err
+	}
+	if err := importDocuments(ctx, copyDB, newDB, fromDir, dataDir, report); err != nil {
+		return fmt.Errorf("importing documents: %w", err)
 	}
 	report.NonImportedKeys = nonImportedKeys
 
@@ -1350,6 +1365,7 @@ func doImport(ctx context.Context, copyDB *sql.DB, newDB *db.DB, store *config.S
 				return nil, fmt.Errorf("setting active profile: %w", err)
 			}
 			report.ActiveProfileSet = true
+			report.activeProfileID = newID
 		}
 	}
 
@@ -2774,6 +2790,9 @@ func formatReport(r *importReport) string {
 	fmt.Fprintf(&sb, "Questions & Answers: %d read, %d written\n", r.QARead, r.QAWritten)
 
 	fmt.Fprintf(&sb, "Readings: %d written\n", r.ReadingsWritten)
+
+	formatDocuments(&sb, r)
+	formatProposals(&sb, r)
 
 	if len(r.LegacyFolded) > 0 {
 		fmt.Fprintf(&sb, "Legacy values folded into Other requirements (%d):\n", len(r.LegacyFolded))
