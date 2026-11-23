@@ -109,6 +109,9 @@ func (cs checkState) view(lines []fit.RequirementLine, queue []int64, now time.T
 		v.Made = cs.stored.Made.In(now.Location()).Format("2 Jan 2006")
 	}
 	if cs.current {
+		if len(v.Answers) == 0 {
+			v.State = "Nothing in your data decides these requirements."
+		}
 		return v
 	}
 	v.Active = cs.jobState == "queued" || cs.jobState == "running"
