@@ -102,3 +102,31 @@ func TestNoModelCallWhenCodeDecidedEveryRequirement(t *testing.T) {
 		t.Errorf("answers=%v err=%v calls=%d", got.Answers, err, len(fm.Calls()))
 	}
 }
+
+func TestRequirementCopiedWithTheLevelAndAlternativesThePromptPrintsIsStillMatched(t *testing.T) {
+	fm := &models.FakeModel{}
+	fm.AddReply(reply(answer("Fluent German [required]", "met", "German (C1)")))
+	if got := run(t, fm); len(got.Answers) != 1 || got.Answers[0].Requirement != "Fluent German" {
+		t.Errorf("answers = %+v", got.Answers)
+	}
+
+	fm2 := &models.FakeModel{}
+	fm2.AddReply(reply(answer("Mentoring experience (any of: coaching, mentoring) [preferred]", "met", "German (C1)")))
+	if got := run(t, fm2); len(got.Answers) != 1 || got.Answers[0].Requirement != "Mentoring experience" {
+		t.Errorf("answers = %+v", got.Answers)
+	}
+}
+
+func TestRequirementWhoseOwnTextEndsInBracketsIsMatchedWhole(t *testing.T) {
+	v := vacancy()
+	v.Requirements = append(v.Requirements, reading.Requirement{Text: "Continuous Threat Exposure Management (CTEM)", Kind: "other", Level: "preferred"})
+	fm := &models.FakeModel{}
+	fm.AddReply(reply(answer("Continuous Threat Exposure Management (CTEM)", "met", "German (C1)")))
+	got, err := shortlistcheck.Checker{Model: fm, Text: "We hire a backend engineer."}.Check(context.Background(), facts(), evidence, v)
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	if len(got.Answers) != 1 || got.Answers[0].Requirement != "Continuous Threat Exposure Management (CTEM)" {
+		t.Errorf("answers = %+v", got.Answers)
+	}
+}

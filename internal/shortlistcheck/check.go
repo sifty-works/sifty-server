@@ -86,11 +86,11 @@ func buildPrompt(v reading.VacancyReading, open []fit.RequirementLine, text, evi
 	sb.Write(schemaBytes)
 	sb.WriteString("\nREQUIREMENTS TO DECIDE\n")
 	for _, line := range open {
-		sb.WriteString("- " + line.Text)
+		sb.WriteString("- " + line.Text + "\n")
+		sb.WriteString("  level: " + line.Level + "\n")
 		if len(line.Alts) > 0 {
-			sb.WriteString(" (any of: " + strings.Join(line.Alts, ", ") + ")")
+			sb.WriteString("  also accepted: " + strings.Join(line.Alts, ", ") + "\n")
 		}
-		sb.WriteString(" [" + line.Level + "]\n")
 	}
 	v.Requirements = nil
 	b, _ := json.Marshal(v)
@@ -125,11 +125,30 @@ func validate(in []Answer, open []fit.RequirementLine, evidence string) []Answer
 }
 
 func FindLine(lines []fit.RequirementLine, text string) (fit.RequirementLine, bool) {
-	want := reading.FoldString(text)
-	for _, l := range lines {
-		if reading.FoldString(l.Text) == want {
-			return l, true
+	for range 4 {
+		want := reading.FoldString(text)
+		for _, l := range lines {
+			if reading.FoldString(l.Text) == want {
+				return l, true
+			}
 		}
+		shorter := withoutLastGroup(text)
+		if shorter == text {
+			break
+		}
+		text = shorter
 	}
 	return fit.RequirementLine{}, false
+}
+
+func withoutLastGroup(s string) string {
+	s = strings.TrimSpace(s)
+	for _, pair := range [][2]string{{" [", "]"}, {" (", ")"}} {
+		if strings.HasSuffix(s, pair[1]) {
+			if i := strings.LastIndex(s, pair[0]); i > 0 {
+				return strings.TrimSpace(s[:i])
+			}
+		}
+	}
+	return s
 }
