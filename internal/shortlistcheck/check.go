@@ -27,8 +27,6 @@ var checkerVersion = func() string {
 	return "shortlistcheck/1+" + hex.EncodeToString(h.Sum(nil))[:8]
 }()
 
-func Version() string { return checkerVersion }
-
 const (
 	maxExcerptRunes = 400
 	maxReasonRunes  = 300

@@ -1,20 +1,13 @@
 package candidate
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/xml"
 	"fmt"
-	"io"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -217,167 +210,6 @@ func refreshDocument(ctx context.Context, database *db.DB, filesDir string, read
 		return DocumentItem{}, err
 	}
 	return rowToItem(row), nil
-}
-
-func readWordDocument(_ context.Context, _ Readers, _ *slog.Logger, body []byte) (string, string, string, error) {
-	t, err := extractDocx(body)
-	if err != nil {
-		return "", "error", "The document could not be read.", nil
-	}
-	return t, "ready", "", nil
-}
-
-const (
-	wordNS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-	mcNS   = "http://schemas.openxmlformats.org/markup-compatibility/2006"
-)
-
-const docxMain = "word/document.xml"
-
-func extractDocx(body []byte) (string, error) {
-	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
-	if err != nil {
-		return "", fmt.Errorf("not a valid Word document")
-	}
-	if _, err := fs.Stat(zr, docxMain); err != nil {
-		return "", fmt.Errorf("not a valid Word document")
-	}
-	targets := map[string]string{}
-	for _, e := range docxElements(zr, "word/_rels/document.xml.rels", "Relationship") {
-		targets[xmlAttr(e, "Id")] = xmlAttr(e, "Target")
-	}
-	var around [2][]string
-	for _, e := range docxElements(zr, docxMain, "headerReference", "footerReference") {
-		target := targets[xmlAttr(e, "id")]
-		if target == "" {
-			continue
-		}
-		name := path.Join("word", target)
-		if strings.HasPrefix(target, "/") {
-			name = target[1:]
-		}
-		side := 0
-		if e.Name.Local == "footerReference" {
-			side = 1
-		}
-		around[side] = append(around[side], name)
-	}
-	var texts []string
-	seen := map[string]bool{}
-	collect := func(names []string) {
-		for _, name := range names {
-			t, err := docxText(zr, name)
-			if err != nil || t == "" || seen[t] {
-				continue
-			}
-			seen[t] = true
-			texts = append(texts, t)
-		}
-	}
-	collect(around[0])
-	main, err := docxText(zr, docxMain)
-	if err != nil {
-		return "", err
-	}
-	if main != "" {
-		texts = append(texts, main)
-	}
-	collect(around[1])
-	return strings.Join(texts, "\n"), nil
-}
-
-func docxText(zr *zip.Reader, name string) (string, error) {
-	f, err := zr.Open(name)
-	if err != nil {
-		return "", fmt.Errorf("could not read document content")
-	}
-	defer f.Close()
-	return parseDocxXML(f)
-}
-
-func docxElements(zr *zip.Reader, name string, locals ...string) []xml.StartElement {
-	f, err := zr.Open(name)
-	if err != nil {
-		return nil
-	}
-	defer f.Close()
-	var out []xml.StartElement
-	dec := xml.NewDecoder(f)
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			return out
-		}
-		if t, ok := tok.(xml.StartElement); ok && slices.Contains(locals, t.Name.Local) {
-			out = append(out, t.Copy())
-		}
-	}
-}
-
-func xmlAttr(e xml.StartElement, local string) string {
-	for _, a := range e.Attr {
-		if a.Name.Local == local {
-			return a.Value
-		}
-	}
-	return ""
-}
-
-func parseDocxXML(r io.Reader) (string, error) {
-	var sb strings.Builder
-	dec := xml.NewDecoder(r)
-	inText := false
-	skip := 0
-	for {
-		tok, err := dec.Token()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", fmt.Errorf("could not parse document content")
-		}
-		switch t := tok.(type) {
-		case xml.StartElement:
-			if t.Name.Space == mcNS && t.Name.Local == "Fallback" {
-				skip++
-				break
-			}
-			if skip > 0 {
-				break
-			}
-			if t.Name.Space == wordNS {
-				switch t.Name.Local {
-				case "t":
-					inText = true
-				case "tab":
-					sb.WriteByte('\t')
-				case "br", "cr":
-					sb.WriteByte('\n')
-				}
-			}
-		case xml.EndElement:
-			if t.Name.Space == mcNS && t.Name.Local == "Fallback" {
-				if skip > 0 {
-					skip--
-				}
-				break
-			}
-			if skip > 0 {
-				break
-			}
-			switch t.Name.Local {
-			case "t":
-				inText = false
-			case "p":
-				sb.WriteByte('\n')
-			}
-		case xml.CharData:
-			if inText && skip == 0 {
-				sb.Write([]byte(t))
-			}
-		}
-	}
-	return strings.TrimSpace(sb.String()), nil
 }
 
 func rowToItem(row documentRow) DocumentItem {

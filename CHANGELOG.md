@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- The unused Word document reader and the unused `shortlistcheck.Version` are removed; a `.docx` upload is still refused as before. 170 lines removed.
 - A profile whose stored data cannot be read no longer shows an empty list: the list answers "Internal error, see log #id" with a log entry. Queuing readings for decided vacancies still queues them for every profile it can read, and then the job fails with the id of each profile it could not read, instead of quietly queuing fewer.
 
 ## 0.1.0
