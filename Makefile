@@ -87,6 +87,9 @@ check: build
 	   rm -f "$$tmp"; exit 1; \
 	 fi; \
 	 rm -f "$$tmp"
+	@echo "--- dead code ---"
+	@dead=$$(go run golang.org/x/tools/cmd/deadcode@v0.52.0 -test ./...); \
+	 if [ -n "$$dead" ]; then echo "$$dead"; echo "Code above is reached by nothing, tests included; remove it"; exit 1; fi
 	@echo "--- no comments ---"
 	@gofiles=$$(git ls-files --cached '*.go' | grep -v 'testdata/' | grep -v 'web/dist'); \
 	 if [ -n "$$gofiles" ]; then \

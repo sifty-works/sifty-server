@@ -162,14 +162,6 @@ func rowID(r any) float64 {
 	return v
 }
 
-func rowIDs(body map[string]any) map[float64]bool {
-	out := map[float64]bool{}
-	for _, r := range getRows(body) {
-		out[rowID(r)] = true
-	}
-	return out
-}
-
 func titles(body map[string]any) string {
 	var out []string
 	for _, r := range getRows(body) {

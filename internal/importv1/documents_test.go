@@ -47,19 +47,6 @@ func insertOldDocument(t *testing.T, fromDir string, d oldDoc) {
 	}
 }
 
-func writeOldDocumentFile(t *testing.T, fromDir, docID, name string, body []byte) string {
-	t.Helper()
-	rel := filepath.Join("evidence", "profile-documents", docID, name)
-	path := filepath.Join(fromDir, rel)
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(path, body, 0600); err != nil {
-		t.Fatalf("write old document file: %v", err)
-	}
-	return rel
-}
-
 type newDoc struct {
 	id       int64
 	name     string
@@ -93,17 +80,6 @@ func readNewDocuments(t *testing.T, targetDir string) []newDoc {
 		out = append(out, d)
 	}
 	return out
-}
-
-func newDocByName(t *testing.T, docs []newDoc, name string) newDoc {
-	t.Helper()
-	for _, d := range docs {
-		if d.name == name {
-			return d
-		}
-	}
-	t.Fatalf("no imported document named %q among %d", name, len(docs))
-	return newDoc{}
 }
 
 func setupDocumentFixture(t *testing.T) string {
