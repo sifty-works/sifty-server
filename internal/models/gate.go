@@ -34,6 +34,7 @@ type providerEntry struct {
 
 	stateMu         sync.RWMutex
 	state           string
+	stateErr        error
 	stateAt         time.Time
 	requestFailures int
 	loading         bool
@@ -104,15 +105,12 @@ func (c *gatedCall) Complete(ctx context.Context, r Request) (Response, error) {
 		if err != nil || paused {
 			return Response{}, WaitError{RetryAfter: c.gate.now().Add(providerRetryDelay)}
 		}
-		if cfg.DailyModelLimit > 0 {
-			n, err := countTodayCalls(ctx, c.gate.db)
-			if err != nil {
-				return Response{}, WaitError{RetryAfter: c.gate.now().Add(providerRetryDelay)}
-			}
-			if n >= cfg.DailyModelLimit {
-				next := time.Now().UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)
-				return Response{}, WaitError{RetryAfter: next}
-			}
+		until, reached, err := c.gate.dailyLimit(ctx, cfg.DailyModelLimit)
+		if err != nil {
+			return Response{}, WaitError{RetryAfter: c.gate.now().Add(providerRetryDelay)}
+		}
+		if reached {
+			return Response{}, WaitError{RetryAfter: until}
 		}
 		if atomic.LoadInt32(&entry.waitUser) > 0 {
 			return Response{}, WaitError{RetryAfter: time.Now().Add(5 * time.Second)}
@@ -135,17 +133,17 @@ func (c *gatedCall) Complete(ctx context.Context, r Request) (Response, error) {
 	defer func() { entry.mu <- struct{}{} }()
 
 	if c.background {
-		if until, held := entry.heldUntil(c.gate.now()); held {
-			return Response{}, WaitError{RetryAfter: until}
+		if h, held := entry.hold(c.gate.now()); held {
+			return Response{}, WaitError{RetryAfter: h.Until}
 		}
 	}
 
 	start := time.Now()
 	entry, err = c.gate.loadIfNeeded(ctx, entry, pc)
 	if err != nil {
-		c.gate.updateState(entry, err)
+		failure := c.gate.updateState(entry, err)
 		c.gate.journal(ctx, c.kind, name, pc.Model, c.background, len(r.Prompt), 0, 0, 0, int(time.Since(start).Milliseconds()), err.Error(), c.vacancyID)
-		return Response{}, err
+		return Response{}, failure
 	}
 
 	resp, callErr := entry.model.Complete(ctx, r)
@@ -155,11 +153,11 @@ func (c *gatedCall) Complete(ctx context.Context, r Request) (Response, error) {
 	if callErr != nil {
 		outcome = callErr.Error()
 	}
-	c.gate.updateState(entry, callErr)
+	failure := c.gate.updateState(entry, callErr)
 	c.gate.journal(ctx, c.kind, name, pc.Model, c.background,
 		len(r.Prompt), resp.InTokens, len(resp.Text), resp.OutTokens,
 		int(dur.Milliseconds()), outcome, c.vacancyID)
-	return resp, callErr
+	return resp, failure
 }
 
 func (g *Gate) loadIfNeeded(ctx context.Context, e *providerEntry, pc config.ProviderConfig) (*providerEntry, error) {
@@ -181,38 +179,74 @@ func (g *Gate) loadIfNeeded(ctx context.Context, e *providerEntry, pc config.Pro
 	return e, err
 }
 
-func (e *providerEntry) heldUntil(now time.Time) (time.Time, bool) {
+type Hold struct {
+	Until time.Time
+	Why   error
+}
+
+func (e *providerEntry) hold(now time.Time) (Hold, bool) {
 	e.stateMu.RLock()
 	defer e.stateMu.RUnlock()
 	if e.state == "" || e.state == "ok" {
-		return time.Time{}, false
+		return Hold{}, false
 	}
 	until := e.stateAt.Add(providerRetryDelay)
-	return until, now.Before(until)
+	return Hold{Until: until, Why: e.stateErr}, now.Before(until)
 }
 
-func (g *Gate) updateState(e *providerEntry, err error) {
+func (g *Gate) updateState(e *providerEntry, err error) error {
 	var re requestError
 	isRequest := errors.As(err, &re)
 	if errors.Is(err, context.Canceled) || errors.Is(err, ErrPromptTooLong) {
-		return
+		return err
 	}
 	e.stateMu.Lock()
 	defer e.stateMu.Unlock()
 	switch {
 	case err == nil:
 		e.state = "ok"
+		e.stateErr = nil
 		e.requestFailures = 0
 	case isRequest:
 		e.requestFailures++
 		if e.requestFailures >= requestFailuresBeforeHold {
 			e.state = err.Error()
+			e.stateErr = fmt.Errorf("%w: %w", ErrUnusableAnswers, err)
 			e.stateAt = g.now()
 		}
 	default:
 		e.state = err.Error()
 		e.stateAt = g.now()
+		e.stateErr = fmt.Errorf("%w: %w", ErrProviderUnavailable, err)
+		return e.stateErr
 	}
+	return err
+}
+
+func (g *Gate) Held(provider string) (Hold, bool) {
+	g.mu.Lock()
+	e, ok := g.entries[provider]
+	g.mu.Unlock()
+	if !ok {
+		return Hold{}, false
+	}
+	return e.hold(g.now())
+}
+
+func (g *Gate) DailyLimitUntil(ctx context.Context) (time.Time, bool, error) {
+	return g.dailyLimit(ctx, g.store.Get().DailyModelLimit)
+}
+
+func (g *Gate) dailyLimit(ctx context.Context, limit int) (time.Time, bool, error) {
+	if limit <= 0 {
+		return time.Time{}, false, nil
+	}
+	n, err := countTodayCalls(ctx, g.db)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	next := time.Now().UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)
+	return next, n >= limit, nil
 }
 
 func (g *Gate) Check(ctx context.Context, name string) (string, error) {

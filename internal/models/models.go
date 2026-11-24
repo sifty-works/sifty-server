@@ -29,6 +29,10 @@ var ErrOffline = errors.New("model calls are not available in offline mode")
 var ErrBulkOnPaid = errors.New("Bulk model work is not allowed on a paid provider. Enable 'Allow paid bulk work' first.")
 var ErrNoProvider = errors.New("no model provider configured")
 
+var ErrProviderUnavailable = errors.New("the provider did not answer")
+
+var ErrUnusableAnswers = errors.New("the provider kept giving answers that could not be used")
+
 var ErrPromptTooLong = errors.New("prompt is longer than the context of the provider")
 
 type requestError struct{ err error }

@@ -640,4 +640,7 @@ func TestActiveByKindFiltersResults(t *testing.T) {
 		t.Errorf("Active(bb): got %v", bb)
 	}
 	close(hold)
+	for deadline := time.Now().Add(5 * time.Second); len(r.Active()) > 0 && time.Now().Before(deadline); {
+		time.Sleep(5 * time.Millisecond)
+	}
 }

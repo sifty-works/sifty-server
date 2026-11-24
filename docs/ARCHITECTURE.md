@@ -116,7 +116,7 @@ type Runner interface {
 }
 ```
 
-- One table `job(id, kind, subject, priority, state, attempts, not_before, progress, error, params, created, updated)` runs every kind of background work: `collect`, `read_vacancy`, `recompute_fit`, `shortlist_check`, `locate`, `prepare`, `analyze_document`, `retention`. Finished jobs are kept for 90 days.
+- One table `job(id, kind, subject, priority, state, attempts, not_before, progress, error, params, created, updated)` runs every kind of background work: `collect`, `read_vacancy`, `recompute_fit`, `shortlist_check`, `locate`, `prepare`, `analyze_document`, `retention`. Finished jobs are kept for 90 days. A failed job's `error` holds a sentence made from the error's type when it fails; the Go text goes to the log with the job's id.
 - **Lanes are taken per stage, not per job:** `browser` (1) for reading a form, `net` (several) for collection and search, `cpu` (1) for recomputation. A model is not a lane; a stage that needs one takes the model gate per call and holds no lane while it waits, so reading a form never waits for a model.
 - **Restart:** a job that was running becomes `interrupted`. Automatic kinds (`read_vacancy`, `recompute_fit`, `shortlist_check`, `retention`) are queued again while they have had fewer than three attempts, else `failed`. `locate` is queued again as a boards-only search. `collect`, `prepare` and `analyze_document` stay `interrupted` until the user retries; for `prepare` this follows the decision that failed preparations are not retried automatically.
 - **Cancel:** the job states are `queued`, `running`, `done`, `failed`, `interrupted` and `cancelled`. A cancelled job is a decision of the user and is answered at once: a queued job never starts, and a running job has its context cancelled without waiting for it to notice. The saved `params` of a cancelled job are kept, so retrying an `analyze_document` takes the job over and continues from the saved chunk, as it does for an `interrupted` one. A restart does not queue a cancelled job again.
@@ -211,7 +211,7 @@ The web client lives in `github.com/sifty-works/sifty-web`. Its source is in tha
 | Questions & Answers | `GET/POST/PATCH/DELETE /api/qa` |
 | Reference | `GET /api/reference` (countries, regions and time-zone bands from the `places` vocabulary, and option sets; shipped as embedded data) |
 | Application | `GET /api/vacancies/{id}/application`; `PATCH …/application/fields/{field}`; `POST …/application/{write,paste,questions,retry}`; `POST /api/vacancies/{id}/locate`; `POST /api/vacancies/{id}/shortlist-check/retry` |
-| Settings and status | `GET/PUT /api/settings`, `GET/PUT /api/settings/file`; `GET/PATCH /api/models` (providers with their cost and state, the provider of each kind of work, paid bulk permission, the pause switch, the daily limit and the day's background calls); `POST /api/providers/{name}/check`; `GET /api/jobs`; `GET /api/status` (or event stream); `GET /api/version` |
+| Settings and status | `GET/PUT /api/settings`, `GET/PUT /api/settings/file`; `GET/PATCH /api/models` (providers with their cost and state, the provider of each kind of work, paid bulk permission, the pause switch, the daily limit and the day's background calls); `POST /api/providers/{name}/check`; `GET /api/work` (running jobs, queued jobs by kind with the reason they wait, and failures of the last 7 days); `GET /api/status` (or event stream); `GET /api/version` |
 
 ## Import of the old application
 

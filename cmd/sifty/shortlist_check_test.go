@@ -427,7 +427,7 @@ work: {reading: paidbox, shortlist_check: paidbox, preparation: paidbox}
 		check, _ = view["check"].(map[string]any)
 		return check != nil && check["retry"] == true
 	})
-	if state := fmt.Sprint(check["state"]); !strings.Contains(state, "Bulk model work is not allowed on a paid provider") {
+	if state := fmt.Sprint(check["state"]); !strings.Contains(state, "The provider is paid, so this work is refused") {
 		t.Errorf("state = %q", state)
 	}
 	if n := reqCount.Load(); n != 0 {

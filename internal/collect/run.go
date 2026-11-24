@@ -219,10 +219,12 @@ func (c *Collector) run(ctx context.Context, j *runner.Job) error {
 	wg.Wait()
 
 	if failedCount > 0 && failedCount == len(enabled) {
-		return runner.Permanent(errors.New("Every source failed"))
+		return runner.Permanent(ErrEverySourceFailed)
 	}
 	return nil
 }
+
+var ErrEverySourceFailed = errors.New("every source failed")
 
 func (c *Collector) listSource(ctx context.Context, s config.SourceConfig) ([]listing.Posting, error) {
 	u, _ := url.Parse(s.URL)

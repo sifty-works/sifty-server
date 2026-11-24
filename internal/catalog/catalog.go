@@ -618,6 +618,18 @@ func (c *Catalog) Known(ctx context.Context, p listing.Posting) (Known, error) {
 	return Known{ID: r.matchIDs[0], HasText: hasText, HasCompany: company != "", Requested: requested}, nil
 }
 
+func (c *Catalog) TitleCompany(ctx context.Context, id int64) (string, string, error) {
+	var title, company string
+	err := c.db.QueryRowContext(ctx, `SELECT title, company FROM vacancy WHERE id = ?`, id).Scan(&title, &company)
+	if err == sql.ErrNoRows {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("catalog: title and company: %w", err)
+	}
+	return title, company, nil
+}
+
 func (c *Catalog) MarkRequested(ctx context.Context, id int64, at time.Time) error {
 	_, err := c.db.ExecContext(ctx,
 		`UPDATE vacancy SET detail_requested_at=? WHERE id=?`, at.UTC().Format(time.RFC3339), id)

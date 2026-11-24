@@ -91,11 +91,14 @@ func runAnalyzeDocument(
 			if errors.Is(err, models.ErrBulkOnPaid) {
 				return runner.WaitUntil(time.Now().Add(paidBulkDelay))
 			}
-			reason := userFriendlyAnalyzeError(err)
+			reason, known := failureSentence(j.Kind, err)
+			if !known {
+				reason = "The analysis could not be completed. Try again."
+			}
 			if uerr := candidate.UpdateDocumentError(ctx, database, docID, reason); uerr != nil {
 				return uerr
 			}
-			if isPermanentAnalyzeError(err) {
+			if known && !errors.Is(err, models.ErrProviderUnavailable) {
 				return runner.Permanent(err)
 			}
 			if serr := saveAnalyzeCheckpoint(ctx, j, cp); serr != nil {
@@ -121,21 +124,4 @@ func runAnalyzeDocument(
 		return err
 	}
 	return candidate.UpdateDocumentAnalysed(ctx, database, docID, saved)
-}
-
-func userFriendlyAnalyzeError(err error) string {
-	if errors.Is(err, models.ErrNoProvider) {
-		return "No model is chosen for reading. Open Settings."
-	}
-	if errors.Is(err, models.ErrOffline) {
-		return "Model calls are unavailable in offline mode. Open Settings."
-	}
-	if errors.Is(err, models.ErrPromptTooLong) {
-		return "The document is too long for the chosen model. Choose a model with a longer context in Settings."
-	}
-	return "The analysis could not be completed. Try again."
-}
-
-func isPermanentAnalyzeError(err error) bool {
-	return errors.Is(err, models.ErrNoProvider) || errors.Is(err, models.ErrOffline) || errors.Is(err, models.ErrPromptTooLong)
 }

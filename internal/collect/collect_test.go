@@ -214,8 +214,8 @@ func TestRunAllFailingEndsFailed(t *testing.T) {
 	runCollect(t, e)
 
 	lr := e.get(t, "/api/status")["lastRun"].(map[string]any)
-	if lr["message"] != "Every source failed" {
-		t.Errorf("lastRun.message: got %v", lr["message"])
+	if lr["state"] != "failed" {
+		t.Errorf("lastRun.state: got %v", lr["state"])
 	}
 }
 

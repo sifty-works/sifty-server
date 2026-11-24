@@ -80,6 +80,7 @@ func registerAllRoutes(
 		return enqueue(kind, subject)
 	}
 	server.Handle(mux, "POST /api/providers/{name}/check", logger, models.CheckProviderHandler(gate))
+	server.Handle(mux, "GET /api/work", logger, workHandler(database, gate, r, now))
 	server.Handle(mux, "GET /api/models", logger, models.ModelsHandler(gate))
 	server.Handle(mux, "PATCH /api/models", logger, models.PatchModelsHandler(gate))
 	inbox.RegisterRoutes(mux, database, now, logger, collectActive, sourceNames, rules, recomputeFit, enqueueModelWork)

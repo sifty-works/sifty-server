@@ -319,6 +319,7 @@ func fitRules(store *config.Store) func() fit.Rules {
 }
 
 func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, gate modelSource, cat *catalog.Catalog, logger *slog.Logger, offline bool, now func() time.Time) {
+	r.SetExplain(failureSentence)
 	r.Register(runner.Kind{
 		Name:   "recompute_fit",
 		Resume: true,

@@ -296,6 +296,14 @@ func DocumentText(ctx context.Context, database *db.DB, id int64) (string, bool,
 	return row.Text, true, nil
 }
 
+func DocumentName(ctx context.Context, database *db.DB, id int64) (string, error) {
+	row, err := loadDocumentRow(ctx, database, id)
+	if _, missing := err.(apperr.NotFound); missing {
+		return "", nil
+	}
+	return row.Name, err
+}
+
 func setDocumentEvidence(ctx context.Context, database *db.DB, id int64, evidence bool) (DocumentItem, error) {
 	if err := updateDocumentEvidence(ctx, database, id, evidence); err != nil {
 		return DocumentItem{}, err
