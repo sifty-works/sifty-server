@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"cmp"
 	"encoding/json"
+	"errors"
 	"io"
 	"maps"
 	"net/http"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -64,6 +67,77 @@ func keyReplacer(keys []string) *strings.Replacer {
 		pairs = append(pairs, k, "***")
 	}
 	return strings.NewReplacer(pairs...)
+}
+
+func scrubLogs(dir string, keys []string) error {
+	usable := usableKeys(keys)
+	if len(usable) == 0 {
+		return nil
+	}
+	rep := keyReplacer(usable)
+	var errs []error
+	for _, name := range []string{logFileName + ".1", logFileName} {
+		if err := scrubFile(filepath.Join(dir, name), rep); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func scrubFile(path string, rep *strings.Replacer) error {
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	changed, err := copyScrubbed(f, io.Discard, rep)
+	if err != nil || !changed {
+		return err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".scrub-*")
+	if err != nil {
+		return err
+	}
+	w := bufio.NewWriter(tmp)
+	_, err = copyScrubbed(f, w, rep)
+	if err == nil {
+		err = w.Flush()
+	}
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		os.Remove(tmp.Name())
+	}
+	return err
+}
+
+func copyScrubbed(r io.Reader, w io.Writer, rep *strings.Replacer) (bool, error) {
+	br := bufio.NewReader(r)
+	changed := false
+	for {
+		line, readErr := br.ReadString('\n')
+		out := rep.Replace(line)
+		changed = changed || out != line
+		if _, err := io.WriteString(w, out); err != nil {
+			return changed, err
+		}
+		if readErr == io.EOF {
+			return changed, nil
+		}
+		if readErr != nil {
+			return changed, readErr
+		}
+	}
 }
 
 type keyMask struct {

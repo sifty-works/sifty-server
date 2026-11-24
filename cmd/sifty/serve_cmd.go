@@ -64,12 +64,6 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 	defer lockFile.Close()
 
-	logger, setLogKeys, logClose, err := openLog(dataDir, stderr)
-	if err != nil {
-		return fmt.Errorf("opening log: %w", err)
-	}
-	defer logClose()
-
 	settingsPath := filepath.Join(dataDir, settingsFileName)
 	store, cfgResult, err := config.Open(settingsPath)
 	if err != nil {
@@ -78,6 +72,26 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 	cfg := store.Get()
 
+	secrets, secretsErr := models.LoadSecrets(filepath.Join(dataDir, "secrets.env"))
+	if secretsErr != nil {
+		secrets = map[string]string{}
+	}
+	keys := heldKeys(store, secrets)
+	scrubErr := scrubLogs(filepath.Join(dataDir, logDir), keys())
+
+	logger, setLogKeys, logClose, err := openLog(dataDir, stderr)
+	if err != nil {
+		return fmt.Errorf("opening log: %w", err)
+	}
+	defer logClose()
+	setLogKeys(keys)
+
+	if scrubErr != nil {
+		logger.Warn("old log lines not scrubbed", "err", scrubErr)
+	}
+	if secretsErr != nil {
+		logger.Warn("secrets.env load failed", "err", secretsErr)
+	}
 	if cfgResult.SaveErr != nil {
 		logger.Warn("restored settings not written", "err", cfgResult.SaveErr)
 	}
@@ -113,14 +127,6 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 	defer database.Close()
 
-	secretsPath := filepath.Join(dataDir, "secrets.env")
-	secrets, err := models.LoadSecrets(secretsPath)
-	if err != nil {
-		logger.Warn("secrets.env load failed", "err", err)
-		secrets = map[string]string{}
-	}
-	keys := heldKeys(store, secrets)
-	setLogKeys(keys)
 	gate := models.NewGate(database, store, offline, secrets, logger)
 	defer gate.Stop(context.Background())
 

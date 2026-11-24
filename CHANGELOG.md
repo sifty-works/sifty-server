@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- At start, API keys the application holds are scrubbed from the lines already in `logs/sifty.log` and `logs/sifty.log.1`, written before keys were masked; a file with no key is not rewritten. Keys no longer held, such as the key of a removed provider, stay in old lines.
 - The recovery notice under the header shows the server's sentence for each recovered file instead of one fixed sentence (web client 0.27.0).
 - The notice of a file recovered at start says what happened, in a sentence the status sends as `text` in place of `err` and `broken`: the settings file moved to `.broken-<time>` with the reason and the backup or the defaults used, unknown settings ignored, the site descriptions file moved with the host at fault and the built-in descriptions used. A refused settings file that cannot be moved aside is left as it is instead of being overwritten.
 - Removed the one-time import from the previous application.
