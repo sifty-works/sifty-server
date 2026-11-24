@@ -103,7 +103,7 @@ func TestWorkExplainsAHeldProviderWithoutItsErrorText(t *testing.T) {
 	}
 }
 
-func TestWorkListsRecentFailuresWithSentencesAndNoGoText(t *testing.T) {
+func TestLogsListRecentFailuresWithSentencesAndNoGoText(t *testing.T) {
 	d := openTestDB(t)
 	tooLong := insertFullVacancy(t, d, "https://jobs.example.com/f1", "Long Posting", "Acme")
 	broken := insertFullVacancy(t, d, "https://jobs.example.com/f2", "Odd Posting", "Globex")
@@ -130,7 +130,7 @@ func TestWorkListsRecentFailuresWithSentencesAndNoGoText(t *testing.T) {
 	defer cancel()
 	go r.Start(ctx)
 	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", tooLong)})
-	waitFor(t, 5*time.Second, func() bool { return len(getWork(t, base).Failed) == 1 })
+	waitFor(t, 5*time.Second, func() bool { return len(getLogs(t, base).Failed) == 1 })
 	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", broken)})
 	go func() {
 		for ctx.Err() == nil {
@@ -139,9 +139,9 @@ func TestWorkListsRecentFailuresWithSentencesAndNoGoText(t *testing.T) {
 			r.Wake()
 		}
 	}()
-	waitFor(t, 5*time.Second, func() bool { return len(getWork(t, base).Failed) == 2 })
+	waitFor(t, 5*time.Second, func() bool { return len(getLogs(t, base).Failed) == 2 })
 
-	failed := getWork(t, base).Failed
+	failed := getLogs(t, base).Failed
 	newest, first := failed[0], failed[1]
 	if first.Reason != "The vacancy text is too long for the chosen model. Choose a model with a longer context in Settings." || first.Subject != "Long Posting at Acme" {
 		t.Errorf("prompt-too-long failure = %+v", first)

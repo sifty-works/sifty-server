@@ -211,7 +211,7 @@ The web client lives in `github.com/sifty-works/sifty-web`. Its source is in tha
 | Questions & Answers | `GET/POST/PATCH/DELETE /api/qa` |
 | Reference | `GET /api/reference` (countries, regions and time-zone bands from the `places` vocabulary, and option sets; shipped as embedded data) |
 | Application | `GET /api/vacancies/{id}/application`; `PATCH …/application/fields/{field}`; `POST …/application/{write,paste,questions,retry}`; `POST /api/vacancies/{id}/locate`; `POST /api/vacancies/{id}/shortlist-check/retry` |
-| Settings and status | `GET/PUT /api/settings`, `GET/PUT /api/settings/file`; `GET/PATCH /api/models` (providers with their cost and state, the provider of each kind of work, paid bulk permission, the pause switch, the daily limit and the day's background calls); `POST /api/providers/{name}/check`; `GET /api/work` (running jobs, queued jobs by kind with the reason they wait, and failures of the last 7 days); `GET /api/logs` (the same failures, and the last 200 warnings and errors of the log with keys masked); `GET /api/status` (or event stream); `GET /api/version` |
+| Settings and status | `GET/PUT /api/settings`, `GET/PUT /api/settings/file`; `GET/PATCH /api/models` (providers with their cost and state, the provider of each kind of work, paid bulk permission, the pause switch, the daily limit and the day's background calls); `POST /api/providers/{name}/check`; `GET /api/work` (running jobs, and queued jobs by kind with the reason they wait); `GET /api/logs` (failures of the last 7 days, and the last 200 warnings and errors of the log with keys masked); `GET /api/status` (or event stream); `GET /api/version` |
 
 ## Import of the old application
 

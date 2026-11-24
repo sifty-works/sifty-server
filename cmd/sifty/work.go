@@ -135,7 +135,6 @@ type workFailed struct {
 type workResp struct {
 	Running []workRunning `json:"running"`
 	Waiting []workWaiting `json:"waiting"`
-	Failed  []workFailed  `json:"failed"`
 }
 
 func label(kind string) string {
@@ -154,7 +153,7 @@ func subjectOf(ctx context.Context, database *db.DB, j runner.Job) (string, erro
 
 func workHandler(database *db.DB, gate *models.Gate, r *runner.Runner, now func() time.Time) func(*http.Request, struct{}) (workResp, error) {
 	return func(req *http.Request, _ struct{}) (workResp, error) {
-		out := workResp{Running: []workRunning{}, Waiting: []workWaiting{}, Failed: []workFailed{}}
+		out := workResp{Running: []workRunning{}, Waiting: []workWaiting{}}
 		if r == nil {
 			return out, nil
 		}
@@ -175,9 +174,6 @@ func workHandler(database *db.DB, gate *models.Gate, r *runner.Runner, now func(
 			return workResp{}, err
 		}
 		if out.Waiting, err = waitingWork(ctx, gate, queued, now()); err != nil {
-			return workResp{}, err
-		}
-		if out.Failed, err = failedWork(ctx, database, r, now); err != nil {
 			return workResp{}, err
 		}
 		return out, nil
