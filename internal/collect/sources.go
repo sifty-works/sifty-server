@@ -2,7 +2,6 @@ package collect
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -13,8 +12,6 @@ import (
 	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/server"
 )
-
-const maxAgeMonths = 1200
 
 type SourceStatus struct {
 	Text      string `json:"text"`
@@ -177,14 +174,11 @@ func (c *Collector) RegisterRoutes(mux *http.ServeMux) {
 	server.Handle(mux, "PUT /api/sources/schedule", c.log, func(r *http.Request, req scheduleReq) (SourcesResp, error) {
 		d, err := time.ParseDuration(req.Interval)
 		if err != nil {
-			return SourcesResp{}, apperr.Invalid{Message: req.Interval}
+			return SourcesResp{}, apperr.Invalid{Message: config.IntervalRefusal}
 		}
-		months := 0
-		if m := req.MaxAgeMonths; m != nil {
-			if *m < 1 || *m != math.Trunc(*m) || *m > maxAgeMonths {
-				return SourcesResp{}, apperr.Invalid{Message: "The age limit is a whole number of months, from 1 to 1200, or empty for no limit."}
-			}
-			months = int(*m)
+		months, err := config.AgeLimit(req.MaxAgeMonths)
+		if err != nil {
+			return SourcesResp{}, apperr.Invalid{Message: err.Error()}
 		}
 		return c.updateSources(func(cfg *config.Config) error {
 			cfg.Collection.Auto = req.Auto

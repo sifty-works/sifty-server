@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/config"
 )
 
@@ -112,24 +114,6 @@ func TestValidKeysParsed(t *testing.T) {
 	}
 	if c := parse("collection:\n  interval: 30m\n"); time.Duration(c.Collection.Interval) != 30*time.Minute {
 		t.Errorf("collection.interval: got %s, want 30m", time.Duration(c.Collection.Interval))
-	}
-}
-
-func TestInvalidConfigsRejected(t *testing.T) {
-	cases := []struct{ yaml, errContains string }{
-		{"port: 99999\n", "port"},
-		{"collection:\n  interval: 10m\n", "The interval must be between 15 minutes and 7 days."},
-		{"collection:\n  interval: 200h\n", "The interval must be between 15 minutes and 7 days."},
-	}
-	for _, tc := range cases {
-		_, err := loadContent(t, tc.yaml)
-		if err == nil {
-			t.Errorf("yaml %q: want error", tc.yaml)
-			continue
-		}
-		if !strings.Contains(err.Error(), tc.errContains) {
-			t.Errorf("yaml %q: error should contain %q; got: %v", tc.yaml, tc.errContains, err)
-		}
 	}
 }
 
@@ -308,8 +292,8 @@ providers:
 	if err == nil {
 		t.Fatal("expected error for api_key in settings, got nil")
 	}
-	if !strings.Contains(err.Error(), "key_env") {
-		t.Errorf("error message should mention key_env: %v", err)
+	if !strings.Contains(err.Error(), "A key is never kept in the settings file.") || strings.Contains(err.Error(), "mysecret") {
+		t.Errorf("error message: %v", err)
 	}
 }
 
@@ -325,5 +309,90 @@ func TestWeightsAndRatesKeepDefaultsForAbsentKeys(t *testing.T) {
 		if _, err := loadContent(t, bad); err == nil {
 			t.Errorf("%q accepted", bad)
 		}
+	}
+}
+
+const ageLimitSentence = "The age limit is a whole number of months, from 1 to 1200, or empty for no limit."
+
+func TestAgeLimitInTheFileFollowsTheSameBoundAsTheEndpoint(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  int
+	}{{"1200", 1200}, {"", 0}} {
+		c, err := loadContent(t, "collection:\n  max_age_months: "+tc.value+"\n")
+		if err != nil || c.Collection.MaxAgeMonths != tc.want {
+			t.Errorf("max_age_months %q: got %d, %v; want %d", tc.value, c.Collection.MaxAgeMonths, err, tc.want)
+		}
+	}
+	for _, bad := range []string{"-3", "0", "1201", "99999999999"} {
+		if _, err := loadContent(t, "collection:\n  max_age_months: "+bad+"\n"); err == nil || !strings.Contains(err.Error(), ageLimitSentence) {
+			t.Errorf("max_age_months %s: got %v; want %q", bad, err, ageLimitSentence)
+		}
+	}
+}
+
+func TestRefusedSettingsAreSentencesWhetherSavedOrStandingInTheFile(t *testing.T) {
+	const providers = "providers:\n  localbox: {type: ollama}\n"
+	localbox := map[string]config.ProviderConfig{"localbox": {Type: "ollama"}}
+	cases := []struct {
+		name     string
+		yaml     string
+		change   func(c *config.Config)
+		sentence string
+	}{
+		{"unknown provider type", "providers:\n  localbox: {type: carrier-pigeon}\n",
+			func(c *config.Config) {
+				c.Providers = map[string]config.ProviderConfig{"localbox": {Type: "carrier-pigeon"}}
+			},
+			"The type of the provider called localbox is not known. A provider is one of ollama, openai, cli-claude or cli-opencode."},
+		{"unknown provider cost", "providers:\n  localbox: {type: ollama, cost: cheap}\n",
+			func(c *config.Config) {
+				c.Providers = map[string]config.ProviderConfig{"localbox": {Type: "ollama", Cost: "cheap"}}
+			},
+			"The cost of the provider called localbox must be local, free or paid."},
+		{"unknown provider for a kind of work", providers + "work: {reading: nowhere}\n",
+			func(c *config.Config) { c.Providers, c.Work = localbox, config.WorkConfig{"reading": "nowhere"} },
+			"There is no provider called nowhere to use for Reading."},
+		{"negative weight", "weights: {role: -1}\n",
+			func(c *config.Config) { c.Weights["role"] = -1 },
+			"The weight for role must be a number of 0 or more."},
+		{"weight of an unknown criterion", "weights: {luck: 0.1}\n",
+			func(c *config.Config) { c.Weights["luck"] = 0.1 },
+			"luck is not a criterion of Fits you, so it has no weight."},
+		{"rate of zero", "rates: {USD: 0}\n",
+			func(c *config.Config) { c.Rates["USD"] = 0 },
+			"The rate for USD must be a number above 0."},
+		{"rate with a bad code", "rates: {usd: 1}\n",
+			func(c *config.Config) { c.Rates["usd"] = 1 },
+			"usd is not a currency code: a code is three capital letters, such as USD."},
+		{"port out of range", "port: 99999\n",
+			func(c *config.Config) { c.Port = 99999 },
+			"The port must be between 0 and 65535."},
+		{"interval too short", "collection: {interval: 10m}\n",
+			func(c *config.Config) { c.Collection.Interval = config.Duration(10 * time.Minute) },
+			config.IntervalRefusal},
+		{"interval too long", "collection: {interval: 200h}\n",
+			func(c *config.Config) { c.Collection.Interval = config.Duration(200 * time.Hour) },
+			config.IntervalRefusal},
+		{"interval that is not a time", "collection: {interval: soon}\n", nil, config.IntervalRefusal},
+		{"timeout that is not a time", "providers:\n  localbox: {type: ollama, timeout: later}\n", nil,
+			"The timeout of the provider called localbox is a number with a unit, such as 30s or 2m."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, result, err := config.Open(writeTmp(t, tc.yaml))
+			if err != nil || result.Err != tc.sentence {
+				t.Errorf("file: got %q, %v; want %q", result.Err, err, tc.sentence)
+			}
+			if tc.change == nil {
+				return
+			}
+			s, _ := openStore(t)
+			err = s.Update(func(c *config.Config) error { tc.change(c); return nil })
+			var inv apperr.Invalid
+			if !errors.As(err, &inv) || inv.Message != tc.sentence {
+				t.Errorf("save: got %v; want %q", err, tc.sentence)
+			}
+		})
 	}
 }

@@ -2,10 +2,13 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -44,7 +47,7 @@ func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 	}
 	parsed, err := time.ParseDuration(s)
 	if err != nil {
-		return fmt.Errorf("collection.interval: invalid duration %q: %w", s, err)
+		return errors.New("A time is a number with a unit, such as 30s, 15m or 3h.")
 	}
 	*d = Duration(parsed)
 	return nil
@@ -151,6 +154,8 @@ func defaultRates() map[string]float64 {
 
 var WorkKinds = []string{"reading", "shortlist_check", "preparation"}
 
+var WorkLabels = map[string]string{"reading": "Reading", "shortlist_check": "Shortlist check", "preparation": "Preparation"}
+
 func (c *Config) WorkProviderFor(kind string) string {
 	return c.Work[kind]
 }
@@ -220,8 +225,17 @@ func parse(data []byte) (Config, []string, error) {
 		case "collection":
 			if v.Kind == yaml.MappingNode {
 				for j := 0; j+1 < len(v.Content); j += 2 {
-					if ck := v.Content[j].Value; !knownCollection[ck] {
+					ck := v.Content[j].Value
+					if !knownCollection[ck] {
 						unknown = append(unknown, "collection."+ck)
+					}
+					if ck == "interval" && !validDurationNode(v.Content[j+1]) {
+						return c, nil, errors.New(IntervalRefusal)
+					}
+					if ck == "max_age_months" {
+						if err := checkAgeLimitNode(v.Content[j+1]); err != nil {
+							return c, nil, err
+						}
 					}
 				}
 			}
@@ -258,7 +272,9 @@ func parse(data []byte) (Config, []string, error) {
 				for n := 0; n+1 < len(pn.Content); n += 2 {
 					switch pk := pn.Content[n].Value; {
 					case pk == "api_key":
-						return c, nil, fmt.Errorf("providers.%s: use key_env to name an environment variable; do not put a key in the settings file", name)
+						return c, nil, fmt.Errorf("A key is never kept in the settings file. The provider called %s must take its key from an environment variable, or the key goes in the secrets file.", name)
+					case pk == "timeout" && !validDurationNode(pn.Content[n+1]):
+						return c, nil, fmt.Errorf("The timeout of the provider called %s is a number with a unit, such as 30s or 2m.", name)
 					case !knownProvider[pk]:
 						unknown = append(unknown, "providers."+name+"."+pk)
 					}
@@ -277,38 +293,88 @@ func parse(data []byte) (Config, []string, error) {
 	return c, unknown, nil
 }
 
-var validProviderTypes = map[string]bool{"ollama": true, "openai": true, "cli-claude": true, "cli-opencode": true}
+const MaxAgeLimitMonths = 1200
+
+func AgeLimit(months *float64) (int, error) {
+	if months == nil {
+		return 0, nil
+	}
+	if *months < 1 || *months != math.Trunc(*months) || *months > MaxAgeLimitMonths {
+		return 0, fmt.Errorf("The age limit is a whole number of months, from 1 to %d, or empty for no limit.", MaxAgeLimitMonths)
+	}
+	return int(*months), nil
+}
+
+func validDurationNode(n *yaml.Node) bool {
+	if n.Kind != yaml.ScalarNode {
+		return false
+	}
+	_, err := time.ParseDuration(n.Value)
+	return err == nil
+}
+
+func checkAgeLimitNode(n *yaml.Node) error {
+	if n.Kind == yaml.ScalarNode && n.Tag == "!!null" {
+		return nil
+	}
+	var months float64
+	if n.Kind == yaml.ScalarNode && (n.Tag == "!!int" || n.Tag == "!!float") {
+		if f, err := strconv.ParseFloat(n.Value, 64); err == nil {
+			months = f
+		}
+	}
+	_, err := AgeLimit(&months)
+	return err
+}
+
+var ProviderTypes = []string{"ollama", "openai", "cli-claude", "cli-opencode"}
+
+func joinOr(items []string) string {
+	return strings.Join(items[:len(items)-1], ", ") + " or " + items[len(items)-1]
+}
+
+const IntervalRefusal = "The interval must be between 15 minutes and 7 days."
 
 func Validate(c Config) error {
 	if c.Port < 0 || c.Port > 65535 {
-		return fmt.Errorf("port: must be between 0 and 65535, got %d", c.Port)
+		return fmt.Errorf("The port must be between 0 and 65535.")
 	}
 	minInterval := Duration(15 * time.Minute)
 	maxInterval := Duration(168 * time.Hour)
 	if c.Collection.Interval < minInterval || c.Collection.Interval > maxInterval {
-		return fmt.Errorf("The interval must be between 15 minutes and 7 days.")
+		return errors.New(IntervalRefusal)
 	}
-	if c.Collection.MaxAgeMonths < 0 {
-		return fmt.Errorf("collection.max_age_months: a whole number of months, 1 or more.")
-	}
-	defaults := Defaults().Weights
-	for k, w := range c.Weights {
-		if _, ok := defaults[k]; !ok || w < 0 || math.IsInf(w, 0) || math.IsNaN(w) {
-			return fmt.Errorf("weights.%s: a weight of a known criterion is a number of 0 or more.", k)
+	if c.Collection.MaxAgeMonths != 0 {
+		months := float64(c.Collection.MaxAgeMonths)
+		if _, err := AgeLimit(&months); err != nil {
+			return err
 		}
 	}
-	for k, r := range c.Rates {
-		if len(k) != 3 || strings.ToUpper(k) != k || !(r > 0) || math.IsInf(r, 0) {
-			return fmt.Errorf("rates.%s: a rate is a currency code and a number above 0.", k)
+	defaults := Defaults().Weights
+	for _, k := range slices.Sorted(maps.Keys(c.Weights)) {
+		if _, ok := defaults[k]; !ok {
+			return fmt.Errorf("%s is not a criterion of Fits you, so it has no weight.", k)
+		}
+		if w := c.Weights[k]; w < 0 || math.IsInf(w, 0) || math.IsNaN(w) {
+			return fmt.Errorf("The weight for %s must be a number of 0 or more.", k)
+		}
+	}
+	for _, k := range slices.Sorted(maps.Keys(c.Rates)) {
+		if len(k) != 3 || strings.ToUpper(k) != k {
+			return fmt.Errorf("%s is not a currency code: a code is three capital letters, such as USD.", k)
+		}
+		if r := c.Rates[k]; !(r > 0) || math.IsInf(r, 0) {
+			return fmt.Errorf("The rate for %s must be a number above 0.", k)
 		}
 	}
 	validCosts := map[string]bool{"local": true, "free": true, "paid": true, "": true}
-	for name, pc := range c.Providers {
-		if !validProviderTypes[pc.Type] {
-			return fmt.Errorf("providers.%s: unknown type %q", name, pc.Type)
+	for _, name := range slices.Sorted(maps.Keys(c.Providers)) {
+		pc := c.Providers[name]
+		if !slices.Contains(ProviderTypes, pc.Type) {
+			return fmt.Errorf("The type of the provider called %s is not known. A provider is one of %s.", name, joinOr(ProviderTypes))
 		}
 		if !validCosts[pc.Cost] {
-			return fmt.Errorf("providers.%s: cost must be local, free or paid", name)
+			return fmt.Errorf("The cost of the provider called %s must be local, free or paid.", name)
 		}
 	}
 	{
@@ -318,7 +384,7 @@ func Validate(c Config) error {
 				continue
 			}
 			if _, ok := c.Providers[pname]; !ok {
-				return fmt.Errorf("work.%s: provider %q not found", kind, pname)
+				return fmt.Errorf("There is no provider called %s to use for %s.", pname, WorkLabels[kind])
 			}
 		}
 	}

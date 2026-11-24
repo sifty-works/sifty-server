@@ -27,7 +27,7 @@ The application is one program to run; reading application forms additionally ne
 
 ## Recovery at start
 
-A settings file or a site description file that cannot be parsed or fails validation is never fatal. The application renames the broken file to `<name>.broken-<time>`, uses the newest valid backup of the settings file or the embedded description for site descriptions, and starts normally. Each recovery is printed at start and listed under `recovered` in the status response. A file that cannot be read (permissions, I/O error) is not renamed. An unknown key in the settings file, as may appear after a rollback to an older version, is ignored.
+A settings file or a site description file that cannot be parsed or fails validation is never fatal. The application renames the broken file to `<name>.broken-<time>`, uses the newest valid backup of the settings file or the embedded description for site descriptions, and starts normally. Each recovery is printed at start and listed under `recovered` in the status response. A file that cannot be read (permissions, I/O error) is not renamed. An unknown key in the settings file, as may appear after a rollback to an older version, is ignored. A file that is put aside because of a refused value gives the same sentence the settings screen gives for that value, for example "The age limit is a whole number of months, from 1 to 1200, or empty for no limit.", and that sentence is what the recovered notice shows and the start prints.
 
 ## Settings
 

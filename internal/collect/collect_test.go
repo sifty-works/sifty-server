@@ -427,8 +427,8 @@ func TestPutScheduleValidAndInvalid(t *testing.T) {
 	if status != 422 {
 		t.Fatalf("bad interval: status %d", status)
 	}
-	if !strings.Contains(fmt.Sprint(body["error"]), "badval") {
-		t.Errorf("error should contain bad value; got: %v", body["error"])
+	if body["error"] != "The interval must be between 15 minutes and 7 days." {
+		t.Errorf("bad interval: got %v", body["error"])
 	}
 
 	body, status = e.mutate(t, "PUT", "/api/sources/schedule", map[string]any{"auto": true, "interval": "10m"})
@@ -1054,12 +1054,15 @@ func TestPutScheduleAgeLimit(t *testing.T) {
 			t.Errorf("limit %v: status %d, want 422", bad, status)
 			continue
 		}
-		if !strings.Contains(fmt.Sprint(body["error"]), "whole number of months") {
+		if body["error"] != "The age limit is a whole number of months, from 1 to 1200, or empty for no limit." {
 			t.Errorf("limit %v: error %v", bad, body["error"])
 		}
 	}
 	if got := e.get(t, "/api/sources")["max_age_months"]; got != float64(6) {
 		t.Errorf("refused values changed the limit: %v", got)
+	}
+	if body, status := put(1200); status != 200 || body["max_age_months"] != float64(1200) {
+		t.Errorf("limit 1200: status %d body %v", status, body)
 	}
 	if body, status := put(nil); status != 200 || body["max_age_months"] != nil {
 		t.Errorf("empty limit: status %d body %v", status, body)
