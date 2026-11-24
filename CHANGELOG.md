@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Every API key the application holds is replaced by `***` before a line is written to the log file or to the terminal, wherever in the line it stands; before, keys were hidden only when Settings › Monitor › Logs read the file.
 - On a profile whose data, or My data, cannot be read, a decision and a permanent deletion are refused before anything is written, and the list and the vacancy page fail instead of showing Fits you as though the profile had no inputs. Before, the decision or the deletion was saved and the answer was still an error.
 - Settings › Monitor has a Logs section: the jobs that failed in the last seven days, moved there from Background work, and the latest warnings and errors of the log, with a Refresh button (web client 0.25.0).
 - `GET /api/logs` lists the jobs that failed in the last seven days and the last 200 warnings and errors of the log, newest first, with every held API key shown as `***`. The log file is now written as JSON lines, and the number in "see log #N" starts from the start time, so it does not repeat after a restart. The frontend budget rises to 6,200 lines for the Logs page.

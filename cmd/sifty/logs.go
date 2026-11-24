@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"io"
 	"maps"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sifty-works/sifty-server/internal/config"
@@ -50,6 +52,61 @@ func heldKeys(store *config.Store, secrets map[string]string) func() []string {
 	}
 }
 
+func usableKeys(keys []string) []string {
+	usable := slices.DeleteFunc(slices.Clone(keys), func(k string) bool { return len(k) < minMaskedKey })
+	slices.SortFunc(usable, func(a, b string) int { return cmp.Or(len(b)-len(a), strings.Compare(a, b)) })
+	return slices.Compact(usable)
+}
+
+func keyReplacer(keys []string) *strings.Replacer {
+	var pairs []string
+	for _, k := range keys {
+		pairs = append(pairs, k, "***")
+	}
+	return strings.NewReplacer(pairs...)
+}
+
+type keyMask struct {
+	mu   sync.Mutex
+	held func() []string
+	sig  string
+	rep  *strings.Replacer
+}
+
+func (m *keyMask) setKeys(held func() []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.held, m.sig, m.rep = held, "", nil
+}
+
+func (m *keyMask) mask(p []byte) []byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.held == nil {
+		return p
+	}
+	keys := usableKeys(m.held())
+	if sig := strings.Join(keys, "\x00"); sig != m.sig {
+		m.sig, m.rep = sig, keyReplacer(keys)
+	}
+	if len(keys) == 0 {
+		return p
+	}
+	return []byte(m.rep.Replace(string(p)))
+}
+
+type maskedWriter struct {
+	w io.Writer
+	m *keyMask
+}
+
+func (mw maskedWriter) Write(p []byte) (int, error) {
+	if _, err := mw.w.Write(mw.m.mask(p)); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
 func logsHandler(database *db.DB, r *runner.Runner, now func() time.Time, logPath string, heldKeys func() []string) func(*http.Request, struct{}) (logsResp, error) {
 	return func(req *http.Request, _ struct{}) (logsResp, error) {
 		failed, err := failedWork(req.Context(), database, r, now)
@@ -60,14 +117,7 @@ func logsHandler(database *db.DB, r *runner.Runner, now func() time.Time, logPat
 		if heldKeys != nil {
 			keys = heldKeys()
 		}
-		slices.SortFunc(keys, func(a, b string) int { return len(b) - len(a) })
-		var pairs []string
-		for _, k := range keys {
-			if len(k) >= minMaskedKey {
-				pairs = append(pairs, k, "***")
-			}
-		}
-		mask := strings.NewReplacer(pairs...).Replace
+		mask := keyReplacer(usableKeys(keys)).Replace
 		entries := []logEntry{}
 		for _, path := range []string{logPath, logPath + ".1"} {
 			if entries, err = readProblems(path, entries, mask); err != nil {

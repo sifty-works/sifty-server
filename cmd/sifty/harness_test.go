@@ -37,6 +37,11 @@ func openTestDB(t *testing.T) *db.DB {
 
 func startServer(t *testing.T, dir string, offline bool) (port int, cancel func()) {
 	t.Helper()
+	return startServerWithStderr(t, dir, offline, io.Discard)
+}
+
+func startServerWithStderr(t *testing.T, dir string, offline bool, stderr io.Writer) (port int, cancel func()) {
+	t.Helper()
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	pr, pw := io.Pipe()
 	done := make(chan struct{})
@@ -46,7 +51,7 @@ func startServer(t *testing.T, dir string, offline bool) (port int, cancel func(
 	}
 	go func() {
 		defer close(done)
-		run(ctx, args, pw, io.Discard)
+		run(ctx, args, pw, stderr)
 		pw.Close()
 	}()
 	sc := bufio.NewScanner(pr)

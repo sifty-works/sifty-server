@@ -63,7 +63,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 	defer lockFile.Close()
 
-	logger, logClose, err := openLog(dataDir, stderr)
+	logger, setLogKeys, logClose, err := openLog(dataDir, stderr)
 	if err != nil {
 		return fmt.Errorf("opening log: %w", err)
 	}
@@ -119,6 +119,8 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		logger.Warn("secrets.env load failed", "err", err)
 		secrets = map[string]string{}
 	}
+	keys := heldKeys(store, secrets)
+	setLogKeys(keys)
 	gate := models.NewGate(database, store, offline, secrets, logger)
 	defer gate.Stop(context.Background())
 
@@ -200,7 +202,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			}
 			return m
 		}
-		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r, modelReady(store, offline), filepath.Join(dataDir, logDir, logFileName), heldKeys(store, secrets))
+		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r, modelReady(store, offline), filepath.Join(dataDir, logDir, logFileName), keys)
 	})
 
 	srv := &http.Server{
@@ -250,10 +252,10 @@ func acquireLock(path string) (*os.File, error) {
 	return f, nil
 }
 
-func openLog(dataDir string, stderr io.Writer) (*slog.Logger, func(), error) {
+func openLog(dataDir string, stderr io.Writer) (*slog.Logger, func(func() []string), func(), error) {
 	logsDir := filepath.Join(dataDir, logDir)
 	if err := os.MkdirAll(logsDir, 0700); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	logPath := filepath.Join(logsDir, logFileName)
@@ -265,13 +267,14 @@ func openLog(dataDir string, stderr io.Writer) (*slog.Logger, func(), error) {
 
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
-	logger := slog.New(slog.NewMultiHandler(slog.NewTextHandler(stderr, opts), slog.NewJSONHandler(logFile, opts)))
+	mask := &keyMask{}
+	logger := slog.New(slog.NewMultiHandler(slog.NewTextHandler(maskedWriter{stderr, mask}, opts), slog.NewJSONHandler(maskedWriter{logFile, mask}, opts)))
 
-	return logger, func() { logFile.Close() }, nil
+	return logger, mask.setKeys, func() { logFile.Close() }, nil
 }
 
 func runRetention(ctx context.Context, j *runner.Job, cat *catalog.Catalog, database *db.DB, log *slog.Logger, now time.Time) error {
