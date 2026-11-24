@@ -8,6 +8,7 @@ What the user gets: one set of facts about themselves (My data), several profile
 - **A profile**: name, headline, target roles, search keywords and "All of these" terms, target industries, compensation, engagement, hours, work modes, preferred locations, relocation, time zones, other requirements.
 - Exclusions belong to the one list of exclusions (see `inbox.md`); a profile page shows the word exclusions of that profile.
 - An empty field means unknown, never zero or false.
+- A save changes the fields it names and no others. A field left empty in the editor is saved as empty, whether the editor sends an empty value or none; only a field the save does not name keeps what was stored. The one exception is the profile name: an empty name is ignored (see Profile switcher).
 
 ## Profile switcher
 

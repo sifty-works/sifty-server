@@ -39,6 +39,16 @@ type MePatchReq struct {
 	CurrentLocation    *Location            `json:"currentLocation,omitempty"`
 	WorkAuthorizations *[]WorkAuthorization `json:"workAuthorizations,omitempty"`
 	Demographics       *Demographics        `json:"demographics,omitempty"`
+
+	named map[string]json.RawMessage `json:"-"`
+}
+
+func (p *MePatchReq) UnmarshalJSON(data []byte) error {
+	type plain MePatchReq
+	if err := json.Unmarshal(data, (*plain)(p)); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &p.named)
 }
 
 type ProfileListItem struct {
@@ -85,6 +95,16 @@ type ProfilePatchReq struct {
 	Relocation         *string       `json:"relocation,omitempty"`
 	TimeZones          *[]string     `json:"timeZones,omitempty"`
 	OtherRequirements  *string       `json:"otherRequirements,omitempty"`
+
+	named map[string]json.RawMessage `json:"-"`
+}
+
+func (p *ProfilePatchReq) UnmarshalJSON(data []byte) error {
+	type plain ProfilePatchReq
+	if err := json.Unmarshal(data, (*plain)(p)); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &p.named)
 }
 
 type SetActiveReq struct {
@@ -266,38 +286,41 @@ func jsonEqual(a, b any) bool {
 
 func clearInheritedUnchanged(patch *ProfilePatchReq, own, first ProfileData) {
 	if patch.Compensation != nil && own.Compensation == nil && jsonEqual(patch.Compensation, first.Compensation) {
-		patch.Compensation = nil
+		delete(patch.named, "compensation")
 	}
 	if patch.Engagement != nil && len(own.Engagement) == 0 && jsonEqual(*patch.Engagement, first.Engagement) {
-		patch.Engagement = nil
+		delete(patch.named, "engagement")
 	}
 	if patch.Hours != nil && own.Hours == nil && jsonEqual(patch.Hours, first.Hours) {
-		patch.Hours = nil
+		delete(patch.named, "hours")
 	}
 	if patch.WorkModes != nil && len(own.WorkModes) == 0 && jsonEqual(*patch.WorkModes, first.WorkModes) {
-		patch.WorkModes = nil
+		delete(patch.named, "workModes")
 	}
 	if patch.PreferredLocations != nil && len(own.PreferredLocations) == 0 && jsonEqual(*patch.PreferredLocations, first.PreferredLocations) {
-		patch.PreferredLocations = nil
+		delete(patch.named, "preferredLocations")
 	}
 	if patch.TargetIndustries != nil && len(own.TargetIndustries) == 0 && jsonEqual(*patch.TargetIndustries, first.TargetIndustries) {
-		patch.TargetIndustries = nil
+		delete(patch.named, "targetIndustries")
 	}
 }
 
-func mergePatch[D any](dst D, src any) (D, error) {
-	base, _ := json.Marshal(dst)
-	over, _ := json.Marshal(src)
+func mergePatch[D any](dst D, named map[string]json.RawMessage) (D, error) {
+	base, err := json.Marshal(dst)
+	if err != nil {
+		return dst, fmt.Errorf("candidate: merge patch: %w", err)
+	}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(base, &m); err != nil {
-		return dst, err
+		return dst, fmt.Errorf("candidate: merge patch: %w", err)
 	}
-	var p map[string]json.RawMessage
-	json.Unmarshal(over, &p)
-	for k, v := range p {
+	for k, v := range named {
 		m[k] = v
 	}
-	merged, _ := json.Marshal(m)
+	merged, err := json.Marshal(m)
+	if err != nil {
+		return dst, fmt.Errorf("candidate: merge patch: %w", err)
+	}
 	var result D
 	if err := json.Unmarshal(merged, &result); err != nil {
 		return dst, fmt.Errorf("candidate: merge patch: %w", err)
@@ -335,7 +358,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 		if err != nil {
 			return MeData{}, err
 		}
-		updated, err := mergePatch(me, patch)
+		updated, err := mergePatch(me, patch.named)
 		if err != nil {
 			return MeData{}, err
 		}
@@ -402,8 +425,8 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 		if err != nil {
 			return ProfileDetailResp{}, err
 		}
-		if patch.Name != nil && strings.TrimSpace(*patch.Name) == "" {
-			patch.Name = nil
+		if patch.Name == nil || strings.TrimSpace(*patch.Name) == "" {
+			delete(patch.named, "name")
 		}
 		firstID, _ := firstProfileID(ctx, database)
 		if firstID != id {
@@ -411,7 +434,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 				clearInheritedUnchanged(&patch, own, firstPD)
 			}
 		}
-		updated, err := mergePatch(own, patch)
+		updated, err := mergePatch(own, patch.named)
 		if err != nil {
 			return ProfileDetailResp{}, err
 		}

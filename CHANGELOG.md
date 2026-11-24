@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Saving My data or a profile now stores every field the save names, whatever its value: a list left empty in the editor and sent as "none" is cleared exactly as an empty list is, where before it kept its old entries; a field the save does not name keeps its stored value, and an empty profile name is still ignored. The interface description is unchanged.
 - Web client 0.21.0: the Inbox filter reads "Published — All, 7 days, 30 days" in place of "Collected", Newest follows the role's own publication date, and Sources carries the field "Do not collect roles published more than N months ago" beside the collection schedule, which keeps its value when automatic collection is switched on or off.
 - Sources carries an age limit, "Do not collect roles published more than N months ago": a whole number of months, empty for no limit. A posting whose listing gives an older publication date is not collected and its page is not requested; a posting with no publication date is always collected. The limit removes nothing already collected, so raising or clearing it brings older roles back the next time a source shows them.
 - The Inbox filter "Collected 7 / 30 days" is replaced by "Published — All, 7 days, 30 days", which reads the role's own publication date instead of the day it entered the catalogue; a role with no publication date passes every choice. Newest now sorts by publication date alone, newest first, with undated roles last.
