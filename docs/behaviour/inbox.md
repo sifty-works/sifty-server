@@ -81,6 +81,8 @@ There is one list of exclusions, managed in Settings.
 - Search and filters work the same in all four lists, Dismissed included.
 - **Sort** Best fit or Newest, as defined in `assessment.md`, in Inbox and Shortlist. Applied and Dismissed are sorted by the date of the decision, newest first.
 - The query, the filters and the sort are remembered in the browser.
+- **The list arrives in windows.** A request names a window with `limit`, a whole number from 1 to 200 (100 when left out), and `offset`, a whole number from 0 (0 when left out); the rows are that part of the chosen order, so the next window continues where the last one ended. A `limit` or an `offset` that is not a whole number in range is refused with a sentence and nothing is listed. An `offset` past the end gives no rows and is not an error.
+- **`matching`** is the number of roles the query and the filters select, counted whole and the same for every window; `total` stays the number of roles in the stage, which the stage tabs show. The stage counts, the counts beside the Industries and Sources filters and the empty text are counted over the whole selection, never over the window, so moving to another window changes none of them.
 
 ## Stages and decisions
 

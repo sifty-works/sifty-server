@@ -28,6 +28,8 @@ type ListReq struct {
 	Unread     bool   `json:"unread,omitempty"`
 	Fit        string `json:"fit,omitempty"`
 	Sort       string `json:"sort,omitempty"`
+	Limit      int64  `json:"limit,omitempty"`
+	Offset     int64  `json:"offset,omitempty"`
 }
 
 type ListResp struct {
@@ -36,6 +38,7 @@ type ListResp struct {
 	IndustryCounts []IndustryCount `json:"industryCounts"`
 	SourceCounts   []SourceCount   `json:"sourceCounts"`
 	Total          int             `json:"total"`
+	Matching       int             `json:"matching"`
 	Empty          string          `json:"empty"`
 	Profile        int64           `json:"profile"`
 }
@@ -146,6 +149,10 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		default:
 			return ListResp{}, apperr.Invalid{Message: "Invalid stage."}
 		}
+		limit, offset, err := parseWindow(r, req)
+		if err != nil {
+			return ListResp{}, err
+		}
 		pid, err := resolveProfile(r.Context(), database, req.Profile)
 		if err != nil {
 			return ListResp{}, err
@@ -168,7 +175,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 			Unread:     unread,
 			Fit:        splitComma(req.Fit),
 		}
-		rows, counts, indCounts, srcCounts, total, err := list(r.Context(), database, now, pid, stage, strings.TrimSpace(req.Q), req.Sort, industries, f, rules())
+		rows, counts, indCounts, srcCounts, total, matching, err := list(r.Context(), database, now, pid, stage, strings.TrimSpace(req.Q), req.Sort, industries, f, limit, offset, rules())
 		if err != nil {
 			return ListResp{}, err
 		}
@@ -186,7 +193,8 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 			IndustryCounts: indCounts,
 			SourceCounts:   srcCounts,
 			Total:          total,
-			Empty:          emptyText(len(rows), stage, hasFilters),
+			Matching:       matching,
+			Empty:          emptyText(matching, stage, hasFilters),
 			Profile:        pid,
 		}, nil
 	})
@@ -310,6 +318,26 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		}
 		return PreviewResp{Text: text}, nil
 	})
+}
+
+const (
+	defaultListLimit = 100
+	maxListLimit     = 200
+)
+
+func parseWindow(r *http.Request, req ListReq) (int, int, error) {
+	q := r.URL.Query()
+	limit := int64(defaultListLimit)
+	if q.Has("limit") {
+		if req.Limit < 1 || req.Limit > maxListLimit {
+			return 0, 0, apperr.Invalid{Message: "The limit is a whole number from 1 to 200."}
+		}
+		limit = req.Limit
+	}
+	if q.Has("offset") && (q.Get("offset") == "" || req.Offset < 0) {
+		return 0, 0, apperr.Invalid{Message: "The offset is a whole number from 0."}
+	}
+	return int(limit), int(req.Offset), nil
 }
 
 func parseID(req *http.Request) (int64, error) {

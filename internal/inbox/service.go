@@ -230,36 +230,40 @@ func rowAndCounts(ctx context.Context, database *db.DB, now func() time.Time, pr
 	return toRow(row, t, fitInputs(ctx, database, profileID, r), rs), buildCounts(cm), nil
 }
 
-func list(ctx context.Context, database *db.DB, now func() time.Time, profileID int64, stage, q, sort string, industries []string, f Filters, r fit.Rules) ([]Row, Counts, []IndustryCount, []SourceCount, int, error) {
+func list(ctx context.Context, database *db.DB, now func() time.Time, profileID int64, stage, q, sort string, industries []string, f Filters, limit, offset int, r fit.Rules) ([]Row, Counts, []IndustryCount, []SourceCount, int, int, error) {
 	vis := profileVisibility(ctx, database, profileID)
 	f.inputs = fitInputs(ctx, database, profileID, r)
 	t := now()
 	cm, err := stageCounts(ctx, database, t, profileID, vis)
 	if err != nil {
-		return nil, Counts{}, nil, nil, 0, err
+		return nil, Counts{}, nil, nil, 0, 0, err
 	}
 	indCounts, err := industryCounts(ctx, database, t, profileID, stage, q, vis, f)
 	if err != nil {
-		return nil, Counts{}, nil, nil, 0, err
+		return nil, Counts{}, nil, nil, 0, 0, err
 	}
 	srcCounts, err := sourceCounts(ctx, database, t, profileID, stage, q, vis, industries, f)
 	if err != nil {
-		return nil, Counts{}, nil, nil, 0, err
+		return nil, Counts{}, nil, nil, 0, 0, err
 	}
 	rs, _, err := queryReadingSet(ctx, database)
 	if err != nil {
-		return nil, Counts{}, nil, nil, 0, err
+		return nil, Counts{}, nil, nil, 0, 0, err
 	}
-	raw, err := listRows(ctx, database, t, profileID, stage, q, sort, vis, f, industries...)
+	raw, err := listRows(ctx, database, t, profileID, stage, q, sort, vis, f, limit, offset, industries...)
 	if err != nil {
-		return nil, Counts{}, nil, nil, 0, err
+		return nil, Counts{}, nil, nil, 0, 0, err
+	}
+	matching, err := countRows(ctx, database, t, profileID, stage, q, vis, f, industries)
+	if err != nil {
+		return nil, Counts{}, nil, nil, 0, 0, err
 	}
 	rows := make([]Row, len(raw))
 	for i, rr := range raw {
 		rows[i] = toRow(rr, t, f.inputs, rs)
 	}
 	total := cm[stage]
-	return rows, buildCounts(cm), indCounts, srcCounts, total, nil
+	return rows, buildCounts(cm), indCounts, srcCounts, total, matching, nil
 }
 
 func applyDecision(ctx context.Context, database *db.DB, now func() time.Time, enqueue func(kind, subject string) (int64, error),

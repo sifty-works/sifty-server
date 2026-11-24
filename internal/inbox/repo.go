@@ -311,7 +311,17 @@ func stageCounts(ctx context.Context, database *db.DB, now time.Time, profileID 
 	return out, nil
 }
 
-func listRows(ctx context.Context, database *db.DB, now time.Time, profileID int64, stage, q, sort string, vis candidate.Filter, f Filters, industries ...string) ([]repoRow, error) {
+func countRows(ctx context.Context, database *db.DB, now time.Time, profileID int64, stage, q string, vis candidate.Filter, f Filters, industries []string) (int, error) {
+	join, where, args := scopeClause(now, profileID, stage, q, vis, f, industries, false)
+	var n int
+	if err := database.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM vacancy v `+join+` WHERE `+where, args...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("inbox: count matching: %w", err)
+	}
+	return n, nil
+}
+
+func listRows(ctx context.Context, database *db.DB, now time.Time, profileID int64, stage, q, sort string, vis candidate.Filter, f Filters, limit, offset int, industries ...string) ([]repoRow, error) {
 	join, where, args := scopeClause(now, profileID, stage, q, vis, f, industries, false)
 	order := orderDecided
 	switch {
@@ -324,8 +334,8 @@ func listRows(ctx context.Context, database *db.DB, now time.Time, profileID int
 	}
 
 	sqlRows, err := database.QueryContext(ctx,
-		`SELECT `+listCols+` FROM vacancy v `+join+` WHERE `+where+` `+order,
-		args...)
+		`SELECT `+listCols+` FROM vacancy v `+join+` WHERE `+where+` `+order+` LIMIT ? OFFSET ?`,
+		append(args, limit, offset)...)
 	if err != nil {
 		return nil, fmt.Errorf("inbox: list: %w", err)
 	}
