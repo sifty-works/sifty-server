@@ -329,7 +329,7 @@ func checkAgeLimitNode(n *yaml.Node) error {
 
 var ProviderTypes = []string{"ollama", "openai", "cli-claude", "cli-opencode"}
 
-func joinOr(items []string) string {
+func JoinOr(items []string) string {
 	return strings.Join(items[:len(items)-1], ", ") + " or " + items[len(items)-1]
 }
 
@@ -371,7 +371,7 @@ func Validate(c Config) error {
 	for _, name := range slices.Sorted(maps.Keys(c.Providers)) {
 		pc := c.Providers[name]
 		if !slices.Contains(ProviderTypes, pc.Type) {
-			return fmt.Errorf("The type of the provider called %s is not known. A provider is one of %s.", name, joinOr(ProviderTypes))
+			return fmt.Errorf("The type of the provider called %s is not known. A provider is one of %s.", name, JoinOr(ProviderTypes))
 		}
 		if !validCosts[pc.Cost] {
 			return fmt.Errorf("The cost of the provider called %s must be local, free or paid.", name)

@@ -84,7 +84,7 @@ func patchModels(ctx context.Context, gate *Gate, req modelsPatch) (modelsResp, 
 		err := gate.Store().Update(func(c *config.Config) error {
 			for kind, provider := range req.Work {
 				if !c.SetWorkProvider(kind, provider) {
-					return apperr.Invalid{Message: fmt.Sprintf("There is no kind of model work called %q.", kind)}
+					return apperr.Invalid{Message: fmt.Sprintf("There is no kind of model work called %s. A kind of model work is one of %s.", kind, config.JoinOr(config.WorkKinds))}
 				}
 			}
 			if req.AllowPaidBulk != nil {
