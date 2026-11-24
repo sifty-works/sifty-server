@@ -27,7 +27,7 @@ The application is one program to run; reading application forms additionally ne
 
 ## Recovery at start
 
-A settings file or a site description file that cannot be parsed or fails validation is never fatal. The application starts normally and says what happened in one or two sentences, which the start prints and the status response lists under `recovered` as `text`, one entry for each file. Each sentence says which file was refused, why, and which settings are used instead:
+A settings file or a site description file that cannot be parsed or fails validation is never fatal. The application starts normally and says what happened in one or two sentences, which the start prints, the status response lists under `recovered` as `text`, one entry for each file, and the notice under the header shows as they come, one paragraph for each file. Each sentence says which file was refused, why, and which settings are used instead:
 
 - **Settings file refused:** "Your settings file could not be used and was moved to sifty.yaml.broken-<time>. <reason> The settings were restored from the backup backups/sifty-<time>.yaml." The file is put aside under that name and the newest valid backup is used. With no valid backup the last sentence is "The default settings are used."
 - **Restored settings that could not be written:** if the file was moved aside but the settings in use could not be written back, the last sentence is "The settings of the backup backups/sifty-<time>.yaml (or: The default settings) are used for this run; they could not be written, so set them again in Settings."
