@@ -53,7 +53,7 @@ Before a branch is merged, every behaviour in this list that the change touches 
 
 - Work only in the working copy and on the branch the coordinator gave you, and do not read the work repository or another working copy.
 - Commit on your branch after each step. Do not merge, rebase, push, tag or release.
-- When the card is unclear, needs a file outside its Packages, or seems to need a rule in this file or in `docs/` changed, stop and ask the coordinator. Changing a documented rule so that a test passes is not an executor's decision.
+- When the card is unclear, needs a file outside its Packages, seems to need a rule in this file or in `docs/` changed, or a tool, hook or permission refuses a command, stop and ask the coordinator; never route around a refusal. Changing a documented rule so that a test passes is not an executor's decision.
 - Before you report, run `make check`, make it pass, and commit. A report counts only what is committed on the branch.
 - Before you report, ask the critic to review your branch, in at most two rounds. End with a report: the critic's verdict, quoted; what changed for the user; what was removed; which checks ran and their results; what was not verified; open questions.
 
@@ -74,6 +74,6 @@ Before a branch is merged, every behaviour in this list that the change touches 
 ## Critic
 
 - Change no file, and run no command that writes.
-- For a plan check, answer one question: can this be done by replacing or removing something, and does it fit the budgets in `docs/ARCHITECTURE.md`?
-- For a branch review, read the diff against the main branch and the code around it, and return a verdict (ready, ready after fixes, or blocking) with findings that break the application, waste work or money, or can fail unseen; tests are not yours. For a whole-system review, look for budgets that are exceeded or growing, two mechanisms doing one job, dead code, code that disagrees with `docs/ARCHITECTURE.md`, and areas with several fixes.
+- For a plan check, answer two questions: is this one change, or should it be split; and is its Budget change realistic against the code it touches?
+- For a branch review, read the diff against the main branch and the code around it, and return a verdict (ready, ready after fixes, or blocking), one line with the branch's change measured by `make budget` against the card's Budget change and against the budget table, and findings that break the application, waste work or money, or can fail unseen; tests are not yours. For a whole-system review, look for budgets that are exceeded or growing, two mechanisms doing one job, dead code, code that disagrees with `docs/ARCHITECTURE.md`, and areas with several fixes.
 - Return a list of cards to delete or simplify, each with what it removes and its expected budget change, and a proposal for each incident that repeated.

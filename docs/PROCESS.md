@@ -7,7 +7,7 @@ This document says how Sifty is developed: who does what, how a piece of work go
 - The **owner** is the person Sifty is built for. The owner decides what is built, approves every change of described behaviour and of budgets, looks at a preview when a card asks for one, and takes the decisions of each weekly review.
 - The **coordinator** is the one Claude Code session that writes to this repository. The owner names it. It writes cards, runs executors, accepts and merges their work, releases, and keeps the work repository. Any other session in this repository only reads.
 - An **executor** is a Claude Code agent that the coordinator starts for one card. It works only in its own working copy, on its own branch.
-- The **critic** is a Claude Code agent that reads and changes nothing. It checks the plans of cards that add structure, reviews each executor's branch before the executor reports, and reviews the whole system every week.
+- The **critic** is a Claude Code agent that reads and changes nothing. It checks the plan of every card, reviews each executor's branch before the executor reports and measures its budgets, and reviews the whole system every week.
 
 Three more words are used below. A **card** is the description of one piece of work, from its reason to its report. A **working copy** is a git worktree: a separate folder on its own branch that shares the repository's history. The **work repository** is a private repository that holds the cards, the backlog and the journal.
 
@@ -17,7 +17,7 @@ The process rests on six arrangements. Each guarantee is held by one of them, no
 
 1. **One writer.** Only the coordinator writes to the main branch, and only by merging an accepted card or by releasing. Executors work in parallel, each on its own card, branch and working copy. Because no two writes to the main branch can happen at once, the process needs no locks and no hooks.
 2. **Merging is not releasing.** A merge changes the main branch only. The running application changes only through `make release`, which gives the release a version and changelog entries. `make rollback` undoes a release in one command.
-3. **Every card names what it replaces.** A card says what it replaces and removes and how it changes the budgets. The coordinator measures the budgets at acceptance, and going over a budget is the owner's decision.
+3. **Every card names what it replaces.** A card says what it replaces and removes and how it changes the budgets. The critic measures the budgets on each branch, and going over a budget is the owner's decision.
 4. **The whole system is reviewed every week.** The critic proposes cards that delete or simplify, and those cards go first in the queue.
 5. **The process does not grow by itself.** An incident is recorded and looked at with the others at the weekly review, not patched at once. A new protective rule needs a failure that repeated, and the process grows in size only by the owner's decision.
 6. **Code is public and work is private.** This repository holds code and documents only. The cards, the owner's words and the journal live in the work repository.
@@ -40,7 +40,7 @@ A card is one file with the following sections, in this order. It carries no tim
 1. **Reason** holds the owner's words as the owner gave them, or the review decision or the defect that started the card.
 2. **Result** says what the user sees or gets when the card is done, in the terms of `docs/behaviour/`. For internal work, it says what changes in the code.
 3. **Replaces and removes** names the existing code, tables, settings and text that the change replaces, and what is deleted in the same change. An answer of "nothing" needs a reason.
-4. **Budget change** gives the expected change of each budget the card touches, code and tests apart, such as "backend code +250, tests +200, one table fewer". The coordinator adds the measured change at acceptance.
+4. **Budget change** gives the expected change of each budget the card touches, code and tests apart, such as "backend code +250, tests +200, one table fewer". The critic's measured change is added at acceptance.
 5. **Packages** lists the packages and documents that the card changes.
 6. **Checks** says how the result is checked through public boundaries.
 7. **Preview** is "yes" when the owner wants to see the result before the merge, and "no" otherwise.
@@ -51,8 +51,8 @@ A card is one file with the following sections, in this order. It carries no tim
 
 1. **Backlog.** An idea becomes a line in the backlog. Ideas come from the owner, from the weekly review, and from defects that anyone finds. Cards from the review go first, and the rest follow the owner's order.
 2. **Card.** The coordinator writes the card. When the card changes behaviour that a behaviour document describes, or raises a budget, the owner approves it before work starts. Otherwise no approval is needed. A card that changes what the user sees also changes the behaviour document, in the same merge.
-3. **Plan check.** When a card adds a package, a table, a dependency, a configuration key or a kind of background work, the critic reads it before work starts. The critic answers one question: can this be done by replacing or removing something, and does it fit the budgets? The answer goes into the card, and the coordinator changes the card when the answer shows a smaller way.
-4. **Start.** The coordinator starts a card only when its packages do not overlap those of any card in progress, so overlapping cards wait. The migration files, `api/client.ts` and the route table of `server` are shared and do not count as an overlap; the coordinator gives a new migration its number when it brings the branch up to date. The coordinator creates the working copy and the branch from the main branch, records the start in the journal, and starts an executor with its role, the path of its working copy, and the card's text without the Reason, Budget change and Report sections.
+3. **Plan check.** The critic reads every card before work starts and answers two questions: is this one change, or should it be split; and is its Budget change realistic? The answer goes into the card, and the coordinator splits or changes the card when the answer says so.
+4. **Start.** The coordinator starts a card only when its packages do not overlap those of any card in progress, so overlapping cards wait. The migration files, `api/client.ts` and the route table of `server` are shared and do not count as an overlap; the coordinator gives a new migration its number when it brings the branch up to date. The coordinator creates the working copy and the branch from the main branch, records the start in the journal, and starts an executor with its role, the path of its working copy, and the card's text without the Reason and Report sections.
 5. **Work.** The executor commits on its branch after each step, so the work survives the end of a session. It runs `make check` before it reports, and asks the critic to review its branch, in at most two rounds, fixing what it agrees with. Its report quotes the critic's verdict and says what changed for the user, what was removed, which checks ran and with what result, what was not verified, and which questions are open. When the card is unclear, or needs a file outside its Packages, the executor stops and asks.
 6. **Acceptance.** The coordinator accepts the work or returns it, as described in the next section.
 7. **Merge.** The coordinator squashes the branch into one commit on the main branch and pushes the main branch. It then removes the working copy and the branch, removes the backlog line and records the merge in the journal.
@@ -68,12 +68,12 @@ The coordinator accepts a card once, on the final state of its branch, so the tr
 
 1. The coordinator brings the branch up to date with the main branch. It resolves a small conflict itself and returns a larger one to the executor.
 2. It runs `make uncomment` and commits any changes it makes, then runs `make check`, which builds the application and runs every test and linter.
-3. It runs `make budget` on the branch and on the main branch and writes the difference into the card. A change that goes over a budget is not merged. Either the executor makes the change smaller, or the owner decides to raise the budget, and then the budget table in `docs/ARCHITECTURE.md` changes in the same merge.
+3. It copies into the card the critic's last branch verdict line that gives the branch's measured change against the card's Budget change and against the budget table. A change that goes over a budget is not merged. Either the executor makes the change smaller, or the owner decides to raise the budget, and then the budget table in `docs/ARCHITECTURE.md` changes in the same merge.
 4. It checks that everything the card names under "Replaces and removes" is gone.
-5. It checks the result as the card's Checks section says, through the HTTP (Hypertext Transfer Protocol) interface or in the browser. It does this on `make dev`, which runs the application offline on a copy of the data.
+5. It checks the result as the card's Checks section says, through the HTTP (Hypertext Transfer Protocol) interface or in the browser. It does this on `make dev`, which runs the application offline on a copy of the data. When the card changes what the user sees, an agent started for this alone walks each check in the browser and returns pass or fail per check with screenshots, and the coordinator reads only that verdict.
 6. When the card asks for a preview, the owner looks at the result on `make dev` and either accepts it or says what to change.
 7. When the change is notable, the coordinator adds an entry to `CHANGELOG.md` on the branch.
-8. It writes the report: what changed for the user, what was removed, how the budgets changed, and what was not verified.
+8. It writes the report: what changed for the user, what was removed, the critic's budget line, and what was not verified.
 
 When a step fails, the card goes back to its executor with the findings, unless the fix is a small edit, which the coordinator commits on the card's branch.
 
@@ -103,7 +103,7 @@ Tests check behaviour through public boundaries, so the code behind those bounda
 
 ## Budgets
 
-The budgets in `docs/ARCHITECTURE.md`, section "Budgets", are a target that the coordinator checks at acceptance. They are not a rule given to executors. `make budget` measures every budget it can on the code and on a fixture data folder, and it prints each measure next to its target. A change over a budget is merged only by the owner's decision, and that decision changes the budget table and adds an entry to `docs/budget-log.md`, naming what the lines are spent on, in the same merge. The weekly review looks at how the measures move over time.
+The budgets in `docs/ARCHITECTURE.md`, section "Budgets", are a target that the critic measures on each branch; an executor sees a card's Budget change as its expected size. `make budget` measures every budget it can on the code and on a fixture data folder, and it prints each measure next to its target. A change over a budget is merged only by the owner's decision, and that decision changes the budget table and adds an entry to `docs/budget-log.md`, naming what the lines are spent on, in the same merge. The weekly review looks at how the measures move over time.
 
 ## Weekly review
 
