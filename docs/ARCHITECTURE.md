@@ -204,7 +204,7 @@ The web client lives in `github.com/sifty-works/sifty-web`. Its source is in tha
 
 | Group | Endpoints |
 |---|---|
-| Lists and vacancies | `GET /api/vacancies?profile&stage&q&sort&filters` (rows of about 350 bytes, counts per stage and per filter value); `GET /api/vacancies/{id}?profile`; `POST /api/vacancies/{id}/decision {profile,from,to,reason?,confirmed?}`; `POST /api/vacancies/{id}/seen`; `DELETE /api/vacancies/{id}?profile`; `POST /api/vacancies/{id}/refresh` |
+| Lists and vacancies | `GET /api/vacancies?profile&stage&q&sort&filters&limit&offset` (a window of the list, 100 rows of about 350 bytes by default; counts per stage and per filter value, and `matching`, counted over the whole selection); `GET /api/vacancies/{id}?profile`; `POST /api/vacancies/{id}/decision {profile,from,to,reason?,confirmed?}`; `POST /api/vacancies/{id}/seen`; `DELETE /api/vacancies/{id}?profile`; `POST /api/vacancies/{id}/refresh` |
 | Exclusions and industries | `GET/POST/DELETE /api/exclusions?profile` (word exclusions take an optional profile scope; company exclusions are global), `GET /api/exclusions/preview`; `GET /api/industries` |
 | Collection | `GET/POST/PATCH/DELETE /api/sources`; `PUT /api/sources/schedule`; `POST /api/collect {force}` |
 | Profiles | `GET/PATCH /api/me`; `PUT/DELETE/GET /api/me/photo` (png, jpg or webp, at most 2 MiB, real type checked from bytes); `GET/POST/PATCH/DELETE /api/profiles`; `GET /api/profiles/{id}`; `PUT /api/active-profile`; `POST /api/me/skills` (+ and − from a vacancy) |
