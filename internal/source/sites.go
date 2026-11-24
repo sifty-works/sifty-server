@@ -47,26 +47,30 @@ func init() {
 	sitesByHost = buildSiteMap(entries)
 }
 
+type SitesRefused struct{ Reason string }
+
+func (e SitesRefused) Error() string { return e.Reason }
+
 func parseSites(data []byte) ([]siteEntry, error) {
 	var f sitesFile
 	if err := yaml.Unmarshal(data, &f); err != nil {
-		return nil, err
+		return nil, SitesRefused{"It is not a valid site descriptions file."}
 	}
 	seen := make(map[string]bool, len(f.Sites))
 	for _, e := range f.Sites {
 		if strings.TrimSpace(e.Host) == "" {
-			return nil, fmt.Errorf("sites: host must not be empty")
+			return nil, SitesRefused{"A site has no host."}
 		}
 		if seen[e.Host] {
-			return nil, fmt.Errorf("sites: duplicate host %q", e.Host)
+			return nil, SitesRefused{fmt.Sprintf("The host %s is listed twice.", e.Host)}
 		}
 		seen[e.Host] = true
 		if _, ok := knownSiteModules[e.Module]; !ok {
-			return nil, fmt.Errorf("sites: unknown module %q for host %q", e.Module, e.Host)
+			return nil, SitesRefused{fmt.Sprintf("The host %s names an unknown module %s.", e.Host, e.Module)}
 		}
 		if e.LinkPattern != "" {
 			if _, err := regexp.Compile(e.LinkPattern); err != nil {
-				return nil, fmt.Errorf("sites: invalid link_pattern for host %q: %w", e.Host, err)
+				return nil, SitesRefused{fmt.Sprintf("The host %s has a link pattern that is not a valid regular expression.", e.Host)}
 			}
 		}
 	}

@@ -68,79 +68,90 @@ func TestConfigDefaultsPrintsValidYAML(t *testing.T) {
 	}
 }
 
-func TestBrokenSettingsFileIsRecoveredAtStart(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "sifty.yaml"), []byte("{{{: not valid yaml\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+type recoveredNotice struct {
+	File string `json:"file"`
+	Text string `json:"text"`
+}
+
+func recoveredAtStart(t *testing.T, dir string) []recoveredNotice {
+	t.Helper()
 	port, cancel := startServer(t, dir, true)
 	defer cancel()
-
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/api/status", port))
 	if err != nil {
 		t.Fatalf("GET /api/status: %v", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
 	var status struct {
-		Recovered []struct {
-			File   string `json:"file"`
-			Err    string `json:"err"`
-			Broken string `json:"broken"`
-		} `json:"recovered"`
+		Recovered []recoveredNotice `json:"recovered"`
 	}
-	if err := json.Unmarshal(body, &status); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
 		t.Fatalf("parse status: %v", err)
 	}
-	if len(status.Recovered) == 0 {
-		t.Error("broken settings file should appear in status recovered list")
-	} else {
-		if status.Recovered[0].Broken == "" {
-			t.Error("recovery should name the broken file")
-		}
-		if !strings.Contains(status.Recovered[0].File, "sifty.yaml") {
-			t.Errorf("recovery file = %q, want sifty.yaml", status.Recovered[0].File)
-		}
+	return status.Recovered
+}
+
+func brokenFileIn(t *testing.T, dir, prefix string) string {
+	t.Helper()
+	matches, _ := filepath.Glob(filepath.Join(dir, prefix+".broken-*"))
+	if len(matches) != 1 {
+		t.Fatalf("want one %s.broken-* file in %s, got %v", prefix, dir, matches)
+	}
+	return filepath.Base(matches[0])
+}
+
+func TestRefusedValueIsPutAsideAndBackupRestoredWithTheSentenceInStatus(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "backups"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "backups", "sifty-20240101T120000.000000000Z.yaml"), []byte("port: 9191\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sifty.yaml"), []byte("collection:\n  max_age_months: 5000\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got := recoveredAtStart(t, dir)
+	if len(got) != 1 || got[0].File != "sifty.yaml" {
+		t.Fatalf("recovered = %+v", got)
+	}
+	want := "Your settings file could not be used and was moved to " + brokenFileIn(t, dir, "sifty.yaml") + ". " +
+		"The age limit is a whole number of months, from 1 to 1200, or empty for no limit. " +
+		"The settings were restored from the backup backups/sifty-20240101T120000.000000000Z.yaml."
+	if got[0].Text != want {
+		t.Errorf("text = %q\nwant   %q", got[0].Text, want)
 	}
 }
 
-func TestUnknownConfigKeyAppearsInStatusRecovered(t *testing.T) {
+func TestUnknownConfigKeyIsNamedAndNothingIsMovedOrRestored(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "sifty.yaml"), []byte("unknown_top_key: true\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	port, cancel := startServer(t, dir, true)
-	defer cancel()
+	got := recoveredAtStart(t, dir)
+	want := "Your settings file has settings this version does not use; they were ignored: unknown_top_key."
+	if len(got) != 1 || got[0].File != "sifty.yaml" || got[0].Text != want {
+		t.Errorf("recovered = %+v, want text %q", got, want)
+	}
+	if matches, _ := filepath.Glob(filepath.Join(dir, "sifty.yaml.broken-*")); len(matches) != 0 {
+		t.Errorf("settings file was moved: %v", matches)
+	}
+}
 
-	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/api/status", port))
-	if err != nil {
-		t.Fatalf("GET /api/status: %v", err)
+func TestSiteDescriptionsWithDuplicatedHostArePutAsideAndSaidSo(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "vocab"), 0700); err != nil {
+		t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	var status struct {
-		Recovered []struct {
-			File   string `json:"file"`
-			Err    string `json:"err"`
-			Broken string `json:"broken"`
-		} `json:"recovered"`
+	sites := "sites:\n  - host: board.example.com\n    module: feed\n  - host: board.example.com\n    module: links\n"
+	if err := os.WriteFile(filepath.Join(dir, "vocab", "sites.yaml"), []byte(sites), 0600); err != nil {
+		t.Fatal(err)
 	}
-	if err := json.Unmarshal(body, &status); err != nil {
-		t.Fatalf("parse status: %v", err)
-	}
-	if len(status.Recovered) == 0 {
-		t.Error("unknown key should appear in status recovered list")
-		return
-	}
-	r := status.Recovered[0]
-	if r.Broken != "" {
-		t.Error("unknown key should not rename the settings file")
-	}
-	if !strings.Contains(r.Err, "unknown_top_key") {
-		t.Errorf("recovery error should name the unknown key, got %q", r.Err)
-	}
-	if !strings.Contains(r.File, "sifty.yaml") {
-		t.Errorf("recovery file should be sifty.yaml, got %q", r.File)
+	got := recoveredAtStart(t, dir)
+	want := "Your site descriptions file vocab/sites.yaml could not be used and was moved to " + brokenFileIn(t, filepath.Join(dir, "vocab"), "sites.yaml") + ". " +
+		"The host board.example.com is listed twice. The built-in site descriptions are used."
+	if len(got) != 1 || got[0].File != "sites.yaml" || got[0].Text != want {
+		t.Errorf("recovered = %+v, want text %q", got, want)
 	}
 }
 

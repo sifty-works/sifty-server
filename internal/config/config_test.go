@@ -32,7 +32,7 @@ func loadFile(t *testing.T, path string) (config.Config, error) {
 	if err != nil {
 		return config.Config{}, err
 	}
-	if result.Broken != "" {
+	if result.Err != "" {
 		return config.Config{}, fmt.Errorf("recovered: %s", result.Err)
 	}
 	return s.Get(), nil

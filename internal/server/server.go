@@ -40,9 +40,8 @@ type StatusExtra struct {
 }
 
 type RecoveredFile struct {
-	File   string `json:"file"`
-	Err    string `json:"err"`
-	Broken string `json:"broken"`
+	File string `json:"file"`
+	Text string `json:"text"`
 }
 
 type StatusResp struct {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -77,24 +78,23 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 	cfg := store.Get()
 
+	if cfgResult.SaveErr != nil {
+		logger.Warn("restored settings not written", "err", cfgResult.SaveErr)
+	}
 	recovered := []server.RecoveredFile{}
-	if cfgResult.Broken != "" {
-		recovered = append(recovered, server.RecoveredFile{File: "sifty.yaml", Err: cfgResult.Err, Broken: cfgResult.Broken})
+	if cfgResult.Err != "" {
+		recovered = append(recovered, server.RecoveredFile{File: "sifty.yaml", Text: settingsRecoveryText(cfgResult)})
 	}
 	if len(cfgResult.Unknown) > 0 {
-		recovered = append(recovered, server.RecoveredFile{File: "sifty.yaml", Err: "ignored unknown keys: " + strings.Join(cfgResult.Unknown, ", ")})
+		recovered = append(recovered, server.RecoveredFile{File: "sifty.yaml", Text: "Your settings file has settings this version does not use; they were ignored: " + strings.Join(cfgResult.Unknown, ", ") + "."})
 	}
 
 	if brokenSite, siteErr := source.LoadSites(filepath.Join(dataDir, "vocab", "sites.yaml")); siteErr != nil {
-		recovered = append(recovered, server.RecoveredFile{File: "sites.yaml", Err: siteErr.Error(), Broken: brokenSite})
+		recovered = append(recovered, server.RecoveredFile{File: "sites.yaml", Text: sitesRecoveryText(brokenSite, siteErr)})
 	}
 
 	for _, r := range recovered {
-		if r.Broken != "" {
-			fmt.Fprintf(stderr, "recovered %s: %s (moved to %s)\n", r.File, r.Err, r.Broken)
-		} else {
-			fmt.Fprintf(stderr, "recovered %s: %s\n", r.File, r.Err)
-		}
+		fmt.Fprintf(stderr, "recovered %s: %s\n", r.File, r.Text)
 	}
 
 	if flags.port >= 0 {
@@ -250,6 +250,37 @@ func acquireLock(path string) (*os.File, error) {
 		return nil, err
 	}
 	return f, nil
+}
+
+func settingsRecoveryText(r config.OpenResult) string {
+	used := "The default settings are used"
+	if r.Backup != "" {
+		used = "The settings of the backup backups/" + r.Backup + " are used"
+	}
+	if r.Broken == "" {
+		return "Your settings file could not be used and could not be moved aside, so it was left as it is. " + r.Err + " " + used + " for this run."
+	}
+	switch {
+	case r.SaveErr != nil:
+		used += " for this run; they could not be written, so set them again in Settings."
+	case r.Backup != "":
+		used = "The settings were restored from the backup backups/" + r.Backup + "."
+	default:
+		used += "."
+	}
+	return "Your settings file could not be used and was moved to " + r.Broken + ". " + r.Err + " " + used
+}
+
+func sitesRecoveryText(broken string, err error) string {
+	const file = "Your site descriptions file vocab/sites.yaml "
+	var refused source.SitesRefused
+	if !errors.As(err, &refused) {
+		return file + "could not be read. The built-in site descriptions are used."
+	}
+	if broken == "" {
+		return file + "could not be used and could not be moved aside, so it was left as it is. " + refused.Reason + " The built-in site descriptions are used for this run."
+	}
+	return file + "could not be used and was moved to " + broken + ". " + refused.Reason + " The built-in site descriptions are used."
 }
 
 func openLog(dataDir string, stderr io.Writer) (*slog.Logger, func(func() []string), func(), error) {

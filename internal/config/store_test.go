@@ -60,6 +60,12 @@ func TestOpenBrokenFileWithValidBackupUsesBackup(t *testing.T) {
 	if s.Get().Port != 9191 {
 		t.Errorf("port should come from backup: got %d", s.Get().Port)
 	}
+	if result.Backup != "sifty-20240101T120000.000000000Z.yaml" {
+		t.Errorf("restored backup = %q", result.Backup)
+	}
+	if result.Err != config.NotSettingsFileSentence {
+		t.Errorf("reason = %q", result.Err)
+	}
 }
 
 func TestOpenBrokenFileNoBackupUsesDefaults(t *testing.T) {

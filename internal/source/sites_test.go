@@ -2,10 +2,10 @@ package source_test
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/sifty-works/sifty-server/internal/fetch"
@@ -114,8 +114,9 @@ func TestLoadSitesBadLinkPatternRenamesFile(t *testing.T) {
 	if broken == "" {
 		t.Error("file with bad link_pattern should be renamed")
 	}
-	if !strings.Contains(err.Error(), "link_pattern") {
-		t.Errorf("error should mention link_pattern: %s", err)
+	var refused source.SitesRefused
+	if !errors.As(err, &refused) || refused.Reason != "The host board.example.com has a link pattern that is not a valid regular expression." {
+		t.Errorf("reason = %q", refused.Reason)
 	}
 }
 
@@ -128,8 +129,9 @@ func TestLoadSitesDuplicateHostRenamesFile(t *testing.T) {
 	if broken == "" {
 		t.Error("file with duplicate host should be renamed")
 	}
-	if !strings.Contains(err.Error(), "duplicate") {
-		t.Errorf("error should mention duplicate: %s", err)
+	var refused source.SitesRefused
+	if !errors.As(err, &refused) || refused.Reason != "The host board.example.com is listed twice." {
+		t.Errorf("reason = %q", refused.Reason)
 	}
 }
 

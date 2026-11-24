@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 type OpenResult struct {
 	Broken  string
 	Err     string
+	Backup  string
+	SaveErr error
 	Unknown []string
 }
 
@@ -35,13 +38,24 @@ func Open(path string) (*Store, OpenResult, error) {
 		return &Store{path: path, cfg: cfg}, OpenResult{Unknown: unknown}, nil
 	}
 	result := OpenResult{Err: err.Error()}
+	var invalid notSettingsFile
+	if errors.As(err, &invalid) {
+		result.Err = NotSettingsFileSentence
+	}
+	moved := false
 	if b := path + ".broken-" + time.Now().UTC().Format("20060102T150405"); os.Rename(path, b) == nil {
 		result.Broken = filepath.Base(b)
+		moved = true
 	}
-	return &Store{path: path, cfg: restoreSettings(path)}, result, nil
+	cfg, data, backup := restoreSettings(path)
+	result.Backup = backup
+	if moved {
+		result.SaveErr = atomicWrite(path, data)
+	}
+	return &Store{path: path, cfg: cfg}, result, nil
 }
 
-func restoreSettings(settingsPath string) Config {
+func restoreSettings(settingsPath string) (Config, []byte, string) {
 	dataDir := filepath.Dir(settingsPath)
 	entries, _ := os.ReadDir(filepath.Join(dataDir, "backups"))
 	var paths []string
@@ -54,13 +68,11 @@ func restoreSettings(settingsPath string) Config {
 	for i := len(paths) - 1; i >= 0; i-- {
 		if d, err := os.ReadFile(paths[i]); err == nil {
 			if cfg, _, err := parse(d); err == nil {
-				_ = atomicWrite(settingsPath, d)
-				return cfg
+				return cfg, d, filepath.Base(paths[i])
 			}
 		}
 	}
-	_ = atomicWrite(settingsPath, []byte(DefaultsYAML()))
-	return Defaults()
+	return Defaults(), []byte(DefaultsYAML()), ""
 }
 
 func (s *Store) Get() Config {

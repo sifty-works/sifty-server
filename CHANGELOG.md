@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- The notice of a file recovered at start says what happened, in a sentence the status sends as `text` in place of `err` and `broken`: the settings file moved to `.broken-<time>` with the reason and the backup or the defaults used, unknown settings ignored, the site descriptions file moved with the host at fault and the built-in descriptions used. A refused settings file that cannot be moved aside is left as it is instead of being overwritten.
 - Removed the one-time import from the previous application.
 - A list that cannot be loaded shows an error, not an empty list: the Inbox shows the server's sentence, and Saved answers and the excluded words of a profile say that they could not be loaded (web client 0.26.0).
 - Every API key the application holds is replaced by `***` before a line is written to the log file or to the terminal, wherever in the line it stands; before, keys were hidden only when Settings › Monitor › Logs read the file.

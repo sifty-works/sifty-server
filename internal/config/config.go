@@ -191,22 +191,30 @@ func SourceKey(rawURL string) (string, error) {
 	return key, nil
 }
 
+const NotSettingsFileSentence = "It is not a valid settings file."
+
+type notSettingsFile struct{ cause error }
+
+func (e notSettingsFile) Error() string { return "settings file is not valid: " + e.cause.Error() }
+
+func (e notSettingsFile) Unwrap() error { return e.cause }
+
 func parse(data []byte) (Config, []string, error) {
 	c := Defaults()
 
 	var node yaml.Node
 	if err := yaml.Unmarshal(data, &node); err != nil {
-		return c, nil, fmt.Errorf("parsing settings file: %w", err)
+		return c, nil, notSettingsFile{fmt.Errorf("parsing settings file: %w", err)}
 	}
 	if node.Kind == 0 {
 		return c, nil, nil
 	}
 	if node.Kind != yaml.DocumentNode || len(node.Content) == 0 {
-		return c, nil, fmt.Errorf("settings file must be a YAML mapping")
+		return c, nil, notSettingsFile{errors.New("settings file must be a YAML mapping")}
 	}
 	root := node.Content[0]
 	if root.Kind != yaml.MappingNode {
-		return c, nil, fmt.Errorf("settings file must be a YAML mapping")
+		return c, nil, notSettingsFile{errors.New("settings file must be a YAML mapping")}
 	}
 
 	knownTop := map[string]bool{"port": true, "debug": true, "collection": true, "sources": true, "weights": true, "rates": true,
@@ -284,7 +292,7 @@ func parse(data []byte) (Config, []string, error) {
 	}
 
 	if err := node.Decode(&c); err != nil {
-		return c, nil, fmt.Errorf("parsing settings file: %w", err)
+		return c, nil, notSettingsFile{fmt.Errorf("parsing settings file: %w", err)}
 	}
 
 	if err := Validate(c); err != nil {
