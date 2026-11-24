@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Web client 0.23.0: Undo beside a decision taken in this session returns the role to the stage it came from, where before the button did nothing; the Settings screen draws one page shell when the server is not running, instead of a second navigation rail inside the first.
 - The Money tile picks its mark after rounding, so a sum just under the next unit is no longer written with the lower one: 999,950 reads "$1M" instead of "$1000k", and 999.5 reads "1k" instead of "1000".
 - Web client 0.22.0: the Inbox asks the server for 100 roles at a time and carries "Show more roles" under the list, while the stage counts, the Sources counts and the "Showing N / M roles" line read the whole selection; the Filters panel has no Industries group, a list row and the vacancy page carry no industries, and a profile has no target industries.
 - Industries are gone from the application: the Inbox has no Industries filter and no industry counts, a list row and the vacancy page carry no industries, a profile has no target industries and no longer narrows its Inbox by them, `GET /api/industries` is no longer served, and collection no longer derives industries from board tags or from a site's description. A profile that still holds target industries keeps them stored and ignores them. A migration drops the stored industries of every vacancy; vacancies and decisions are kept.
