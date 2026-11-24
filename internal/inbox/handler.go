@@ -264,6 +264,9 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		if collectActive != nil && collectActive() {
 			return DeleteVacancyResp{}, apperr.Busy{Message: "Collection is running; try again when it ends."}
 		}
+		if _, err := fit.LoadProfile(r.Context(), database, pid, rules()); err != nil {
+			return DeleteVacancyResp{}, err
+		}
 		if err := cat.Delete(r.Context(), vacancyID); err != nil {
 			return DeleteVacancyResp{}, err
 		}

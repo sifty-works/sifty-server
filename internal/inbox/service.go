@@ -140,9 +140,9 @@ func fitMark(s fit.Stored, inputs int64, vacancyID int64, readingSet map[int64]b
 	return m
 }
 
-func fitInputs(ctx context.Context, database *db.DB, profileID int64, r fit.Rules) int64 {
-	p, _ := fit.LoadProfile(ctx, database, profileID, r)
-	return p.Inputs
+func fitInputs(ctx context.Context, database *db.DB, profileID int64, r fit.Rules) (int64, error) {
+	p, err := fit.LoadProfile(ctx, database, profileID, r)
+	return p.Inputs, err
 }
 
 type Counts struct {
@@ -223,7 +223,11 @@ func rowAndCounts(ctx context.Context, database *db.DB, now func() time.Time, pr
 	if err != nil {
 		return Row{}, Counts{}, err
 	}
-	return toRow(row, t, fitInputs(ctx, database, profileID, r), rs), buildCounts(cm), nil
+	inputs, err := fitInputs(ctx, database, profileID, r)
+	if err != nil {
+		return Row{}, Counts{}, err
+	}
+	return toRow(row, t, inputs, rs), buildCounts(cm), nil
 }
 
 func list(ctx context.Context, database *db.DB, now func() time.Time, profileID int64, stage, q, sort string, f Filters, limit, offset int, r fit.Rules) ([]Row, Counts, []SourceCount, int, int, error) {
@@ -231,7 +235,10 @@ func list(ctx context.Context, database *db.DB, now func() time.Time, profileID 
 	if err != nil {
 		return nil, Counts{}, nil, 0, 0, err
 	}
-	f.inputs = fitInputs(ctx, database, profileID, r)
+	f.inputs, err = fitInputs(ctx, database, profileID, r)
+	if err != nil {
+		return nil, Counts{}, nil, 0, 0, err
+	}
 	t := now()
 	cm, err := stageCounts(ctx, database, t, profileID, vis)
 	if err != nil {
@@ -286,6 +293,9 @@ func applyDecision(ctx context.Context, database *db.DB, now func() time.Time, e
 	}
 
 	if err := validateMove(from, to, reason, confirmed); err != nil {
+		return Row{}, Counts{}, err
+	}
+	if _, err := fit.LoadProfile(ctx, database, profileID, r); err != nil {
 		return Row{}, Counts{}, err
 	}
 
@@ -622,6 +632,11 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enq
 		lv.Empty = "A full description has not been retrieved. Open the original listing; missing text is not an empty job."
 	}
 
+	inputs, err := fitInputs(ctx, database, profileID, r)
+	if err != nil {
+		return VacancyView{}, err
+	}
+
 	f, err := fit.Band(ctx, database, profileID, vacancyID, r)
 	if err != nil {
 		return VacancyView{}, err
@@ -660,7 +675,7 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enq
 	if f.State == fit.Scored {
 		band.Score, band.Text = &f.Score, fmt.Sprintf("Fits you %d /100", f.Score)
 	}
-	apiRow := toRow(row, t, fitInputs(ctx, database, profileID, r), rs)
+	apiRow := toRow(row, t, inputs, rs)
 	return VacancyView{
 		Row:      apiRow,
 		Sources:  sources,
