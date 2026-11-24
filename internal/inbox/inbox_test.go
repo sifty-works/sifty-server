@@ -989,6 +989,21 @@ func TestVacancyView_AliasedVacancyAndNotFound(t *testing.T) {
 	}
 }
 
+func TestList_UnreadableProfileIsAnInternalError(t *testing.T) {
+	d := openTestDB(t)
+	setProfileData(t, d, []string{"engineer"}, nil, nil)
+	add(t, newCat(d), post("https://example.com/jobs/np2", "Engineer", "Acme"))
+	if _, err := d.Exec(`UPDATE profile SET data='{"targetRoles": 17' WHERE id=1`); err != nil {
+		t.Fatalf("corrupt profile: %v", err)
+	}
+	ts := newTestServer(t, d)
+
+	_, status := apiGetRaw(t, ts, "/api/vacancies?profile=1")
+	if status != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", status)
+	}
+}
+
 func TestVisibility_ProfileSearch(t *testing.T) {
 	for _, tc := range []struct {
 		name                   string

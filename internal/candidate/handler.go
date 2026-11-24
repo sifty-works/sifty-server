@@ -937,9 +937,8 @@ func EffectiveProfile(ctx context.Context, database *db.DB, profileID int64) (Pr
 func ProfileSearch(ctx context.Context, database *db.DB, profileID int64) (Profile, error) {
 	pd, err := EffectiveProfile(ctx, database, profileID)
 	if err != nil {
-		return Profile{}, nil
+		return Profile{}, err
 	}
-
 	return Profile{
 		TargetRoles: pd.TargetRoles,
 		Keywords:    pd.Keywords,

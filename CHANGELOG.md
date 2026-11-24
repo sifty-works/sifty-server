@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- A profile whose stored data cannot be read no longer shows an empty list: the list answers "Internal error, see log #id" with a log entry. Queuing readings for decided vacancies still queues them for every profile it can read, and then the job fails with the id of each profile it could not read, instead of quietly queuing fewer.
+
 ## 0.1.0
 
 - A background model call that fails because of the request itself — a prompt longer than the provider's context, a command-line answer that is not valid JSON or is over the output limit, an answer in which the model tried to call a tool — now fails only that piece of work and no longer marks the provider as not answering; a prompt too long for the provider fails that reading, check or analysis for good with a sentence, where before it held all background work; three such failures in a row hold the provider like one that does not answer, and any success resets the count. When a provider itself does not answer, background work waits five minutes and then tries the provider again by itself, where before it waited until a call of the user or Check succeeded. A call cancelled in flight is recorded and counts against the daily limit, a failed record is logged, and background work waits when the pause switch or today's calls cannot be read, instead of going ahead.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -355,5 +356,28 @@ func TestQueueReadings_active_read_vacancy_suppresses_all_queueing(t *testing.T)
 	fix.d.QueryRow(`SELECT count(*) FROM job WHERE kind='read_vacancy'`).Scan(&total)
 	if total != 1 {
 		t.Errorf("active job: expected only the pre-existing 1 job, got %d", total)
+	}
+}
+
+func TestQueueReadings_unreadable_profile_fails_the_job_after_queuing_the_others(t *testing.T) {
+	fix := newQueueFix(t)
+	insertProfile(t, fix.d, 1, "Platform Engineer")
+	if _, _, err := fix.cat.Upsert(fix.ctx, postingFull("https://jobs.example.com/pe9", "Platform Engineer", "Stackworks"), "src"); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if _, err := fix.d.Exec(`INSERT INTO profile (id, data) VALUES (2, '{"targetRoles": 17')`); err != nil {
+		t.Fatalf("insert broken profile: %v", err)
+	}
+
+	store := openStoreWithReading(t)
+	err := queueReadings(fix.ctx, fix.d, fakeEnqueue(fix.d), store, false, knownReaderVersion)
+	if err == nil {
+		t.Fatal("queueReadings returned nil, want the profile error")
+	}
+	if !strings.Contains(err.Error(), "profile 2") {
+		t.Errorf("error = %v, want it to name profile 2", err)
+	}
+	if subjects := collectQueuedSubjects(t, fix.d); len(subjects) != 1 {
+		t.Errorf("queued %v, want the one reading of the readable profile", subjects)
 	}
 }

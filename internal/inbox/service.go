@@ -175,12 +175,12 @@ func toRow(rr repoRow, now time.Time, inputs int64, readingSet map[int64]bool) R
 	}
 }
 
-func profileVisibility(ctx context.Context, database *db.DB, profileID int64) candidate.Filter {
+func profileVisibility(ctx context.Context, database *db.DB, profileID int64) (candidate.Filter, error) {
 	p, err := candidate.ProfileSearch(ctx, database, profileID)
 	if err != nil {
-		return candidate.Filter{SQL: "1=0"}
+		return candidate.Filter{}, err
 	}
-	return candidate.Visibility(p)
+	return candidate.Visibility(p), nil
 }
 
 func buildCounts(cm map[string]int) Counts {
@@ -194,7 +194,10 @@ func buildCounts(cm map[string]int) Counts {
 }
 
 func loadCounts(ctx context.Context, database *db.DB, now time.Time, profileID int64) (Counts, error) {
-	vis := profileVisibility(ctx, database, profileID)
+	vis, err := profileVisibility(ctx, database, profileID)
+	if err != nil {
+		return Counts{}, err
+	}
 	cm, err := stageCounts(ctx, database, now, profileID, vis)
 	if err != nil {
 		return Counts{}, err
@@ -203,7 +206,10 @@ func loadCounts(ctx context.Context, database *db.DB, now time.Time, profileID i
 }
 
 func rowAndCounts(ctx context.Context, database *db.DB, now func() time.Time, profileID, vacancyID int64, r fit.Rules) (Row, Counts, error) {
-	vis := profileVisibility(ctx, database, profileID)
+	vis, err := profileVisibility(ctx, database, profileID)
+	if err != nil {
+		return Row{}, Counts{}, err
+	}
 	_, row, _, err := loadVacancyFull(ctx, database, profileID, vacancyID)
 	if err != nil {
 		return Row{}, Counts{}, err
@@ -221,7 +227,10 @@ func rowAndCounts(ctx context.Context, database *db.DB, now func() time.Time, pr
 }
 
 func list(ctx context.Context, database *db.DB, now func() time.Time, profileID int64, stage, q, sort string, f Filters, limit, offset int, r fit.Rules) ([]Row, Counts, []SourceCount, int, int, error) {
-	vis := profileVisibility(ctx, database, profileID)
+	vis, err := profileVisibility(ctx, database, profileID)
+	if err != nil {
+		return nil, Counts{}, nil, 0, 0, err
+	}
 	f.inputs = fitInputs(ctx, database, profileID, r)
 	t := now()
 	cm, err := stageCounts(ctx, database, t, profileID, vis)

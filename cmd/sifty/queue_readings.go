@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -28,9 +29,9 @@ func queueReadings(ctx context.Context, database *db.DB, enqueue func(runner.Spe
 		return nil
 	}
 
-	visSQL, visArgs, err := readingVisibility(ctx, database)
-	if err != nil || visSQL == "" {
-		return err
+	visSQL, visArgs, profileErr := readingVisibility(ctx, database)
+	if visSQL == "" {
+		return profileErr
 	}
 	candidates, err := catalog.ReadingCandidates(ctx, database, visSQL, visArgs, readerVersion)
 	if err != nil {
@@ -39,7 +40,7 @@ func queueReadings(ctx context.Context, database *db.DB, enqueue func(runner.Spe
 	for _, c := range candidates {
 		enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/%d", c.VacancyID, c.Version), Priority: c.Priority})
 	}
-	return nil
+	return profileErr
 }
 
 func readingVisibility(ctx context.Context, database *db.DB) (string, []any, error) {
@@ -57,9 +58,11 @@ func readingVisibility(ctx context.Context, database *db.DB) (string, []any, err
 	rows.Close()
 	clauses := []string{"EXISTS (SELECT 1 FROM decision d2 WHERE d2.vacancy=v.id)"}
 	var args []any
+	var failed []error
 	for _, id := range ids {
 		p, err := candidate.ProfileSearch(ctx, database, id)
 		if err != nil {
+			failed = append(failed, fmt.Errorf("queue readings: profile %d: %w", id, err))
 			continue
 		}
 		f := candidate.Visibility(p)
@@ -68,5 +71,5 @@ func readingVisibility(ctx context.Context, database *db.DB) (string, []any, err
 			args = append(args, f.Args...)
 		}
 	}
-	return "(" + strings.Join(clauses, " OR ") + ")", args, nil
+	return "(" + strings.Join(clauses, " OR ") + ")", args, errors.Join(failed...)
 }
