@@ -51,8 +51,9 @@ func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 }
 
 type CollectionConfig struct {
-	Auto     bool     `yaml:"auto"`
-	Interval Duration `yaml:"interval"`
+	Auto         bool     `yaml:"auto"`
+	Interval     Duration `yaml:"interval"`
+	MaxAgeMonths int      `yaml:"max_age_months,omitempty"`
 }
 
 func (c *CollectionConfig) UnmarshalYAML(value *yaml.Node) error {
@@ -205,7 +206,7 @@ func parse(data []byte) (Config, []string, error) {
 
 	knownTop := map[string]bool{"port": true, "debug": true, "collection": true, "sources": true, "weights": true, "rates": true,
 		"providers": true, "work": true, "allow_paid_bulk": true, "daily_model_limit": true}
-	knownCollection := map[string]bool{"auto": true, "interval": true}
+	knownCollection := map[string]bool{"auto": true, "interval": true, "max_age_months": true}
 	knownSource := map[string]bool{"name": true, "url": true, "enabled": true}
 	knownProvider := map[string]bool{"type": true, "model": true, "endpoint": true, "cost": true, "timeout": true, "context": true, "key_env": true}
 	var unknown []string
@@ -286,6 +287,9 @@ func Validate(c Config) error {
 	maxInterval := Duration(168 * time.Hour)
 	if c.Collection.Interval < minInterval || c.Collection.Interval > maxInterval {
 		return fmt.Errorf("The interval must be between 15 minutes and 7 days.")
+	}
+	if c.Collection.MaxAgeMonths < 0 {
+		return fmt.Errorf("collection.max_age_months: a whole number of months, 1 or more.")
 	}
 	defaults := Defaults().Weights
 	for k, w := range c.Weights {

@@ -38,10 +38,7 @@ const listCols = `v.id, v.company, v.title, v.location, v.published_at, v.publis
     (SELECT profile_name FROM application WHERE vacancy=v.id ORDER BY applied_at DESC LIMIT 1),
     v.expires_at, ` + fit.Columns
 
-const orderNewest = `ORDER BY
-    CASE WHEN published_basis != '' THEN 1 WHEN published_at != '' THEN 2 ELSE 3 END ASC,
-    CASE WHEN published_at != '' THEN published_at ELSE '0000-00-00' END DESC,
-    first_seen DESC, id DESC`
+const orderNewest = `ORDER BY published_at DESC, first_seen DESC, id DESC`
 
 const orderDecided = `ORDER BY d.decided_at DESC, d.vacancy DESC`
 
@@ -115,9 +112,9 @@ func filterClauses(now time.Time, f Filters, skipSources bool) ([]string, []any)
 	var parts []string
 	var args []any
 
-	if f.Collected != 0 {
-		cutoff := now.AddDate(0, 0, -f.Collected).UTC().Format(time.RFC3339)
-		parts = append(parts, "v.first_seen>=?")
+	if f.Published != 0 {
+		cutoff := now.AddDate(0, 0, -f.Published).UTC().Format(time.RFC3339)
+		parts = append(parts, "(v.published_at='' OR v.published_at>=?)")
 		args = append(args, cutoff)
 	}
 

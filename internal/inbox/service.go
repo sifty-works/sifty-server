@@ -20,7 +20,7 @@ import (
 )
 
 type Filters struct {
-	Collected  int
+	Published  int
 	Remote     bool
 	Leadership bool
 	Sources    []string

@@ -18,32 +18,35 @@ func addAtLocation(t *testing.T, cat *catalog.Catalog, url, title, location stri
 	return add(t, cat, p)
 }
 
-func TestFilter_Collected(t *testing.T) {
+func publishedFixture(t *testing.T) *db.DB {
+	t.Helper()
+	d := openTestDB(t)
+	setProfileData(t, d, nil, []string{"engineer"}, nil)
+	cat := newCat(d)
 	for _, tc := range []struct {
-		name        string
-		filter      string
-		kept, older int
-	}{
-		{"7 days keeps a vacancy collected 6 days ago", "7", 6, 8},
-		{"30 days keeps a vacancy collected 7 days ago", "30", 7, 31},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			d := openTestDB(t)
-			setProfileData(t, d, nil, []string{"engineer"}, nil)
-			kept := add(t, catalog.New(d, func() time.Time { return testNow.AddDate(0, 0, -tc.kept) }),
-				post("https://example.com/jobs/c1", "Recent Engineer", "Co"))
-			add(t, catalog.New(d, func() time.Time { return testNow.AddDate(0, 0, -tc.older) }),
-				post("https://example.com/jobs/c2", "Old Engineer", "Co"))
+		name string
+		ago  int
+	}{{"D6", 6}, {"D8", 8}, {"D29", 29}, {"D31", 31}, {"Undated", 0}} {
+		p := post("https://example.com/jobs/pub-"+tc.name, tc.name+" Engineer", "Co")
+		if tc.ago != 0 {
+			p.Published = testNow.AddDate(0, 0, -tc.ago)
+			p.PublishedBasis = "datePosted"
+		}
+		add(t, cat, p)
+	}
+	return d
+}
 
-			ts := newTestServer(t, d)
-			rs := getRows(apiGet(t, ts, "/api/vacancies?collected="+tc.filter))
-			if len(rs) != 1 || rowID(rs[0]) != float64(kept) {
-				t.Errorf("collected=%s: got %d rows, want 1 (the recent one)", tc.filter, len(rs))
-			}
-			if len(getRows(apiGet(t, ts, "/api/vacancies"))) != 2 {
-				t.Errorf("no filter: want 2 rows")
-			}
-		})
+func TestFilter_PublishedKeepsRecentAndUndatedVacancies(t *testing.T) {
+	ts := newTestServer(t, publishedFixture(t))
+	for filter, want := range map[string]string{
+		"":   "D29 Engineer,D31 Engineer,D6 Engineer,D8 Engineer,Undated Engineer",
+		"7":  "D6 Engineer,Undated Engineer",
+		"30": "D29 Engineer,D6 Engineer,D8 Engineer,Undated Engineer",
+	} {
+		if got := sortedTitles(apiGet(t, ts, "/api/vacancies?published="+filter)); got != want {
+			t.Errorf("published=%q: rows %q, want %q", filter, got, want)
+		}
 	}
 }
 
@@ -225,16 +228,21 @@ func TestFilter_Unread(t *testing.T) {
 func TestFilter_Combined(t *testing.T) {
 	d := openTestDB(t)
 	setProfileData(t, d, nil, []string{"engineer"}, nil)
-	catRecent := catalog.New(d, func() time.Time { return testNow.AddDate(0, 0, -3) })
-	catOld := catalog.New(d, func() time.Time { return testNow.AddDate(0, 0, -15) })
+	cat := newCat(d)
+	at := func(url, location string, ago int) int64 {
+		p := postWithText(url, "Engineer", "Co", "job")
+		p.Location = location
+		p.Published = testNow.AddDate(0, 0, -ago)
+		p.PublishedBasis = "datePosted"
+		return add(t, cat, p)
+	}
+	idOK := at("https://example.com/jobs/cb1", "Remote · EU", 3)
+	at("https://example.com/jobs/cb2", "London", 3)
+	at("https://example.com/jobs/cb3", "Remote · US", 15)
 
-	idOK := addAtLocation(t, catRecent, "https://example.com/jobs/cb1", "Engineer", "Remote · EU")
-	addAtLocation(t, catRecent, "https://example.com/jobs/cb2", "Engineer", "London")
-	addAtLocation(t, catOld, "https://example.com/jobs/cb3", "Engineer", "Remote · US")
-
-	rs := getRows(apiGet(t, newTestServer(t, d), "/api/vacancies?remote=true&collected=7"))
+	rs := getRows(apiGet(t, newTestServer(t, d), "/api/vacancies?remote=true&published=7"))
 	if len(rs) != 1 || rowID(rs[0]) != float64(idOK) {
-		t.Errorf("combined remote+collected: got %d rows, want 1", len(rs))
+		t.Errorf("combined remote+published: got %d rows, want 1", len(rs))
 	}
 }
 

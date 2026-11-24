@@ -100,6 +100,13 @@ func applyDiff(root *yaml.Node, old, new Config) {
 			setScalar(coll, "interval",
 				shortDuration(time.Duration(new.Collection.Interval)), "!!str")
 		}
+		if old.Collection.MaxAgeMonths != new.Collection.MaxAgeMonths {
+			if new.Collection.MaxAgeMonths == 0 {
+				removeMappingKey(coll, "max_age_months")
+			} else {
+				setScalar(coll, "max_age_months", strconv.Itoa(new.Collection.MaxAgeMonths), "!!int")
+			}
+		}
 	}
 	if !slices.Equal(old.Sources, new.Sources) {
 		updateSources(root, old.Sources, new.Sources)

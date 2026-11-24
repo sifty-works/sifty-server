@@ -78,6 +78,10 @@ func (c *Collector) run(ctx context.Context, j *runner.Job) error {
 		}
 	}
 
+	var oldest time.Time
+	if m := cfg.Collection.MaxAgeMonths; m > 0 {
+		oldest = c.now().AddDate(0, -m, 0)
+	}
 	seenURLs := make(map[string]bool)
 	var mu sync.Mutex
 	var doneCount, failedCount int
@@ -136,6 +140,9 @@ func (c *Collector) run(ctx context.Context, j *runner.Job) error {
 						}
 						if k.Removed {
 							cntRemoved++
+							continue
+						}
+						if k.New && !p.Published.IsZero() && p.Published.Before(oldest) {
 							continue
 						}
 						excluded := false

@@ -326,7 +326,7 @@ func TestPublicationLine_Forms(t *testing.T) {
 	}
 }
 
-func TestOrder_ThreeRanks(t *testing.T) {
+func TestOrder_NewestFollowsPublicationDateWhetherOrNotItsBasisWasRecorded(t *testing.T) {
 	d := openTestDB(t)
 	setProfileData(t, d, nil, []string{"job"}, nil)
 	cat := newCat(d)
@@ -335,10 +335,11 @@ func TestOrder_ThreeRanks(t *testing.T) {
 		day   int
 		basis string
 	}{
-		{"Rank2", 10, ""},
-		{"Rank1 Newer", 5, "datePosted"},
-		{"Rank3", 0, ""},
-		{"Rank1 Older", 1, "datePosted"},
+		{"Nov10 no basis", 10, ""},
+		{"Nov5 basis", 5, "datePosted"},
+		{"Undated", 0, ""},
+		{"Nov7 no basis", 7, ""},
+		{"Nov1 basis", 1, "datePosted"},
 	} {
 		p := postWithText(fmt.Sprintf("https://example.com/jobs/ord%d", i), tc.title, "Co", "job")
 		if tc.day != 0 {
@@ -348,10 +349,10 @@ func TestOrder_ThreeRanks(t *testing.T) {
 		add(t, cat, p)
 	}
 	rs := getRows(apiGet(t, newTestServer(t, d), "/api/vacancies?sort=newest"))
-	if len(rs) != 4 {
+	if len(rs) != 5 {
 		t.Fatalf("rows: %d", len(rs))
 	}
-	for i, want := range []string{"Rank1 Newer", "Rank1 Older", "Rank2", "Rank3"} {
+	for i, want := range []string{"Nov10 no basis", "Nov7 no basis", "Nov5 basis", "Nov1 basis", "Undated"} {
 		if got := field(rs[i], "title"); got != want {
 			t.Errorf("row[%d]: got %q, want %q", i, got, want)
 		}

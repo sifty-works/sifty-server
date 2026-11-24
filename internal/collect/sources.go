@@ -2,6 +2,7 @@ package collect
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -12,6 +13,8 @@ import (
 	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/server"
 )
+
+const maxAgeMonths = 1200
 
 type SourceStatus struct {
 	Text      string `json:"text"`
@@ -27,9 +30,10 @@ type Source struct {
 }
 
 type SourcesResp struct {
-	Sources  []Source `json:"sources"`
-	Auto     bool     `json:"auto"`
-	Interval string   `json:"interval"`
+	Sources      []Source `json:"sources"`
+	Auto         bool     `json:"auto"`
+	Interval     string   `json:"interval"`
+	MaxAgeMonths *int     `json:"max_age_months"`
 }
 
 type addSourceReq struct {
@@ -47,8 +51,9 @@ type removeSourceReq struct {
 }
 
 type scheduleReq struct {
-	Auto     bool   `json:"auto"`
-	Interval string `json:"interval"`
+	Auto         bool     `json:"auto"`
+	Interval     string   `json:"interval"`
+	MaxAgeMonths *float64 `json:"max_age_months"`
 }
 
 type collectReq struct {
@@ -174,9 +179,17 @@ func (c *Collector) RegisterRoutes(mux *http.ServeMux) {
 		if err != nil {
 			return SourcesResp{}, apperr.Invalid{Message: req.Interval}
 		}
+		months := 0
+		if m := req.MaxAgeMonths; m != nil {
+			if *m < 1 || *m != math.Trunc(*m) || *m > maxAgeMonths {
+				return SourcesResp{}, apperr.Invalid{Message: "The age limit is a whole number of months, from 1 to 1200, or empty for no limit."}
+			}
+			months = int(*m)
+		}
 		return c.updateSources(func(cfg *config.Config) error {
 			cfg.Collection.Auto = req.Auto
 			cfg.Collection.Interval = config.Duration(d)
+			cfg.Collection.MaxAgeMonths = months
 			return nil
 		})
 	})
@@ -208,10 +221,15 @@ func (c *Collector) buildSourcesResp() SourcesResp {
 			Status:  c.buildSourceStatus(key),
 		}
 	}
+	var maxAge *int
+	if m := cfg.Collection.MaxAgeMonths; m > 0 {
+		maxAge = &m
+	}
 	return SourcesResp{
-		Sources:  sources,
-		Auto:     cfg.Collection.Auto,
-		Interval: cfg.Collection.Interval.String(),
+		Sources:      sources,
+		Auto:         cfg.Collection.Auto,
+		Interval:     cfg.Collection.Interval.String(),
+		MaxAgeMonths: maxAge,
 	}
 }
 

@@ -56,7 +56,7 @@ Structured fields the source states, the location, the tags and labelled lines (
 - Empty states of the counter: "Analysing requirements…", "Not analysed yet", "No requirements stated", "Not checked yet" (no requirement is decided), "Full job description is unavailable".
 - A result is out of date when the profile's goals, the work authorizations, the weights, the rates or the scoring version changed, or the vacancy's text changed. It is dimmed, still showing its old number, until the new one is ready, and the Fit filter counts it as Not scored. A change of the vacancy's title, location, tags or stated fields without a change of its text is not dimmed; its result is recomputed after the collection run that brought the change.
 - **Best fit** sorts by Fits you, highest first, then by id; dimmed results and vacancies without a number come after the current ones, by id. It is the default sort of Inbox and Shortlist.
-- **Newest** sorts by publication date in three ranks: a date with its basis, a date without one, no date.
+- **Newest** sorts by publication date, newest first; vacancies with no publication date come last, by when they were first seen, then by id.
 - The chosen sort is remembered in the browser (see `inbox.md`).
 
 ## On the vacancy page

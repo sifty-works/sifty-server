@@ -21,7 +21,7 @@ type ListReq struct {
 	Profile    int64  `json:"profile"`
 	Q          string `json:"q"`
 	Industries string `json:"industries,omitempty"`
-	Collected  string `json:"collected,omitempty"`
+	Published  string `json:"published,omitempty"`
 	Remote     bool   `json:"remote,omitempty"`
 	Leadership bool   `json:"leadership,omitempty"`
 	Sources    string `json:"sources,omitempty"`
@@ -152,16 +152,16 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		}
 		industries := splitComma(req.Industries)
 		sources := splitComma(req.Sources)
-		collected := 0
-		switch req.Collected {
+		published := 0
+		switch req.Published {
 		case "7":
-			collected = 7
+			published = 7
 		case "30":
-			collected = 30
+			published = 30
 		}
 		unread := req.Unread && stage != "applied" && stage != "dismissed"
 		f := Filters{
-			Collected:  collected,
+			Published:  published,
 			Remote:     req.Remote,
 			Leadership: req.Leadership,
 			Sources:    sources,
@@ -179,7 +179,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 			srcCounts = []SourceCount{}
 		}
 		hasFilters := req.Q != "" || len(industries) > 0 || len(sources) > 0 ||
-			collected != 0 || req.Remote || req.Leadership || unread || len(f.Fit) > 0
+			published != 0 || req.Remote || req.Leadership || unread || len(f.Fit) > 0
 		return ListResp{
 			Rows:           rows,
 			Counts:         counts,

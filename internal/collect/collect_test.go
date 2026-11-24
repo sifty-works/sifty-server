@@ -934,3 +934,134 @@ func TestCollect_PostingWithoutEmployerIsStoredOnlyWhenAnEmployerIsFound(t *test
 		})
 	}
 }
+
+const ageListURL = "https://feeds.example.com/age.xml"
+
+var ageURLs = struct{ old, recent, undated string }{
+	"https://feeds.example.com/jobs/old", "https://feeds.example.com/jobs/recent", "https://feeds.example.com/jobs/undated",
+}
+
+func ageFeed(oldTitle string) fetchtest.MapEntry {
+	item := func(title, link, date string) string {
+		if date != "" {
+			date = "<pubDate>" + date + "</pubDate>"
+		}
+		return `<item><title>` + title + `</title><company>Northwind</company><link>` + link + `</link>` + date + `</item>`
+	}
+	body := `<rss version="2.0"><channel>` +
+		item(oldTitle, ageURLs.old, "Tue, 10 Jun 2025 09:00:00 +0000") +
+		item("Recent Role", ageURLs.recent, "Sat, 20 Dec 2025 09:00:00 +0000") +
+		item("Undated Role", ageURLs.undated, "") +
+		`</channel></rss>`
+	return fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "application/xml", Body: []byte(body)}}
+}
+
+func ageEnv(t *testing.T) *env {
+	t.Helper()
+	e := newEnv(t)
+	e.fm.Set(ageListURL, ageFeed("Old Role"))
+	for _, u := range []string{ageURLs.old, ageURLs.recent, ageURLs.undated} {
+		e.fm.Set(u, fetchtest.MapEntry{Err: fetch.ErrNotFound})
+	}
+	addSource(t, e, ageListURL)
+	return e
+}
+
+func (e *env) setAgeLimit(t *testing.T, months any) {
+	t.Helper()
+	if _, status := e.mutate(t, "PUT", "/api/sources/schedule", map[string]any{"auto": true, "interval": "3h", "max_age_months": months}); status != 200 {
+		t.Fatalf("set age limit %v: status %d", months, status)
+	}
+}
+
+func (e *env) storedURLs(t *testing.T) map[string]bool {
+	t.Helper()
+	rows, err := e.db.Query(`SELECT url FROM vacancy`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var u string
+		rows.Scan(&u)
+		out[u] = true
+	}
+	return out
+}
+
+func TestCollect_PostingOlderThanTheAgeLimitIsNotStoredAndItsPageIsNotRequested(t *testing.T) {
+	e := ageEnv(t)
+	e.setAgeLimit(t, 3)
+	runCollect(t, e)
+
+	stored := e.storedURLs(t)
+	if stored[ageURLs.old] || !stored[ageURLs.recent] || !stored[ageURLs.undated] {
+		t.Errorf("stored: %v, want the recent and the undated posting only", stored)
+	}
+	for _, r := range e.fm.Requests() {
+		if r == ageURLs.old {
+			t.Errorf("the page of the old posting was requested")
+		}
+	}
+	if n := len(e.fm.Requests()); n != 3 {
+		t.Errorf("requests: got %d, want 3 (listing and two pages)", n)
+	}
+}
+
+func TestCollect_AgeLimitLeavesStoredVacanciesUpdatedAndLeavesNoTombstone(t *testing.T) {
+	e := ageEnv(t)
+	runCollect(t, e)
+	e.fm.Set(ageListURL, ageFeed("Old Role Renamed"))
+	e.setAgeLimit(t, 1)
+	runCollect(t, e)
+	if n := len(e.storedURLs(t)); n != 3 {
+		t.Errorf("after tightening the limit: stored %d, want 3", n)
+	}
+	var title string
+	e.db.QueryRow(`SELECT title FROM vacancy WHERE url = ?`, ageURLs.old).Scan(&title)
+	if title != "Old Role Renamed" {
+		t.Errorf("a vacancy already stored stopped being updated: title %q", title)
+	}
+
+	fresh := ageEnv(t)
+	fresh.setAgeLimit(t, 1)
+	runCollect(t, fresh)
+	if n := len(fresh.storedURLs(t)); n != 2 {
+		t.Fatalf("with the limit: stored %d, want 2", n)
+	}
+	fresh.setAgeLimit(t, nil)
+	runCollect(t, fresh)
+	if n := len(fresh.storedURLs(t)); n != 3 {
+		t.Errorf("after the limit is cleared: stored %d, want 3", n)
+	}
+}
+
+func TestPutScheduleAgeLimit(t *testing.T) {
+	e := newEnv(t)
+	put := func(months any) (map[string]any, int) {
+		return e.mutate(t, "PUT", "/api/sources/schedule", map[string]any{"auto": true, "interval": "3h", "max_age_months": months})
+	}
+	if body, status := put(6); status != 200 || body["max_age_months"] != float64(6) {
+		t.Fatalf("limit 6: status %d body %v", status, body)
+	}
+	if got := e.get(t, "/api/sources")["max_age_months"]; got != float64(6) {
+		t.Errorf("GET after PUT: %v, want 6", got)
+	}
+	for _, bad := range []any{0, -2, 1.5, 1201} {
+		body, status := put(bad)
+		if status != 422 {
+			t.Errorf("limit %v: status %d, want 422", bad, status)
+			continue
+		}
+		if !strings.Contains(fmt.Sprint(body["error"]), "whole number of months") {
+			t.Errorf("limit %v: error %v", bad, body["error"])
+		}
+	}
+	if got := e.get(t, "/api/sources")["max_age_months"]; got != float64(6) {
+		t.Errorf("refused values changed the limit: %v", got)
+	}
+	if body, status := put(nil); status != 200 || body["max_age_months"] != nil {
+		t.Errorf("empty limit: status %d body %v", status, body)
+	}
+}
