@@ -66,7 +66,7 @@ Diagnostic panels (questionnaire coverage, the technical record of form reading,
 | Document analysis | Analyze or Retry (see `profiles.md`) | the document's state | 1 per chunk |
 | Provider check | "Check" in Settings (see `settings-and-data.md`) | the answer of the check | 1 |
 
-Settings › Background work lists what runs, what waits and what failed:
+Settings › Monitor › Background work lists what runs, what waits and what failed:
 
 - **Running:** each running job with what it is (Collection, Reading vacancy text, Recomputing Fits you, Shortlist check, Document analysis, Text retention), its subject in words (the vacancy's title and company, or the document's name; none for collection, recomputation and retention), its progress when it has one, and since when.
 - **Waiting:** the queued jobs of each kind with their count. When a kind waits for something other than its turn, the reason stands next to it: background model work is paused; the daily limit of model calls is reached, until a time; the provider is held, until a time, because it did not answer or kept giving answers that could not be used; the provider is paid and "Allow paid bulk work" is off; or the job waits to try again at a time.

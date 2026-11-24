@@ -40,7 +40,7 @@ A settings file or a site description file that cannot be parsed or fails valida
   - "Allow paid bulk work", off by default;
   - a switch that pauses background model work, and a daily limit of background model calls.
 - **Web search:** the provider used to find employers' pages (Tavily, Brave, DuckDuckGo, or none), with its key taken from the environment or the secrets file. With none, the employer search uses only applicant tracking boards.
-- **Background work:** what is running, what is waiting and why, and what failed in the last 7 days, each failure with its reason as a sentence (see `application.md`).
+- **Monitor › Background work:** what is running, what is waiting and why, and what failed in the last 7 days, each failure with its reason as a sentence (see `application.md`).
 - **Advanced:** the settings file in a text editor, next to the forms. Saving checks the file first and keeps a backup of the saved content in the data folder; the last ten backups are kept, and the editor names the folder where they are. A change made in a form keeps the comments of the settings file.
 
 A change applies at once without a restart, except a change of the port. A change that affects results (weights) starts a background recomputation and the answer returns at once.
@@ -81,7 +81,7 @@ A change applies at once without a restart, except a change of the port. A chang
 
 - Copying templates by hand before the first start, the four configuration files that had to exist, and the separate frontend and worker folders that had to sit next to the program.
 - The candidate configuration file and the Settings › Candidate context screen (see `profiles.md`).
-- The assessment queue page with its switch and its table (see `assessment.md`); the Background work page replaces it.
+- The assessment queue page with its switch and its table (see `assessment.md`); Monitor › Background work replaces it.
 - The "Extraction" stage label that promised a fallback no code used, the hidden matching stage, and settings that were read and never applied.
 - The order of background work following the sort.
 - Prompt copies in the configuration folder that nothing read.
