@@ -2,7 +2,6 @@ package candidate
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,7 +12,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/db"
@@ -134,108 +132,6 @@ type QAPatchReq struct {
 
 type QADeleteReq struct {
 	ID int64 `json:"id"`
-}
-
-func LoadMe(ctx context.Context, database *db.DB) (MeData, error) {
-	var dataJSON string
-	err := database.QueryRowContext(ctx, `SELECT data FROM me WHERE id=1`).Scan(&dataJSON)
-	if err == sql.ErrNoRows {
-		return MeData{}, nil
-	}
-	if err != nil {
-		return MeData{}, fmt.Errorf("candidate: load me: %w", err)
-	}
-	var me MeData
-	if err := json.Unmarshal([]byte(dataJSON), &me); err != nil {
-		return MeData{}, fmt.Errorf("candidate: decode me: %w", err)
-	}
-	return me, nil
-}
-
-func saveMeData(ctx context.Context, database execer, me MeData) error {
-	NormalizeMeData(&me)
-	data, err := json.Marshal(me)
-	if err != nil {
-		return fmt.Errorf("candidate: encode me: %w", err)
-	}
-	_, err = database.ExecContext(ctx, `INSERT OR REPLACE INTO me (id, data) VALUES (1, ?)`, string(data))
-	if err != nil {
-		return fmt.Errorf("candidate: save me: %w", err)
-	}
-	return nil
-}
-
-func activeProfileID(ctx context.Context, database *db.DB) (int64, error) {
-	var v string
-	err := database.QueryRowContext(ctx, `SELECT value FROM settings WHERE key='active_profile'`).Scan(&v)
-	if err == nil {
-		id, parseErr := strconv.ParseInt(v, 10, 64)
-		if parseErr == nil && id > 0 {
-			var check int64
-			if chkErr := database.QueryRowContext(ctx, `SELECT id FROM profile WHERE id=?`, id).Scan(&check); chkErr == nil {
-				return check, nil
-			}
-		}
-	}
-	var id int64
-	if dbErr := database.QueryRowContext(ctx, `SELECT id FROM profile ORDER BY id LIMIT 1`).Scan(&id); dbErr != nil {
-		if dbErr == sql.ErrNoRows {
-			return 0, apperr.NotFound{Message: "Profile not found."}
-		}
-		return 0, fmt.Errorf("candidate: active profile: %w", dbErr)
-	}
-	return id, nil
-}
-
-func setActiveProfile(ctx context.Context, database *db.DB, id int64) error {
-	_, err := database.ExecContext(ctx,
-		`INSERT OR REPLACE INTO settings (key, value) VALUES ('active_profile', ?)`,
-		strconv.FormatInt(id, 10))
-	if err != nil {
-		return fmt.Errorf("candidate: set active profile: %w", err)
-	}
-	return nil
-}
-
-func loadProfileRow(ctx context.Context, database *db.DB, id int64) (ProfileData, error) {
-	var dataJSON string
-	err := database.QueryRowContext(ctx, `SELECT data FROM profile WHERE id=?`, id).Scan(&dataJSON)
-	if err == sql.ErrNoRows {
-		return ProfileData{}, apperr.NotFound{Message: "Profile not found."}
-	}
-	if err != nil {
-		return ProfileData{}, fmt.Errorf("candidate: load profile %d: %w", id, err)
-	}
-	var pd ProfileData
-	if err := json.Unmarshal([]byte(dataJSON), &pd); err != nil {
-		return ProfileData{}, fmt.Errorf("candidate: decode profile %d: %w", id, err)
-	}
-	return pd, nil
-}
-
-func saveProfileRow(ctx context.Context, database execer, id int64, pd ProfileData) error {
-	NormalizeProfileData(&pd)
-	data, err := json.Marshal(pd)
-	if err != nil {
-		return fmt.Errorf("candidate: encode profile %d: %w", id, err)
-	}
-	_, err = database.ExecContext(ctx, `UPDATE profile SET data=? WHERE id=?`, string(data), id)
-	if err != nil {
-		return fmt.Errorf("candidate: save profile %d: %w", id, err)
-	}
-	return nil
-}
-
-func firstProfileID(ctx context.Context, database *db.DB) (int64, error) {
-	var id int64
-	err := database.QueryRowContext(ctx, `SELECT id FROM profile ORDER BY id LIMIT 1`).Scan(&id)
-	if err == sql.ErrNoRows {
-		return 0, apperr.NotFound{Message: "Profile not found."}
-	}
-	if err != nil {
-		return 0, fmt.Errorf("candidate: first profile: %w", err)
-	}
-	return id, nil
 }
 
 func buildHeadline(pd ProfileData, me MeData) string {
@@ -360,7 +256,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 		if errs := ValidateMeData(updated); len(errs) > 0 {
 			return MeData{}, apperr.Invalid{Message: strings.Join(errs, "; ")}
 		}
-		if err := saveMeData(ctx, database, updated); err != nil {
+		if err := SaveMe(ctx, database, updated); err != nil {
 			return MeData{}, err
 		}
 		notify()
@@ -377,7 +273,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 		if err != nil {
 			return ProfileDetailResp{}, err
 		}
-		own, err := loadProfileRow(ctx, database, id)
+		own, err := LoadProfileData(ctx, database, id)
 		if err != nil {
 			return ProfileDetailResp{}, err
 		}
@@ -390,20 +286,8 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 		if name == "" {
 			return ProfileDetailResp{}, apperr.Invalid{Message: "Name must not be empty."}
 		}
-		pd := ProfileData{Name: name}
-		data, err := json.Marshal(pd)
+		newID, pd, err := createProfile(ctx, database, name)
 		if err != nil {
-			return ProfileDetailResp{}, fmt.Errorf("candidate: encode new profile: %w", err)
-		}
-		res, err := database.ExecContext(ctx, `INSERT INTO profile (data) VALUES (?)`, string(data))
-		if err != nil {
-			return ProfileDetailResp{}, fmt.Errorf("candidate: create profile: %w", err)
-		}
-		newID, err := res.LastInsertId()
-		if err != nil {
-			return ProfileDetailResp{}, fmt.Errorf("candidate: new profile id: %w", err)
-		}
-		if err := setActiveProfile(ctx, database, newID); err != nil {
 			return ProfileDetailResp{}, err
 		}
 		notify()
@@ -416,7 +300,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 		if err != nil {
 			return ProfileDetailResp{}, err
 		}
-		own, err := loadProfileRow(ctx, database, id)
+		own, err := LoadProfileData(ctx, database, id)
 		if err != nil {
 			return ProfileDetailResp{}, err
 		}
@@ -425,7 +309,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 		}
 		firstID, _ := firstProfileID(ctx, database)
 		if firstID != id {
-			if firstPD, fErr := loadProfileRow(ctx, database, firstID); fErr == nil {
+			if firstPD, fErr := LoadProfileData(ctx, database, firstID); fErr == nil {
 				clearInheritedUnchanged(&patch, own, firstPD)
 			}
 		}
@@ -449,36 +333,8 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 		if err != nil {
 			return ProfileListResp{}, err
 		}
-		firstID, err := firstProfileID(ctx, database)
-		if err != nil {
+		if err := deleteProfile(ctx, database, id); err != nil {
 			return ProfileListResp{}, err
-		}
-		if id == firstID {
-			return ProfileListResp{}, apperr.Invalid{Message: "The first profile cannot be deleted."}
-		}
-		if _, err := loadProfileRow(ctx, database, id); err != nil {
-			return ProfileListResp{}, err
-		}
-		tx, err := database.BeginTx(ctx, nil)
-		if err != nil {
-			return ProfileListResp{}, fmt.Errorf("candidate: delete profile tx: %w", err)
-		}
-		defer tx.Rollback()
-		if _, err := tx.ExecContext(ctx, `DELETE FROM exclusion WHERE profile_id=?`, id); err != nil {
-			return ProfileListResp{}, fmt.Errorf("candidate: delete profile exclusions: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM decision WHERE profile=?`, id); err != nil {
-			return ProfileListResp{}, fmt.Errorf("candidate: delete profile decisions: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM profile WHERE id=?`, id); err != nil {
-			return ProfileListResp{}, fmt.Errorf("candidate: delete profile: %w", err)
-		}
-		if err := tx.Commit(); err != nil {
-			return ProfileListResp{}, fmt.Errorf("candidate: delete profile commit: %w", err)
-		}
-		activeID, _ := activeProfileID(ctx, database)
-		if activeID == 0 || activeID == id {
-			setActiveProfile(ctx, database, firstID)
 		}
 		return listProfiles(ctx, database)
 	})
@@ -488,7 +344,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 		if req.ID == 0 {
 			return ProfileListResp{}, apperr.Invalid{Message: "ID is required."}
 		}
-		if _, err := loadProfileRow(ctx, database, req.ID); err != nil {
+		if _, err := LoadProfileData(ctx, database, req.ID); err != nil {
 			return ProfileListResp{}, err
 		}
 		if err := setActiveProfile(ctx, database, req.ID); err != nil {
@@ -559,100 +415,19 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 	})
 
 	server.Handle(mux, "GET /api/qa", logger, func(r *http.Request, _ struct{}) (QAListResp, error) {
-		ctx := r.Context()
-		rows, err := database.QueryContext(ctx,
-			`SELECT id, question, answer, created_at, updated_at FROM qa ORDER BY id`)
-		if err != nil {
-			return QAListResp{}, fmt.Errorf("candidate: list qa: %w", err)
-		}
-		defer rows.Close()
-		var items []QAItem
-		for rows.Next() {
-			var it QAItem
-			if err := rows.Scan(&it.ID, &it.Question, &it.Answer, &it.CreatedAt, &it.UpdatedAt); err != nil {
-				return QAListResp{}, fmt.Errorf("candidate: scan qa: %w", err)
-			}
-			items = append(items, it)
-		}
-		if err := rows.Err(); err != nil {
-			return QAListResp{}, fmt.Errorf("candidate: list qa: %w", err)
-		}
-		if items == nil {
-			items = []QAItem{}
-		}
-		return QAListResp{Items: items}, nil
+		return listQA(r.Context(), database)
 	})
 
 	server.Handle(mux, "POST /api/qa", logger, func(r *http.Request, req QACreateReq) (QAItem, error) {
-		ctx := r.Context()
-		q := strings.TrimSpace(req.Question)
-		if q == "" {
-			return QAItem{}, apperr.Invalid{Message: "Question must not be empty."}
-		}
-		a := strings.TrimSpace(req.Answer)
-		now := time.Now().UTC().Format(time.RFC3339)
-		res, err := database.ExecContext(ctx,
-			`INSERT INTO qa (question, answer, created_at, updated_at) VALUES (?, ?, ?, ?)`,
-			q, a, now, now)
-		if err != nil {
-			return QAItem{}, fmt.Errorf("candidate: create qa: %w", err)
-		}
-		id, err := res.LastInsertId()
-		if err != nil {
-			return QAItem{}, fmt.Errorf("candidate: qa id: %w", err)
-		}
-		return QAItem{ID: id, Question: q, Answer: a, CreatedAt: now, UpdatedAt: now}, nil
+		return createQA(r.Context(), database, req)
 	})
 
 	server.Handle(mux, "PATCH /api/qa", logger, func(r *http.Request, req QAPatchReq) (QAItem, error) {
-		ctx := r.Context()
-		if req.ID == 0 {
-			return QAItem{}, apperr.Invalid{Message: "ID is required."}
-		}
-		var current QAItem
-		err := database.QueryRowContext(ctx,
-			`SELECT id, question, answer, created_at, updated_at FROM qa WHERE id=?`, req.ID).
-			Scan(&current.ID, &current.Question, &current.Answer, &current.CreatedAt, &current.UpdatedAt)
-		if err == sql.ErrNoRows {
-			return QAItem{}, apperr.NotFound{Message: "Q&A entry not found."}
-		}
-		if err != nil {
-			return QAItem{}, fmt.Errorf("candidate: load qa: %w", err)
-		}
-		if req.Question != nil {
-			current.Question = strings.TrimSpace(*req.Question)
-		}
-		if req.Answer != nil {
-			current.Answer = strings.TrimSpace(*req.Answer)
-		}
-		if strings.TrimSpace(current.Question) == "" {
-			return QAItem{}, apperr.Invalid{Message: "Question must not be empty."}
-		}
-		now := time.Now().UTC().Format(time.RFC3339)
-		current.UpdatedAt = now
-		_, err = database.ExecContext(ctx,
-			`UPDATE qa SET question=?, answer=?, updated_at=? WHERE id=?`,
-			current.Question, current.Answer, now, current.ID)
-		if err != nil {
-			return QAItem{}, fmt.Errorf("candidate: update qa: %w", err)
-		}
-		return current, nil
+		return patchQA(r.Context(), database, req)
 	})
 
 	server.Handle(mux, "DELETE /api/qa", logger, func(r *http.Request, req QADeleteReq) (struct{}, error) {
-		ctx := r.Context()
-		if req.ID == 0 {
-			return struct{}{}, apperr.Invalid{Message: "ID is required."}
-		}
-		res, err := database.ExecContext(ctx, `DELETE FROM qa WHERE id=?`, req.ID)
-		if err != nil {
-			return struct{}{}, fmt.Errorf("candidate: delete qa: %w", err)
-		}
-		n, _ := res.RowsAffected()
-		if n == 0 {
-			return struct{}{}, apperr.NotFound{Message: "Q&A entry not found."}
-		}
-		return struct{}{}, nil
+		return struct{}{}, removeQA(r.Context(), database, req.ID)
 	})
 
 	server.Handle(mux, "GET /api/reference", logger, func(r *http.Request, _ struct{}) (ReferenceResp, error) {
@@ -813,7 +588,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 		if row.State == "unavailable" || strings.TrimSpace(row.Text) == "" {
 			return DocumentItem{}, apperr.Invalid{Message: "This document does not have text available for analysis."}
 		}
-		if err := updateDocumentAnalysing(ctx, database, id); err != nil {
+		if err := updateDocumentState(ctx, database, id, "analysing", ""); err != nil {
 			return DocumentItem{}, fmt.Errorf("candidate: set analysing: %w", err)
 		}
 		if enqueue != nil {
@@ -834,66 +609,6 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 	server.Handle(mux, "POST /api/proposals/{id}/reject", logger, RejectProposalHandler(database))
 }
 
-func listProfiles(ctx context.Context, database *db.DB) (ProfileListResp, error) {
-	activeID, _ := activeProfileID(ctx, database)
-	rows, err := database.QueryContext(ctx, `SELECT id, data FROM profile ORDER BY id`)
-	if err != nil {
-		return ProfileListResp{}, fmt.Errorf("candidate: list profiles: %w", err)
-	}
-	defer rows.Close()
-	var items []ProfileListItem
-	for rows.Next() {
-		var id int64
-		var dataJSON string
-		if err := rows.Scan(&id, &dataJSON); err != nil {
-			return ProfileListResp{}, err
-		}
-		var pd ProfileData
-		json.Unmarshal([]byte(dataJSON), &pd)
-		items = append(items, ProfileListItem{ID: id, Name: pd.Name, Active: id == activeID})
-	}
-	if err := rows.Err(); err != nil {
-		return ProfileListResp{}, fmt.Errorf("candidate: list profiles: %w", err)
-	}
-	if items == nil {
-		items = []ProfileListItem{}
-	}
-	return ProfileListResp{Profiles: items}, nil
-}
-
-func loadProfileDetail(ctx context.Context, database *db.DB, id int64, own ProfileData) (ProfileDetailResp, error) {
-	firstID, err := firstProfileID(ctx, database)
-	if err != nil {
-		return ProfileDetailResp{}, err
-	}
-	firstPD, err := loadProfileRow(ctx, database, firstID)
-	if err != nil {
-		return ProfileDetailResp{}, err
-	}
-	activeID, _ := activeProfileID(ctx, database)
-	me, _ := LoadMe(ctx, database)
-	effective := own
-	var inherited map[string]InheritedSource
-	if id != firstID {
-		effective = Effective(own, firstPD)
-		for _, f := range InheritedFields(own, firstPD) {
-			if inherited == nil {
-				inherited = make(map[string]InheritedSource)
-			}
-			inherited[f] = InheritedSource{ProfileID: firstID, ProfileName: firstPD.Name}
-		}
-	}
-	return ProfileDetailResp{
-		ID:        id,
-		Name:      own.Name,
-		Active:    id == activeID,
-		Own:       own,
-		Effective: effective,
-		Inherited: inherited,
-		Headline:  buildHeadline(own, me),
-	}, nil
-}
-
 func parseProfileID(r *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -910,16 +625,8 @@ func parseDocumentID(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-func ActiveProfileID(ctx context.Context, database *db.DB) (int64, error) {
-	return activeProfileID(ctx, database)
-}
-
-func SaveMe(ctx context.Context, database *db.DB, me MeData) error {
-	return saveMeData(ctx, database, me)
-}
-
 func EffectiveProfile(ctx context.Context, database *db.DB, profileID int64) (ProfileData, error) {
-	pd, err := loadProfileRow(ctx, database, profileID)
+	pd, err := LoadProfileData(ctx, database, profileID)
 	if err != nil {
 		return ProfileData{}, err
 	}
@@ -927,7 +634,7 @@ func EffectiveProfile(ctx context.Context, database *db.DB, profileID int64) (Pr
 	if err != nil || firstID == profileID {
 		return pd, err
 	}
-	base, err := loadProfileRow(ctx, database, firstID)
+	base, err := LoadProfileData(ctx, database, firstID)
 	if err != nil {
 		return ProfileData{}, err
 	}

@@ -8,40 +8,16 @@ import (
 	"github.com/sifty-works/sifty-server/internal/db"
 )
 
-func EvidenceDocuments(ctx context.Context, database *db.DB) ([]string, error) {
-	rows, err := database.QueryContext(ctx, `SELECT text FROM document WHERE evidence=1 AND state='ready' ORDER BY id`)
-	if err != nil {
-		return nil, fmt.Errorf("candidate: evidence documents: %w", err)
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var text string
-		if err := rows.Scan(&text); err != nil {
-			return nil, fmt.Errorf("candidate: evidence documents: %w", err)
-		}
-		out = append(out, text)
-	}
-	return out, rows.Err()
-}
-
 func EvidenceSignature(ctx context.Context, database *db.DB) (string, error) {
-	rows, err := database.QueryContext(ctx, `SELECT id, state, char_count FROM document WHERE evidence=1 ORDER BY id`)
+	rows, err := selectEvidenceRows(ctx, database)
 	if err != nil {
-		return "", fmt.Errorf("candidate: evidence signature: %w", err)
+		return "", err
 	}
-	defer rows.Close()
 	var parts []string
-	for rows.Next() {
-		var id int64
-		var state string
-		var chars int
-		if err := rows.Scan(&id, &state, &chars); err != nil {
-			return "", fmt.Errorf("candidate: evidence signature: %w", err)
-		}
-		parts = append(parts, fmt.Sprintf("%d:%s:%d", id, state, chars))
+	for _, r := range rows {
+		parts = append(parts, fmt.Sprintf("%d:%s:%d", r.id, r.state, r.chars))
 	}
-	return strings.Join(parts, ","), rows.Err()
+	return strings.Join(parts, ","), nil
 }
 
 func join(sep string, parts ...string) string {

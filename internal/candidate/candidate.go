@@ -1,8 +1,14 @@
 package candidate
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
+	"time"
 
+	"github.com/sifty-works/sifty-server/internal/apperr"
+	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/listing"
 )
 
@@ -234,4 +240,205 @@ func termClause(term string) (string, []any) {
 	}
 	matchArg := `{title tags text}: "` + strings.ReplaceAll(norm, `"`, `""`) + `"`
 	return `v.id IN (SELECT rowid FROM vacancy_fts WHERE vacancy_fts MATCH ?)`, []any{matchArg}
+}
+
+func LoadMe(ctx context.Context, database *db.DB) (MeData, error) {
+	dataJSON, found, err := selectMe(ctx, database)
+	if err != nil {
+		return MeData{}, err
+	}
+	if !found {
+		return MeData{}, nil
+	}
+	var me MeData
+	if err := json.Unmarshal([]byte(dataJSON), &me); err != nil {
+		return MeData{}, fmt.Errorf("candidate: decode me: %w", err)
+	}
+	return me, nil
+}
+
+func SaveMe(ctx context.Context, x execer, me MeData) error {
+	NormalizeMeData(&me)
+	data, err := json.Marshal(me)
+	if err != nil {
+		return fmt.Errorf("candidate: encode me: %w", err)
+	}
+	return upsertMe(ctx, x, string(data))
+}
+
+func ActiveProfileID(ctx context.Context, database *db.DB) (int64, error) {
+	if id, ok := selectActiveProfileSetting(ctx, database); ok {
+		return id, nil
+	}
+	return firstProfileID(ctx, database)
+}
+
+func LoadProfileData(ctx context.Context, database *db.DB, id int64) (ProfileData, error) {
+	dataJSON, err := selectProfileData(ctx, database, id)
+	if err != nil {
+		return ProfileData{}, err
+	}
+	var pd ProfileData
+	if err := json.Unmarshal([]byte(dataJSON), &pd); err != nil {
+		return ProfileData{}, fmt.Errorf("candidate: decode profile %d: %w", id, err)
+	}
+	return pd, nil
+}
+
+func saveProfileRow(ctx context.Context, x execer, id int64, pd ProfileData) error {
+	NormalizeProfileData(&pd)
+	data, err := json.Marshal(pd)
+	if err != nil {
+		return fmt.Errorf("candidate: encode profile %d: %w", id, err)
+	}
+	return updateProfileData(ctx, x, id, string(data))
+}
+
+func createProfile(ctx context.Context, database *db.DB, name string) (int64, ProfileData, error) {
+	pd := ProfileData{Name: name}
+	data, err := json.Marshal(pd)
+	if err != nil {
+		return 0, ProfileData{}, fmt.Errorf("candidate: encode new profile: %w", err)
+	}
+	id, err := insertProfile(ctx, database, string(data))
+	if err != nil {
+		return 0, ProfileData{}, err
+	}
+	if err := setActiveProfile(ctx, database, id); err != nil {
+		return 0, ProfileData{}, err
+	}
+	return id, pd, nil
+}
+
+func deleteProfile(ctx context.Context, database *db.DB, id int64) error {
+	firstID, err := firstProfileID(ctx, database)
+	if err != nil {
+		return err
+	}
+	if id == firstID {
+		return apperr.Invalid{Message: "The first profile cannot be deleted."}
+	}
+	if _, err := LoadProfileData(ctx, database, id); err != nil {
+		return err
+	}
+	tx, err := beginTx(ctx, database)
+	if err != nil {
+		return fmt.Errorf("candidate: delete profile tx: %w", err)
+	}
+	defer tx.Rollback()
+	if err := deleteProfileCascade(ctx, tx, id); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("candidate: delete profile commit: %w", err)
+	}
+	activeID, _ := ActiveProfileID(ctx, database)
+	if activeID == 0 || activeID == id {
+		setActiveProfile(ctx, database, firstID)
+	}
+	return nil
+}
+
+func listProfiles(ctx context.Context, database *db.DB) (ProfileListResp, error) {
+	activeID, _ := ActiveProfileID(ctx, database)
+	rows, err := selectProfiles(ctx, database)
+	if err != nil {
+		return ProfileListResp{}, err
+	}
+	items := []ProfileListItem{}
+	for _, r := range rows {
+		var pd ProfileData
+		json.Unmarshal([]byte(r.data), &pd)
+		items = append(items, ProfileListItem{ID: r.id, Name: pd.Name, Active: r.id == activeID})
+	}
+	return ProfileListResp{Profiles: items}, nil
+}
+
+func loadProfileDetail(ctx context.Context, database *db.DB, id int64, own ProfileData) (ProfileDetailResp, error) {
+	firstID, err := firstProfileID(ctx, database)
+	if err != nil {
+		return ProfileDetailResp{}, err
+	}
+	firstPD, err := LoadProfileData(ctx, database, firstID)
+	if err != nil {
+		return ProfileDetailResp{}, err
+	}
+	activeID, _ := ActiveProfileID(ctx, database)
+	me, _ := LoadMe(ctx, database)
+	effective := own
+	var inherited map[string]InheritedSource
+	if id != firstID {
+		effective = Effective(own, firstPD)
+		for _, f := range InheritedFields(own, firstPD) {
+			if inherited == nil {
+				inherited = make(map[string]InheritedSource)
+			}
+			inherited[f] = InheritedSource{ProfileID: firstID, ProfileName: firstPD.Name}
+		}
+	}
+	return ProfileDetailResp{
+		ID:        id,
+		Name:      own.Name,
+		Active:    id == activeID,
+		Own:       own,
+		Effective: effective,
+		Inherited: inherited,
+		Headline:  buildHeadline(own, me),
+	}, nil
+}
+
+func listQA(ctx context.Context, database *db.DB) (QAListResp, error) {
+	items, err := selectQAs(ctx, database)
+	if err != nil {
+		return QAListResp{}, err
+	}
+	if items == nil {
+		items = []QAItem{}
+	}
+	return QAListResp{Items: items}, nil
+}
+
+func createQA(ctx context.Context, database *db.DB, req QACreateReq) (QAItem, error) {
+	q := strings.TrimSpace(req.Question)
+	if q == "" {
+		return QAItem{}, apperr.Invalid{Message: "Question must not be empty."}
+	}
+	a := strings.TrimSpace(req.Answer)
+	now := time.Now().UTC().Format(time.RFC3339)
+	id, err := insertQA(ctx, database, q, a, now)
+	if err != nil {
+		return QAItem{}, err
+	}
+	return QAItem{ID: id, Question: q, Answer: a, CreatedAt: now, UpdatedAt: now}, nil
+}
+
+func patchQA(ctx context.Context, database *db.DB, req QAPatchReq) (QAItem, error) {
+	if req.ID == 0 {
+		return QAItem{}, apperr.Invalid{Message: "ID is required."}
+	}
+	current, err := selectQA(ctx, database, req.ID)
+	if err != nil {
+		return QAItem{}, err
+	}
+	if req.Question != nil {
+		current.Question = strings.TrimSpace(*req.Question)
+	}
+	if req.Answer != nil {
+		current.Answer = strings.TrimSpace(*req.Answer)
+	}
+	if strings.TrimSpace(current.Question) == "" {
+		return QAItem{}, apperr.Invalid{Message: "Question must not be empty."}
+	}
+	current.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := updateQA(ctx, database, current); err != nil {
+		return QAItem{}, err
+	}
+	return current, nil
+}
+
+func removeQA(ctx context.Context, database *db.DB, id int64) error {
+	if id == 0 {
+		return apperr.Invalid{Message: "ID is required."}
+	}
+	return deleteQA(ctx, database, id)
 }

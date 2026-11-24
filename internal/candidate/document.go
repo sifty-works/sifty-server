@@ -2,7 +2,6 @@ package candidate
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -202,8 +201,8 @@ func refreshDocument(ctx context.Context, database *db.DB, filesDir string, read
 	if err := updateDocumentText(ctx, database, row.ID, text, state, reason); err != nil {
 		return DocumentItem{}, err
 	}
-	if _, err := database.ExecContext(ctx, `UPDATE job SET params=NULL WHERE kind='analyze_document' AND subject=?`, strconv.FormatInt(row.ID, 10)); err != nil {
-		return DocumentItem{}, fmt.Errorf("candidate: drop saved analysis: %w", err)
+	if err := clearAnalysisParams(ctx, database, strconv.FormatInt(row.ID, 10)); err != nil {
+		return DocumentItem{}, err
 	}
 	row, err = loadDocumentRow(ctx, database, row.ID)
 	if err != nil {
@@ -227,98 +226,47 @@ func rowToItem(row documentRow) DocumentItem {
 }
 
 func saveDocument(ctx context.Context, database *db.DB, filesDir, name, kind, address, key string, body []byte, text, state, stateReason string) (DocumentItem, error) {
-	charCount := len([]rune(text))
-	now := time.Now().UTC().Format(time.RFC3339)
-	res, err := database.ExecContext(ctx,
-		`INSERT INTO document (name, kind, state, state_reason, char_count, evidence, text, file_name, address, address_key, created_at) VALUES (?, ?, ?, ?, ?, 0, ?, '', ?, ?, ?)`,
-		name, kind, state, stateReason, charCount, text, address, key, now)
-	if err != nil {
-		return DocumentItem{}, fmt.Errorf("candidate: save document: %w", err)
+	row := documentRow{
+		Name: name, Kind: kind, State: state, StateReason: stateReason, CharCount: len([]rune(text)),
+		Text: text, Address: address, CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
-	id, err := res.LastInsertId()
+	id, err := insertDocument(ctx, database, row, key)
 	if err != nil {
-		return DocumentItem{}, fmt.Errorf("candidate: document id: %w", err)
+		return DocumentItem{}, err
 	}
+	row.ID = id
 	if len(body) > 0 {
 		if err := os.MkdirAll(filesDir, 0700); err != nil {
-			database.ExecContext(ctx, `DELETE FROM document WHERE id=?`, id)
+			deleteDocumentRow(ctx, database, id)
 			return DocumentItem{}, fmt.Errorf("candidate: document dir: %w", err)
 		}
 		fileName := fmt.Sprintf("doc_%d", id)
 		if err := os.WriteFile(filepath.Join(filesDir, fileName), body, 0600); err != nil {
-			database.ExecContext(ctx, `DELETE FROM document WHERE id=?`, id)
+			deleteDocumentRow(ctx, database, id)
 			return DocumentItem{}, fmt.Errorf("candidate: write document file: %w", err)
 		}
-		if _, err := database.ExecContext(ctx, `UPDATE document SET file_name=? WHERE id=?`, fileName, id); err != nil {
+		if err := updateDocumentFileName(ctx, database, id, fileName); err != nil {
 			os.Remove(filepath.Join(filesDir, fileName))
-			database.ExecContext(ctx, `DELETE FROM document WHERE id=?`, id)
-			return DocumentItem{}, fmt.Errorf("candidate: update document file_name: %w", err)
+			deleteDocumentRow(ctx, database, id)
+			return DocumentItem{}, err
 		}
 	}
-	return DocumentItem{
-		ID:          id,
-		Name:        name,
-		Kind:        kind,
-		CharCount:   charCount,
-		State:       state,
-		StateReason: stateReason,
-		Evidence:    false,
-		Address:     address,
-		CreatedAt:   now,
-	}, nil
-}
-
-func loadDocumentRow(ctx context.Context, database *db.DB, id int64) (documentRow, error) {
-	var row documentRow
-	var evidence int
-	err := database.QueryRowContext(ctx,
-		`SELECT id, name, kind, state, state_reason, char_count, evidence, text, file_name, address, created_at FROM document WHERE id=?`, id).
-		Scan(&row.ID, &row.Name, &row.Kind, &row.State, &row.StateReason, &row.CharCount, &evidence, &row.Text, &row.FileName, &row.Address, &row.CreatedAt)
-	if err == sql.ErrNoRows {
-		return documentRow{}, apperr.NotFound{Message: "Document not found."}
-	}
-	if err != nil {
-		return documentRow{}, fmt.Errorf("candidate: load document %d: %w", id, err)
-	}
-	row.Evidence = evidence != 0
-	return row, nil
+	return rowToItem(row), nil
 }
 
 func documentByKey(ctx context.Context, database *db.DB, key string) (DocumentItem, bool, error) {
-	var id int64
-	err := database.QueryRowContext(ctx, `SELECT id FROM document WHERE address_key=?`, key).Scan(&id)
-	if err == sql.ErrNoRows {
-		return DocumentItem{}, false, nil
-	}
-	if err != nil {
-		return DocumentItem{}, false, fmt.Errorf("candidate: find document by address: %w", err)
-	}
-	row, err := loadDocumentRow(ctx, database, id)
-	return rowToItem(row), err == nil, err
+	row, found, err := selectDocumentByKey(ctx, database, key)
+	return rowToItem(row), found, err
 }
 
 func listDocumentsFromDB(ctx context.Context, database *db.DB) (DocumentListResp, error) {
-	rows, err := database.QueryContext(ctx,
-		`SELECT id, name, kind, state, state_reason, char_count, evidence, text, file_name, address, created_at FROM document ORDER BY id DESC`)
+	rows, err := selectDocuments(ctx, database)
 	if err != nil {
-		return DocumentListResp{}, fmt.Errorf("candidate: list documents: %w", err)
+		return DocumentListResp{}, err
 	}
-	defer rows.Close()
-	var items []DocumentItem
-	for rows.Next() {
-		var row documentRow
-		var evidence int
-		if err := rows.Scan(&row.ID, &row.Name, &row.Kind, &row.State, &row.StateReason, &row.CharCount, &evidence, &row.Text, &row.FileName, &row.Address, &row.CreatedAt); err != nil {
-			return DocumentListResp{}, fmt.Errorf("candidate: scan document: %w", err)
-		}
-		row.Evidence = evidence != 0
+	items := []DocumentItem{}
+	for _, row := range rows {
 		items = append(items, rowToItem(row))
-	}
-	if err := rows.Err(); err != nil {
-		return DocumentListResp{}, fmt.Errorf("candidate: list documents: %w", err)
-	}
-	if items == nil {
-		items = []DocumentItem{}
 	}
 	return DocumentListResp{Documents: items}, nil
 }
@@ -334,20 +282,7 @@ func deleteDocument(ctx context.Context, database *db.DB, filesDir string, id in
 			return fmt.Errorf("candidate: delete document file: %w", err)
 		}
 	}
-	if _, err := database.ExecContext(ctx, `DELETE FROM document WHERE id=?`, id); err != nil {
-		return fmt.Errorf("candidate: delete document: %w", err)
-	}
-	return nil
-}
-
-func updateDocumentText(ctx context.Context, database *db.DB, id int64, text, state, stateReason string) error {
-	_, err := database.ExecContext(ctx,
-		`UPDATE document SET text=?, char_count=?, state=?, state_reason=? WHERE id=?`,
-		text, len([]rune(text)), state, stateReason, id)
-	if err != nil {
-		return fmt.Errorf("candidate: update document text: %w", err)
-	}
-	return nil
+	return deleteDocumentRow(ctx, database, id)
 }
 
 func DocumentText(ctx context.Context, database *db.DB, id int64) (string, bool, error) {
@@ -361,22 +296,9 @@ func DocumentText(ctx context.Context, database *db.DB, id int64) (string, bool,
 	return row.Text, true, nil
 }
 
-func LoadProfileData(ctx context.Context, database *db.DB, profileID int64) (ProfileData, error) {
-	return loadProfileRow(ctx, database, profileID)
-}
-
 func setDocumentEvidence(ctx context.Context, database *db.DB, id int64, evidence bool) (DocumentItem, error) {
-	ev := 0
-	if evidence {
-		ev = 1
-	}
-	res, err := database.ExecContext(ctx, `UPDATE document SET evidence=? WHERE id=?`, ev, id)
-	if err != nil {
-		return DocumentItem{}, fmt.Errorf("candidate: set evidence: %w", err)
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return DocumentItem{}, apperr.NotFound{Message: "Document not found."}
+	if err := updateDocumentEvidence(ctx, database, id, evidence); err != nil {
+		return DocumentItem{}, err
 	}
 	row, err := loadDocumentRow(ctx, database, id)
 	if err != nil {

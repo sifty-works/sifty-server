@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- The SQL of My data, profiles, documents, suggestions and Questions & Answers now lives in one repository file of the `candidate` package, and the handlers and services call it; nothing the user sees and nothing in the interface description changes.
 - The list, the vacancy page and decisions no longer wait for a collection, a reading or a recompute that is writing: the database keeps four connections instead of one, and a write waits only for another write. A recompute of Fits you after one changed role stops once the changed results are written, where before it read the whole catalogue again.
 - The unused Word document reader and the unused `shortlistcheck.Version` are removed; a `.docx` upload is still refused as before. 170 lines removed.
 - A profile whose stored data cannot be read no longer shows an empty list: the list answers "Internal error, see log #id" with a log entry. Queuing readings for decided vacancies still queues them for every profile it can read, and then the job fails with the id of each profile it could not read, instead of quietly queuing fewer.
