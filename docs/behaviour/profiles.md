@@ -113,7 +113,3 @@ A list of questions with their answers, shared by all profiles: Edit, Delete and
 - The hint "Skill names are quick-ranking search signals", which was not true.
 - The revision history of My data and profiles, which nothing read.
 - Recomputation of every score after any save, whatever field changed.
-
-## Data from the old application
-
-My data, every profile with its id, the active profile, the photo, documents with their files, suggestions still to review and in conflict, and the Questions & Answers list are imported. Fields are split between My data and profiles as above; "All of these" terms and except-words are imported as they are, the latter into the list of exclusions. Legacy skill levels become Production → Expert, Familiar → Proficient, Learning → Beginner. A legacy text field is dropped when the structured value exists and otherwise is appended to Other requirements. Rich text becomes Markdown. Vacancy-level corrections ("Candidate facts and corrections") are not imported when the old database contains none; when any exist they are reported and skipped. The personal site, LinkedIn and GitHub of the old candidate configuration become link documents. Revision histories, context snapshots and accepted or rejected suggestions are not imported; the source of an accepted skill is kept as a line. Before switch-over, each profile's visible vacancies and Fits you are compared with the old ones by the method in `settings-and-data.md`, and the import report lists every folded legacy value.

@@ -36,9 +36,6 @@ build: web
 	$(GO_BUILD) -o $(BINARY) ./cmd/sifty
 
 dev:
-	@if [ ! -d .dev/data ] && [ -n "$${SIFTY_V1_DIR:-}" ]; then \
-	  $(BINARY) import-v1 --from "$$SIFTY_V1_DIR" --data-dir .dev/data; \
-	fi
 	@echo "Starting server on http://127.0.0.1:7300"
 	@echo "To run the web client: npm run dev  (in a sifty-web checkout)"
 	$(BINARY) serve --offline $$([ -n "$${SIFTY_REPLAY_DIR:-}" ] && echo "--replay $$SIFTY_REPLAY_DIR") --data-dir .dev/data --port 7300

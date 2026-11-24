@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Removed the one-time import from the previous application.
 - A list that cannot be loaded shows an error, not an empty list: the Inbox shows the server's sentence, and Saved answers and the excluded words of a profile say that they could not be loaded (web client 0.26.0).
 - Every API key the application holds is replaced by `***` before a line is written to the log file or to the terminal, wherever in the line it stands; before, keys were hidden only when Settings › Monitor › Logs read the file.
 - On a profile whose data, or My data, cannot be read, a decision and a permanent deletion are refused before anything is written, and the list and the vacancy page fail instead of showing Fits you as though the profile had no inputs. Before, the decision or the deletion was saved and the answer was still an error.

@@ -93,7 +93,3 @@ The reason of a failure is a sentence made from the kind of error when the job f
 - The detailed assessment queue with its switch and its unlimited retries (see `assessment.md`).
 - Answers kept as separate files that only a self-check read. Corrections written on a vacancy move to Confirmed by you (see `profiles.md`).
 - Diagnostic panels shown to the user outside debug mode.
-
-## Data from the old application
-
-Each stored draft becomes the form of its vacancy with its fields: value, where the value came from, the user's edits kept as the user's, and the "removed" and "changed" marks and notes. Learned label phrasings are imported as they are. The employer's page address, its search state and the date it was found are copied to the vacancy. Draft revision histories, form snapshots, preparation operations and the old assessment queue are not imported; after switch-over, shortlisted vacancies without any form fields get their form read once, without drafting. Before switch-over, every vacancy's number of fields, values and user-edited marks are compared with the old ones.

@@ -148,7 +148,7 @@ type Response struct { Text string; InTokens, OutTokens int }
 | `vacancy_fts` | contentless full-text index (`content=''`, `contentless_delete=1`), three columns `title`, `tags`, `text`; each column holds the pre-normalised text (lowercased, non-word runs collapsed to one space, padded with leading and trailing space) so that a phrase query with its own padding matches whole words |
 | `vacancy_source` | where and under which address a vacancy was seen |
 | `vacancy_alias` | old id → id after a merge |
-| `tombstone` | canonical address of a removed vacancy, or a legacy hash |
+| `tombstone` | canonical address of a removed vacancy, or a legacy hash: the SHA-256 of an address under the previous application's canonical rule, `listing.LegacyKey`, which the catalogue checks next to the new canonical address |
 | `exclusion` | scope (all profiles or one), kind (word or company), value |
 | `domain_block` | blocked domain and until when |
 | `source_run` | per run and source (keyed by the source's normalised address): status, counts found, new, updated, unchanged, excluded, removed, and error |
@@ -186,7 +186,7 @@ type Response struct { Text string; InTokens, OutTokens int }
 - `make dev`: starts `sifty serve --offline` on a copy of the data (port 7300) and prints how to run the web client (`npm run dev` in a sifty-web checkout). `--offline` forbids every network request and model call. `SIFTY_REPLAY_DIR=<folder>` adds `--replay <folder>`, which serves requests from recorded responses instead of making real HTTP calls.
 - `make release`: runs `make web`, then refuses when `web/dist/api.sha256` (the SHA-256 of the description the web client was built against) differs from the SHA-256 of `api/openapi.yaml`, then runs the release steps `docs/PROCESS.md` describes: the build, the switch of the running application with its way back, the tag and the push. `make rollback` returns to the previous build.
 - `make check`, `make budget`, `make rollback`: see `PROCESS.md`. Neither runs npm.
-- Commands: `serve` (`--offline`, `--replay <folder>`, `--port`, `--debug`, `--data-dir`), `backup` (database copy and the user's files in one archive), `import-v1`, `config defaults`, `version`.
+- Commands: `serve` (`--offline`, `--replay <folder>`, `--port`, `--debug`, `--data-dir`), `backup` (database copy and the user's files in one archive), `config defaults`, `version`.
 
 ## Web client
 
@@ -212,16 +212,6 @@ The web client lives in `github.com/sifty-works/sifty-web`. Its source is in tha
 | Reference | `GET /api/reference` (countries, regions and time-zone bands from the `places` vocabulary, and option sets; shipped as embedded data) |
 | Application | `GET /api/vacancies/{id}/application`; `PATCH …/application/fields/{field}`; `POST …/application/{write,paste,questions,retry}`; `POST /api/vacancies/{id}/locate`; `POST /api/vacancies/{id}/shortlist-check/retry` |
 | Settings and status | `GET/PUT /api/settings`, `GET/PUT /api/settings/file`; `GET/PATCH /api/models` (providers with their cost and state, the provider of each kind of work, paid bulk permission, the pause switch, the daily limit and the day's background calls); `POST /api/providers/{name}/check`; `GET /api/work` (running jobs, and queued jobs by kind with the reason they wait); `GET /api/logs` (failures of the last 7 days, and the last 200 warnings and errors of the log with keys masked); `GET /api/status` (or event stream); `GET /api/version` |
-
-## Import of the old application
-
-`sifty import-v1` reads a copy of the old database opened read-only, accepts only the known schema versions, writes into an empty data folder, and creates no HTTP client and no model. What is carried over and dropped is in `behaviour/settings-and-data.md` and in each behaviour document. Technical points:
-
-- Vacancy ids are kept; the next id is above every id and every alias. Every vacancy starts at version 1.
-- Old removal marks are SHA-256 hashes of the old canonical address. The old canonicalisation is kept as one function, `legacyKey`, and the catalogue checks both it and the new canonical address.
-- Stored model readings are attached to version 1 of their vacancy, not matched by text hash, because the new normaliser changes the plain text slightly; their quotes are located again as offsets, and a quote that is not found is kept as text.
-- The comparison before switch-over follows `behaviour/settings-and-data.md`.
-- `import-v1` is one-time code: it lives in its own package, is removed after switch-over, and is not counted in the budgets.
 
 ## Budgets
 

@@ -41,7 +41,7 @@ make dev            # server on port 7300 (offline, with a fixture data folder)
   - `inbox.md`: the lists, search, filters, decisions, the vacancy page;
   - `profiles.md`: My data, profiles, documents and suggested facts;
   - `application.md`: application forms, draft answers, background work;
-  - `settings-and-data.md`: settings, model providers, where data lives, import of the previous version.
+  - `settings-and-data.md`: settings, model providers, where data lives.
 - `docs/ARCHITECTURE.md` describes how the code, the data and the background work are arranged, and the size and cost budgets the code must stay within.
 - `docs/PROCESS.md` describes how the repository is developed.
 

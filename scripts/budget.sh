@@ -4,8 +4,7 @@ set -euo pipefail
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 
 files() {
-  git ls-files --cached --others --exclude-standard -- "$@" \
-  | grep -v '^internal/importv1/' || true
+  git ls-files --cached --others --exclude-standard -- "$@"
 }
 
 count() {

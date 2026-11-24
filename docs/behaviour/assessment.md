@@ -120,7 +120,3 @@ Texts are read in the background, one at a time, in the order the vacancies arri
 - Freshness flags of the profile and the "Refresh scoring" button.
 - The background order following the sort switch.
 - The "AI assessment" filter of the Inbox.
-
-## Data from the old application
-
-Requirements and facts already read by a model are imported for every vacancy and attached to its version 1 (see `collection.md`), so no vacancy needs a model call after the switch only because the normaliser changed; their excerpts are located again in the imported text, and an excerpt that is not found is kept as text. Skills, skills the user does not have and confirmed statements are imported as they are; the old free-text facts and corrections are imported into Confirmed by you. Fits you and the requirements counter are recomputed by code for every vacancy and profile, which takes seconds, and compared with the old numbers by the method in `settings-and-data.md`. Old detailed assessments are not imported. Old intermediate result tables, model matching results and candidate-context snapshots are not imported.
