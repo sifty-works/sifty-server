@@ -228,18 +228,7 @@ func (c *Collector) listSource(ctx context.Context, s config.SourceConfig) ([]li
 	u, _ := url.Parse(s.URL)
 	mod, site := source.For(u)
 	site.Name = s.Name
-	postings, err := mod.List(ctx, c.fetcher, site)
-	if err != nil {
-		return nil, err
-	}
-	if len(site.Industries) > 0 {
-		for i := range postings {
-			if len(postings[i].Industries) == 0 {
-				postings[i].Industries = site.Industries
-			}
-		}
-	}
-	return postings, nil
+	return mod.List(ctx, c.fetcher, site)
 }
 
 func (c *Collector) addVacancyPage(ctx context.Context, p listing.Posting, s config.SourceConfig, excluded bool) (listing.Posting, bool) {

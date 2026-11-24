@@ -232,12 +232,10 @@ type oldUserData struct {
 	} `json:"legacyPreferences"`
 	LegacyContextVersion string   `json:"legacyContextVersion"`
 	TargetRoles          []string `json:"targetRoles"`
-	TargetIndustries     []string `json:"targetIndustries"`
 }
 
 type oldProfileData struct {
-	TargetIndustries []string `json:"targetIndustries"`
-	Compensation     *struct {
+	Compensation *struct {
 		CashMin    *float64 `json:"cashMin"`
 		CashTarget *float64 `json:"cashTarget"`
 		Currency   string   `json:"currency"`
@@ -776,42 +774,17 @@ func doImport(ctx context.Context, copyDB *sql.DB, newDB *db.DB, store *config.S
 			}
 		}
 
-		industriesJSON := "[]"
-		{
-			seen := make(map[string]bool)
-			var names []string
-			for _, s := range sightingsByJob[j.id] {
-				for _, ind := range source.BoardIndustriesForURL(s.url) {
-					if !seen[ind] {
-						seen[ind] = true
-						names = append(names, ind)
-					}
-				}
-			}
-			for _, ind := range source.BoardIndustriesForURL(vj.canonURL) {
-				if !seen[ind] {
-					seen[ind] = true
-					names = append(names, ind)
-				}
-			}
-			if len(names) > 0 {
-				if b, jerr := json.Marshal(names); jerr == nil {
-					industriesJSON = string(b)
-				}
-			}
-		}
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO vacancy
 				(id, identity, title, company, url, apply_url, location, tags, source_fields,
 				 published_at, published_basis, expires_at,
-				 first_seen, last_seen, text_state, content_hash, version, body, seen_at,
-				 industries)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+				 first_seen, last_seen, text_state, content_hash, version, body, seen_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			j.id, identity, j.title, company, vj.canonURL, applyURL, location,
 			j.tags, "{}",
 			md.publishedAt, md.publishedBasis, expiresAt,
 			md.firstSeen, md.lastSeen, string(md.textState), md.hash, 1, md.body,
-			md.seenAt, industriesJSON,
+			md.seenAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("inserting vacancy %d: %w", j.id, err)
@@ -1023,14 +996,13 @@ func doImport(ctx context.Context, copyDB *sql.DB, newDB *db.DB, store *config.S
 	profileIDMap := make(map[string]int64)
 	report.profileIDs = profileIDMap
 	type profileEntry struct {
-		newID            int64
-		name             string
-		targetRoles      []string
-		keywords         []string
-		allOf            []string
-		except           []string
-		targetIndustries []string
-		profileData      candidate.ProfileData
+		newID       int64
+		name        string
+		targetRoles []string
+		keywords    []string
+		allOf       []string
+		except      []string
+		profileData candidate.ProfileData
 	}
 	var profilesByNewID []profileEntry
 
@@ -1085,17 +1057,13 @@ func doImport(ctx context.Context, copyDB *sql.DB, newDB *db.DB, store *config.S
 		}
 		pd.Headline = headline
 
-		oldTargetIndustries := pd.TargetIndustries
-		pd.TargetIndustries = nil
-
 		report.LegacyFolded = append(report.LegacyFolded, legacyFolded...)
 		report.LegacyDropped = append(report.LegacyDropped, legacyDropped...)
 
 		profilesByNewID = append(profilesByNewID, profileEntry{
 			newID: newID, name: name,
 			targetRoles: roles, keywords: keywords, allOf: allOf, except: except,
-			targetIndustries: oldTargetIndustries,
-			profileData:      pd,
+			profileData: pd,
 		})
 		report.ProfilesWritten++
 	}
@@ -1156,7 +1124,7 @@ func doImport(ctx context.Context, copyDB *sql.DB, newDB *db.DB, store *config.S
 
 		for _, pp := range profilesByNewID {
 			report.ProfileSearchLines = append(report.ProfileSearchLines,
-				buildProfileSearchLine(pp.newID, pp.name, pp.targetRoles, pp.keywords, pp.allOf, pp.except, pp.targetIndustries))
+				buildProfileSearchLine(pp.newID, pp.name, pp.targetRoles, pp.keywords, pp.allOf, pp.except))
 		}
 	}
 
@@ -2072,7 +2040,7 @@ func filterEmpty(ss []string) []string {
 	return out
 }
 
-func buildProfileSearchLine(newID int64, name string, roles, keywords, allOf, except, targetIndustries []string) string {
+func buildProfileSearchLine(newID int64, name string, roles, keywords, allOf, except []string) string {
 	var parts []string
 	if len(roles) > 0 {
 		parts = append(parts, "roles=["+strings.Join(roles, ", ")+"]")
@@ -2085,9 +2053,6 @@ func buildProfileSearchLine(newID int64, name string, roles, keywords, allOf, ex
 	}
 	if len(except) > 0 {
 		parts = append(parts, "except=["+strings.Join(except, ", ")+"]")
-	}
-	if len(targetIndustries) > 0 {
-		parts = append(parts, "targetIndustries=["+strings.Join(targetIndustries, ", ")+"] (not imported)")
 	}
 	header := fmt.Sprintf("id=%d (%s)", newID, name)
 	if len(parts) == 0 {
@@ -2289,9 +2254,6 @@ func convertOldUserData(ud oldUserData) (candidate.MeData, []string, []string) {
 	if roles := filterEmpty(ud.TargetRoles); len(roles) > 0 {
 		dropped = append(dropped, "My data (targetRoles): not imported ("+strings.Join(roles, ", ")+")")
 	}
-	if industries := filterEmpty(ud.TargetIndustries); len(industries) > 0 {
-		dropped = append(dropped, "My data (targetIndustries): not imported ("+strings.Join(industries, ", ")+")")
-	}
 
 	for _, fe := range toFold {
 		folded = append(folded, fmt.Sprintf("My data (%s): %s", fe.label, fe.text))
@@ -2327,8 +2289,6 @@ func convertOldProfileData(data string, newID int64, hasStructuredNotice bool) (
 	if err := json.Unmarshal([]byte(data), &opd); err != nil {
 		return pd, nil, dropped
 	}
-
-	pd.TargetIndustries = filterEmpty(opd.TargetIndustries)
 
 	if opd.Compensation != nil {
 		c := opd.Compensation

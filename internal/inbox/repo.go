@@ -21,7 +21,6 @@ type repoRow struct {
 	location       string
 	publishedAt    string
 	publishedBasis string
-	industries     string
 	unread         bool
 	stage          string
 	reason         string
@@ -32,7 +31,6 @@ type repoRow struct {
 }
 
 const listCols = `v.id, v.company, v.title, v.location, v.published_at, v.published_basis,
-    v.industries,
     v.seen_at='' AS unread, COALESCE(d.reason,'') AS reason,
     (SELECT applied_at FROM application WHERE vacancy=v.id ORDER BY applied_at DESC LIMIT 1),
     (SELECT profile_name FROM application WHERE vacancy=v.id ORDER BY applied_at DESC LIMIT 1),
@@ -69,11 +67,6 @@ func resolveVacancy(ctx context.Context, database *db.DB, id int64) (int64, erro
 		return 0, fmt.Errorf("inbox: resolve vacancy: %w", err)
 	}
 	return realID, nil
-}
-
-type IndustryCount struct {
-	Name  string `json:"name"`
-	Count int    `json:"count"`
 }
 
 type SourceCount struct {
@@ -149,7 +142,7 @@ func filterClauses(now time.Time, f Filters, skipSources bool) ([]string, []any)
 	return parts, args
 }
 
-func scopeClause(now time.Time, profileID int64, stage, q string, vis candidate.Filter, f Filters, industries []string, skipSources bool) (join, where string, args []any) {
+func scopeClause(now time.Time, profileID int64, stage, q string, vis candidate.Filter, f Filters, skipSources bool) (join, where string, args []any) {
 	isInbox := stage == "inbox"
 	low := strings.ToLower(strings.TrimSpace(q))
 
@@ -183,21 +176,6 @@ func scopeClause(now time.Time, profileID int64, stage, q string, vis candidate.
 		}
 	}
 
-	if len(industries) > 0 {
-		var iparts []string
-		for _, ind := range industries {
-			ind = strings.TrimSpace(ind)
-			if ind == "" {
-				continue
-			}
-			iparts = append(iparts, "EXISTS (SELECT 1 FROM json_each(v.industries) WHERE value=?)")
-			args = append(args, ind)
-		}
-		if len(iparts) > 0 {
-			where += ` AND (` + strings.Join(iparts, " OR ") + `)`
-		}
-	}
-
 	fParts, fArgs := filterClauses(now, f, skipSources)
 	for _, p := range fParts {
 		where += ` AND ` + p
@@ -212,36 +190,8 @@ func scopeClause(now time.Time, profileID int64, stage, q string, vis candidate.
 	return join, where, args
 }
 
-func industryCounts(ctx context.Context, database *db.DB, now time.Time, profileID int64, stage, q string, vis candidate.Filter, f Filters) ([]IndustryCount, error) {
-	join, where, args := scopeClause(now, profileID, stage, q, vis, f, nil, false)
-
-	rows, err := database.QueryContext(ctx, `
-		SELECT j.value, COUNT(*)
-		FROM vacancy v
-		`+join+`
-		JOIN json_each(v.industries) j
-		WHERE j.value IS NOT NULL AND `+where+`
-		GROUP BY j.value
-		ORDER BY j.value`,
-		args...,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("inbox: industry counts: %w", err)
-	}
-	defer rows.Close()
-	var out []IndustryCount
-	for rows.Next() {
-		var ic IndustryCount
-		if err := rows.Scan(&ic.Name, &ic.Count); err != nil {
-			return nil, fmt.Errorf("inbox: industry counts scan: %w", err)
-		}
-		out = append(out, ic)
-	}
-	return out, rows.Err()
-}
-
-func sourceCounts(ctx context.Context, database *db.DB, now time.Time, profileID int64, stage, q string, vis candidate.Filter, industries []string, f Filters) ([]SourceCount, error) {
-	join, where, args := scopeClause(now, profileID, stage, q, vis, f, industries, true)
+func sourceCounts(ctx context.Context, database *db.DB, now time.Time, profileID int64, stage, q string, vis candidate.Filter, f Filters) ([]SourceCount, error) {
+	join, where, args := scopeClause(now, profileID, stage, q, vis, f, true)
 
 	rows, err := database.QueryContext(ctx, `
 		SELECT vs.source, COUNT(DISTINCT v.id)
@@ -311,8 +261,8 @@ func stageCounts(ctx context.Context, database *db.DB, now time.Time, profileID 
 	return out, nil
 }
 
-func countRows(ctx context.Context, database *db.DB, now time.Time, profileID int64, stage, q string, vis candidate.Filter, f Filters, industries []string) (int, error) {
-	join, where, args := scopeClause(now, profileID, stage, q, vis, f, industries, false)
+func countRows(ctx context.Context, database *db.DB, now time.Time, profileID int64, stage, q string, vis candidate.Filter, f Filters) (int, error) {
+	join, where, args := scopeClause(now, profileID, stage, q, vis, f, false)
 	var n int
 	if err := database.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM vacancy v `+join+` WHERE `+where, args...).Scan(&n); err != nil {
@@ -321,8 +271,8 @@ func countRows(ctx context.Context, database *db.DB, now time.Time, profileID in
 	return n, nil
 }
 
-func listRows(ctx context.Context, database *db.DB, now time.Time, profileID int64, stage, q, sort string, vis candidate.Filter, f Filters, limit, offset int, industries ...string) ([]repoRow, error) {
-	join, where, args := scopeClause(now, profileID, stage, q, vis, f, industries, false)
+func listRows(ctx context.Context, database *db.DB, now time.Time, profileID int64, stage, q, sort string, vis candidate.Filter, f Filters, limit, offset int) ([]repoRow, error) {
+	join, where, args := scopeClause(now, profileID, stage, q, vis, f, false)
 	order := orderDecided
 	switch {
 	case stage != "inbox" && stage != "shortlist":
@@ -352,7 +302,6 @@ func scanListRows(stage string, sqlRows *sql.Rows) ([]repoRow, error) {
 		if err := sqlRows.Scan(append([]any{
 			&row.id, &row.company, &row.title, &row.location,
 			&row.publishedAt, &row.publishedBasis,
-			&row.industries,
 			&unread, &row.reason,
 			&appliedAt, &appliedName, &row.expiresAt}, row.fit.Dest()...)...,
 		); err != nil {
@@ -381,7 +330,7 @@ func loadVacancyFull(ctx context.Context, database *db.DB, profileID, vacancyID 
 	err = database.QueryRowContext(ctx, `
 		SELECT COALESCE(d.stage,'inbox'),
 		       v.id, v.company, v.title, v.location, v.published_at, v.published_basis,
-		       v.industries, v.seen_at='' AS unread, COALESCE(d.reason,'') AS reason,
+		       v.seen_at='' AS unread, COALESCE(d.reason,'') AS reason,
 		       (SELECT applied_at FROM application WHERE vacancy=v.id ORDER BY applied_at DESC LIMIT 1),
 		       (SELECT profile_name FROM application WHERE vacancy=v.id ORDER BY applied_at DESC LIMIT 1),
 		       v.expires_at,
@@ -391,7 +340,7 @@ func loadVacancyFull(ctx context.Context, database *db.DB, profileID, vacancyID 
 		profileID, profileID, vacancyID, profileID).Scan(append([]any{
 		&stage,
 		&row.id, &row.company, &row.title, &row.location, &row.publishedAt, &row.publishedBasis,
-		&row.industries, &unread, &row.reason,
+		&unread, &row.reason,
 		&appliedAt, &appliedName,
 		&row.expiresAt,
 		&vd.url, &vd.applyURL, &vd.textState, &vd.body}, row.fit.Dest()...)...)

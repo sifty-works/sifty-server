@@ -31,7 +31,7 @@ make dev            # server on port 7300 (offline, with a fixture data folder)
 ## Documents
 
 - `docs/behaviour/` describes what the user sees and gets, one document per area:
-  - `collection.md`: sources, collection runs, vacancy text, industries, duplicates;
+  - `collection.md`: sources, collection runs, vacancy text, duplicates;
   - `assessment.md`: the Fits you score, requirements, the Shortlist check;
   - `inbox.md`: the lists, search, filters, decisions, the vacancy page;
   - `profiles.md`: My data, profiles, documents and suggested facts;

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sifty-works/sifty-server/internal/industry"
 	"github.com/sifty-works/sifty-server/internal/listing"
 )
 
@@ -26,9 +25,8 @@ type ndJob struct {
 	CompensationCurrency string             `json:"compensationCurrency"`
 	CompensationPeriod   string             `json:"compensationPeriod"`
 	Org                  struct {
-		Name         string   `json:"name"`
-		Slug         string   `json:"slug"`
-		IndustryTags []string `json:"industryTags"`
+		Name string `json:"name"`
+		Slug string `json:"slug"`
 	} `json:"organization"`
 }
 
@@ -64,12 +62,11 @@ func parseGetro(body []byte, base string, _ Site) ([]listing.Posting, bool) {
 		}
 		salary := salaryRangeText(f.CompensationCurrency, float64(f.CompensationMinCents)/100, float64(f.CompensationMaxCents)/100, f.CompensationPeriod)
 		p := listing.Posting{
-			URL:        resolveURL("/companies/"+f.Org.Slug+"/jobs/"+f.Slug, base),
-			Title:      f.Title,
-			Company:    f.Org.Name,
-			Location:   strings.Join(locParts, " · "),
-			Fields:     setFields("workplace_type", f.WorkMode, "salary", salary),
-			Industries: industry.FromLabels(f.Org.IndustryTags),
+			URL:      resolveURL("/companies/"+f.Org.Slug+"/jobs/"+f.Slug, base),
+			Title:    f.Title,
+			Company:  f.Org.Name,
+			Location: strings.Join(locParts, " · "),
+			Fields:   setFields("workplace_type", f.WorkMode, "salary", salary),
 		}
 		p.ApplyURL = resolveURL(f.ApplyURL, base)
 		if f.CreatedAt > 0 {

@@ -18,8 +18,7 @@ func windowFixture(t *testing.T, n int) *db.DB {
 		p := post(fmt.Sprintf("https://example.com/jobs/w%03d", i), fmt.Sprintf("Engineer %03d", i), "Co")
 		p.Published = testNow.AddDate(0, 0, -i)
 		p.PublishedBasis = "datePosted"
-		id := addWithSrc(t, cat, p, []string{"alpha", "beta"}[i%2])
-		setVacancyIndustries(t, d, id, []string{[]string{"Fintech", "Health", "Retail"}[i%3]})
+		addWithSrc(t, cat, p, []string{"alpha", "beta"}[i%2])
 	}
 	return d
 }
@@ -54,11 +53,11 @@ func TestWindow_CountsAndMatchingDoNotChangeWithTheWindow(t *testing.T) {
 	for _, tc := range []struct {
 		filters  string
 		matching float64
-	}{{"", 14}, {"&industries=Fintech", 4}, {"&q=zzznomatch", 0}} {
+	}{{"", 14}, {"&sources=alpha", 7}, {"&q=zzznomatch", 0}} {
 		whole := apiGet(t, ts, "/api/vacancies?limit=200"+tc.filters)
 		for _, window := range []string{"limit=1", "limit=3&offset=9", "limit=3&offset=40"} {
 			got := apiGet(t, ts, "/api/vacancies?"+window+tc.filters)
-			for _, key := range []string{"counts", "industryCounts", "sourceCounts", "total", "matching", "empty"} {
+			for _, key := range []string{"counts", "sourceCounts", "total", "matching", "empty"} {
 				if !reflect.DeepEqual(got[key], whole[key]) {
 					t.Errorf("%s%s, %s: %v, want %v", window, tc.filters, key, got[key], whole[key])
 				}

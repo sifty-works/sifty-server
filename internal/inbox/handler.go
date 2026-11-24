@@ -20,7 +20,6 @@ type ListReq struct {
 	Stage      Stage  `json:"stage"`
 	Profile    int64  `json:"profile"`
 	Q          string `json:"q"`
-	Industries string `json:"industries,omitempty"`
 	Published  string `json:"published,omitempty"`
 	Remote     bool   `json:"remote,omitempty"`
 	Leadership bool   `json:"leadership,omitempty"`
@@ -33,14 +32,13 @@ type ListReq struct {
 }
 
 type ListResp struct {
-	Rows           []Row           `json:"rows"`
-	Counts         Counts          `json:"counts"`
-	IndustryCounts []IndustryCount `json:"industryCounts"`
-	SourceCounts   []SourceCount   `json:"sourceCounts"`
-	Total          int             `json:"total"`
-	Matching       int             `json:"matching"`
-	Empty          string          `json:"empty"`
-	Profile        int64           `json:"profile"`
+	Rows         []Row         `json:"rows"`
+	Counts       Counts        `json:"counts"`
+	SourceCounts []SourceCount `json:"sourceCounts"`
+	Total        int           `json:"total"`
+	Matching     int           `json:"matching"`
+	Empty        string        `json:"empty"`
+	Profile      int64         `json:"profile"`
 }
 
 type VacancyViewReq struct {
@@ -157,7 +155,6 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		if err != nil {
 			return ListResp{}, err
 		}
-		industries := splitComma(req.Industries)
 		sources := splitComma(req.Sources)
 		published := 0
 		switch req.Published {
@@ -175,27 +172,23 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 			Unread:     unread,
 			Fit:        splitComma(req.Fit),
 		}
-		rows, counts, indCounts, srcCounts, total, matching, err := list(r.Context(), database, now, pid, stage, strings.TrimSpace(req.Q), req.Sort, industries, f, limit, offset, rules())
+		rows, counts, srcCounts, total, matching, err := list(r.Context(), database, now, pid, stage, strings.TrimSpace(req.Q), req.Sort, f, limit, offset, rules())
 		if err != nil {
 			return ListResp{}, err
-		}
-		if indCounts == nil {
-			indCounts = []IndustryCount{}
 		}
 		if srcCounts == nil {
 			srcCounts = []SourceCount{}
 		}
-		hasFilters := req.Q != "" || len(industries) > 0 || len(sources) > 0 ||
+		hasFilters := req.Q != "" || len(sources) > 0 ||
 			published != 0 || req.Remote || req.Leadership || unread || len(f.Fit) > 0
 		return ListResp{
-			Rows:           rows,
-			Counts:         counts,
-			IndustryCounts: indCounts,
-			SourceCounts:   srcCounts,
-			Total:          total,
-			Matching:       matching,
-			Empty:          emptyText(matching, stage, hasFilters),
-			Profile:        pid,
+			Rows:         rows,
+			Counts:       counts,
+			SourceCounts: srcCounts,
+			Total:        total,
+			Matching:     matching,
+			Empty:        emptyText(matching, stage, hasFilters),
+			Profile:      pid,
 		}, nil
 	})
 

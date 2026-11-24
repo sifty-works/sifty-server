@@ -3,7 +3,6 @@ package inbox
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -46,19 +45,18 @@ const (
 )
 
 type Row struct {
-	ID           int64    `json:"id"`
-	Company      string   `json:"company"`
-	Title        string   `json:"title"`
-	Location     string   `json:"location"`
-	LocationFull string   `json:"locationFull,omitempty"`
-	Published    string   `json:"published"`
-	Industries   []string `json:"industries"`
-	Unread       bool     `json:"unread"`
-	Stage        Stage    `json:"stage"`
-	Reason       string   `json:"reason,omitempty"`
-	Applied      string   `json:"applied,omitempty"`
-	Expired      bool     `json:"expired,omitempty"`
-	Fit          FitMark  `json:"fit"`
+	ID           int64   `json:"id"`
+	Company      string  `json:"company"`
+	Title        string  `json:"title"`
+	Location     string  `json:"location"`
+	LocationFull string  `json:"locationFull,omitempty"`
+	Published    string  `json:"published"`
+	Unread       bool    `json:"unread"`
+	Stage        Stage   `json:"stage"`
+	Reason       string  `json:"reason,omitempty"`
+	Applied      string  `json:"applied,omitempty"`
+	Expired      bool    `json:"expired,omitempty"`
+	Fit          FitMark `json:"fit"`
 }
 
 type FitMark struct {
@@ -157,13 +155,6 @@ type Counts struct {
 
 func toRow(rr repoRow, now time.Time, inputs int64, readingSet map[int64]bool) Row {
 	nowStr := now.UTC().Format(time.RFC3339)
-	var industries []string
-	if rr.industries != "" && rr.industries != "[]" {
-		json.Unmarshal([]byte(rr.industries), &industries)
-	}
-	if industries == nil {
-		industries = []string{}
-	}
 	loc, full := "Location unstated", ""
 	if rr.location != "" {
 		loc, full = places.Short(strings.Split(rr.location, places.Separator))
@@ -175,7 +166,6 @@ func toRow(rr repoRow, now time.Time, inputs int64, readingSet map[int64]bool) R
 		Location:     loc,
 		LocationFull: full,
 		Published:    publicationLine(rr.publishedAt, rr.publishedBasis, now),
-		Industries:   industries,
 		Unread:       rr.unread,
 		Stage:        Stage(rr.stage),
 		Reason:       rr.reason,
@@ -230,40 +220,36 @@ func rowAndCounts(ctx context.Context, database *db.DB, now func() time.Time, pr
 	return toRow(row, t, fitInputs(ctx, database, profileID, r), rs), buildCounts(cm), nil
 }
 
-func list(ctx context.Context, database *db.DB, now func() time.Time, profileID int64, stage, q, sort string, industries []string, f Filters, limit, offset int, r fit.Rules) ([]Row, Counts, []IndustryCount, []SourceCount, int, int, error) {
+func list(ctx context.Context, database *db.DB, now func() time.Time, profileID int64, stage, q, sort string, f Filters, limit, offset int, r fit.Rules) ([]Row, Counts, []SourceCount, int, int, error) {
 	vis := profileVisibility(ctx, database, profileID)
 	f.inputs = fitInputs(ctx, database, profileID, r)
 	t := now()
 	cm, err := stageCounts(ctx, database, t, profileID, vis)
 	if err != nil {
-		return nil, Counts{}, nil, nil, 0, 0, err
+		return nil, Counts{}, nil, 0, 0, err
 	}
-	indCounts, err := industryCounts(ctx, database, t, profileID, stage, q, vis, f)
+	srcCounts, err := sourceCounts(ctx, database, t, profileID, stage, q, vis, f)
 	if err != nil {
-		return nil, Counts{}, nil, nil, 0, 0, err
-	}
-	srcCounts, err := sourceCounts(ctx, database, t, profileID, stage, q, vis, industries, f)
-	if err != nil {
-		return nil, Counts{}, nil, nil, 0, 0, err
+		return nil, Counts{}, nil, 0, 0, err
 	}
 	rs, _, err := queryReadingSet(ctx, database)
 	if err != nil {
-		return nil, Counts{}, nil, nil, 0, 0, err
+		return nil, Counts{}, nil, 0, 0, err
 	}
-	raw, err := listRows(ctx, database, t, profileID, stage, q, sort, vis, f, limit, offset, industries...)
+	raw, err := listRows(ctx, database, t, profileID, stage, q, sort, vis, f, limit, offset)
 	if err != nil {
-		return nil, Counts{}, nil, nil, 0, 0, err
+		return nil, Counts{}, nil, 0, 0, err
 	}
-	matching, err := countRows(ctx, database, t, profileID, stage, q, vis, f, industries)
+	matching, err := countRows(ctx, database, t, profileID, stage, q, vis, f)
 	if err != nil {
-		return nil, Counts{}, nil, nil, 0, 0, err
+		return nil, Counts{}, nil, 0, 0, err
 	}
 	rows := make([]Row, len(raw))
 	for i, rr := range raw {
 		rows[i] = toRow(rr, t, f.inputs, rs)
 	}
 	total := cm[stage]
-	return rows, buildCounts(cm), indCounts, srcCounts, total, matching, nil
+	return rows, buildCounts(cm), srcCounts, total, matching, nil
 }
 
 func applyDecision(ctx context.Context, database *db.DB, now func() time.Time, enqueue func(kind, subject string) (int64, error),

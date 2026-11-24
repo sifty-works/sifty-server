@@ -179,7 +179,6 @@ func (c *Catalog) Upsert(ctx context.Context, p listing.Posting, src string) (in
 			contentHash:    newHash,
 			version:        1,
 			body:           newBody,
-			industries:     marshalTags(p.Industries),
 		}
 		if p.Requested {
 			row.detailRequestedAt = nowStr
@@ -260,7 +259,6 @@ func (c *Catalog) Upsert(ctx context.Context, p listing.Posting, src string) (in
 
 	titleChanged := p.Title != ex.title
 	tagsChanged := len(p.Tags) > 0 && tagsJSON != ex.tagsJSON
-	upd.industries = unionIndustriesStr(ex.industries, p.Industries)
 
 	if _, err := save(ctx, tx, upd); err != nil {
 		return 0, 0, fmt.Errorf("catalog: upsert: update: %w", err)
@@ -309,15 +307,11 @@ type vacancyRow struct {
 	version           int
 	body              []byte
 	detailRequestedAt string
-	industries        string
 }
 
 func save(ctx context.Context, tx *sql.Tx, v vacancyRow) (int64, error) {
 	if v.body == nil {
 		v.body = []byte{}
-	}
-	if v.industries == "" {
-		v.industries = "[]"
 	}
 	if v.id == 0 {
 		res, err := tx.ExecContext(ctx, `
@@ -325,13 +319,13 @@ func save(ctx context.Context, tx *sql.Tx, v vacancyRow) (int64, error) {
 				(identity, title, company, url, apply_url, location, tags, source_fields,
 				 published_at, published_basis, expires_at,
 				 first_seen, last_seen, text_state, content_hash, version, body,
-				 detail_requested_at, industries)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+				 detail_requested_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			v.identity, v.title, v.company, v.url, v.applyURL, v.location,
 			v.tagsJSON, v.fieldsJSON,
 			v.publishedAt, v.publishedBasis, v.expiresAt,
 			v.firstSeen, v.lastSeen, v.textState, v.contentHash, v.version, v.body,
-			v.detailRequestedAt, v.industries)
+			v.detailRequestedAt)
 		if err != nil {
 			return 0, err
 		}
@@ -342,12 +336,12 @@ func save(ctx context.Context, tx *sql.Tx, v vacancyRow) (int64, error) {
 			identity=?, title=?, company=?, location=?, tags=?, source_fields=?,
 			apply_url=?, published_at=?, published_basis=?, expires_at=?,
 			last_seen=?, seen_at=?, text_state=?, content_hash=?, version=?, body=?,
-			detail_requested_at=?, industries=?
+			detail_requested_at=?
 		WHERE id=?`,
 		v.identity, v.title, v.company, v.location, v.tagsJSON, v.fieldsJSON,
 		v.applyURL, v.publishedAt, v.publishedBasis, v.expiresAt,
 		v.lastSeen, v.seenAt, v.textState, v.contentHash, v.version, v.body,
-		v.detailRequestedAt, v.industries, v.id)
+		v.detailRequestedAt, v.id)
 	return v.id, err
 }
 
@@ -357,13 +351,13 @@ func loadVacancy(ctx context.Context, tx *sql.Tx, id int64) (vacancyRow, error) 
 		SELECT id, identity, title, company, url, apply_url, location, tags, source_fields,
 		       published_at, published_basis, expires_at,
 		       first_seen, last_seen, seen_at, text_state, content_hash, version, body,
-		       detail_requested_at, industries
+		       detail_requested_at
 		FROM vacancy WHERE id = ?`, id).Scan(
 		&ex.id, &ex.identity, &ex.title, &ex.company, &ex.url, &ex.applyURL, &ex.location,
 		&ex.tagsJSON, &ex.fieldsJSON,
 		&ex.publishedAt, &ex.publishedBasis, &ex.expiresAt,
 		&ex.firstSeen, &ex.lastSeen, &ex.seenAt, &ex.textState, &ex.contentHash, &ex.version, &ex.body,
-		&ex.detailRequestedAt, &ex.industries)
+		&ex.detailRequestedAt)
 	return ex, err
 }
 
@@ -466,26 +460,6 @@ func contentHash(plainText string) string {
 	}
 	h := sha256.Sum256([]byte(plainText))
 	return hex.EncodeToString(h[:])
-}
-
-func unionIndustriesStr(existingJSON string, incoming []string) string {
-	var current []string
-	json.Unmarshal([]byte(existingJSON), &current)
-	seen := make(map[string]bool, len(current)+len(incoming))
-	for _, s := range current {
-		seen[s] = true
-	}
-	for _, s := range incoming {
-		if s != "" && !seen[s] {
-			seen[s] = true
-			current = append(current, s)
-		}
-	}
-	if len(current) == 0 {
-		return "[]"
-	}
-	b, _ := json.Marshal(current)
-	return string(b)
 }
 
 func marshalTags(tags []string) string {
@@ -712,9 +686,6 @@ func performMerge(ctx context.Context, tx *sql.Tx, matchIDs []int64) error {
 			upd.version++
 			textChanged = true
 		}
-		var mergedInds []string
-		json.Unmarshal([]byte(r.industries), &mergedInds)
-		upd.industries = unionIndustriesStr(upd.industries, mergedInds)
 	}
 
 	ph := strings.Repeat("?,", len(matchIDs))

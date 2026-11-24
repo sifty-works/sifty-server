@@ -12,7 +12,6 @@ type ProfileData struct {
 	TargetRoles        []string      `json:"targetRoles,omitempty"`
 	Keywords           []string      `json:"keywords,omitempty"`
 	AllOf              []string      `json:"allOf,omitempty"`
-	TargetIndustries   []string      `json:"targetIndustries,omitempty"`
 	Compensation       *Compensation `json:"compensation,omitempty"`
 	Engagement         []string      `json:"engagement,omitempty"`
 	Hours              *Hours        `json:"hours,omitempty"`
@@ -39,9 +38,6 @@ func Effective(p, base ProfileData) ProfileData {
 	}
 	if len(out.PreferredLocations) == 0 {
 		out.PreferredLocations = base.PreferredLocations
-	}
-	if len(out.TargetIndustries) == 0 {
-		out.TargetIndustries = base.TargetIndustries
 	}
 	return out
 }
@@ -75,17 +71,13 @@ func InheritedFields(p, base ProfileData) []string {
 	if len(p.PreferredLocations) == 0 && len(base.PreferredLocations) > 0 {
 		out = append(out, "preferredLocations")
 	}
-	if len(p.TargetIndustries) == 0 && len(base.TargetIndustries) > 0 {
-		out = append(out, "targetIndustries")
-	}
 	return out
 }
 
 type Profile struct {
-	TargetRoles      []string
-	Keywords         []string
-	AllOf            []string
-	TargetIndustries []string
+	TargetRoles []string
+	Keywords    []string
+	AllOf       []string
 }
 
 type Filter struct {
@@ -144,22 +136,6 @@ func Visibility(p Profile) Filter {
 		part, termArgs := termClause(term)
 		clauses = append(clauses, part)
 		args = append(args, termArgs...)
-	}
-
-	if len(p.TargetIndustries) > 0 {
-		parts := make([]string, 0, len(p.TargetIndustries)+1)
-		parts = append(parts, "v.industries='[]'")
-		for _, ind := range p.TargetIndustries {
-			ind = strings.TrimSpace(ind)
-			if ind == "" {
-				continue
-			}
-			parts = append(parts, "EXISTS (SELECT 1 FROM json_each(v.industries) WHERE value=?)")
-			args = append(args, ind)
-		}
-		if len(parts) > 1 {
-			clauses = append(clauses, "("+strings.Join(parts, " OR ")+")")
-		}
 	}
 
 	if len(clauses) == 0 {

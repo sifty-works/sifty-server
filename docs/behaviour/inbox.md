@@ -20,7 +20,6 @@ What the user gets: for the chosen profile, the vacancies that fit its search, i
 - **Inbox** shows the vacancies with no decision in this profile that fit its search:
   - **Target roles and keywords.** When the profile has both, a vacancy fits when a target role is in its title and a keyword is in its title, tags or text. When it has only one of the two, only that one applies. A profile with neither sees an empty Inbox. Terms match whole words and phrases, ignoring case and punctuation.
   - **All of these.** Every term listed under "All of these" must be in the vacancy's title, tags or text. Terms match whole words and phrases, ignoring case and punctuation.
-  - **Target industries**, the profile's own or inherited from the first profile. When there are any, a vacancy fits when it has at least one of them or has no industry at all; a vacancy whose industries are all outside the targets does not fit. Target industry names not in the fixed list are ignored; the remaining names apply.
 - **Shortlist, Applied and Dismissed** show every vacancy the profile decided that way, whether or not it still fits the search, so a decision never disappears when the search changes or a vacancy's text is removed.
 - **Exclusions** hide a matching vacancy in every list (see below).
 - Counters count the same sets.
@@ -41,7 +40,7 @@ There is one list of exclusions, managed in Settings.
 
 **A row shows:**
 
-- the industries as badges, then the company;
+- the company;
 - in Applied, ◷ "Listing expired" when the vacancy is past its expiry date; ✓ "Shortlisted" for a vacancy shortlisted from Inbox in this session;
 - in every list, Fits you and the requirements counter (see `assessment.md`);
 - the title;
@@ -74,7 +73,6 @@ There is one list of exclusions, managed in Settings.
   - Fits you: Strong 75+, Partial 55–74, Weak, Not scored, without counts; a dimmed result counts as Not scored;
   - Published: All, 7 days or 30 days, by the vacancy's publication date; a vacancy with no publication date passes every choice;
   - Role: Remote (remote, anywhere or telecommute in the location); Leadership title (CTO, Head, Director, Manager, Lead, not "lead generation");
-  - Industries: one checkbox per industry with its count;
   - Sources: one checkbox per source with its count;
   - Unread (not in Archive);
   - "Showing N / M roles" and "Reset filters", which clears filters, query and Unread and sets the sort to Best fit.
@@ -82,7 +80,7 @@ There is one list of exclusions, managed in Settings.
 - **Sort** Best fit or Newest, as defined in `assessment.md`, in Inbox and Shortlist. Applied and Dismissed are sorted by the date of the decision, newest first.
 - The query, the filters and the sort are remembered in the browser.
 - **The list arrives in windows.** A request names a window with `limit`, a whole number from 1 to 200 (100 when left out), and `offset`, a whole number from 0 (0 when left out); the rows are that part of the chosen order, so the next window continues where the last one ended. A `limit` or an `offset` that is not a whole number in range is refused with a sentence and nothing is listed. An `offset` past the end gives no rows and is not an error.
-- **`matching`** is the number of roles the query and the filters select, counted whole and the same for every window; `total` stays the number of roles in the stage, which the stage tabs show. The stage counts, the counts beside the Industries and Sources filters and the empty text are counted over the whole selection, never over the window, so moving to another window changes none of them.
+- **`matching`** is the number of roles the query and the filters select, counted whole and the same for every window; `total` stays the number of roles in the stage, which the stage tabs show. The stage counts, the counts beside the Sources filter and the empty text are counted over the whole selection, never over the window, so moving to another window changes none of them.
 
 ## Stages and decisions
 
@@ -131,7 +129,7 @@ Then the dialog "Did you submit your application?" asks for the outcome: Not yet
 
 **Header:**
 
-- the industries as badges and the company;
+- the company;
 - the title;
 - "Listing expired", the publication date, each source by name as a link to the source address (hover shows "Found on <name>"), "Original listing ↗", and "Applied <date> from <profile>" when there is an application;
 - the actions of the current stage.
@@ -160,7 +158,7 @@ Opening a vacancy never makes a network request.
 - The automatic refetch of a vacancy when it is opened.
 - The text "Applications are permanently deleted 30 days after…", which was never true.
 - Erasing the application date when Applied is undone.
-- The Web3 mark and the Web3 / blockchain filter; industries replace them.
+- The Web3 mark and the Web3 / blockchain filter.
 - The "AI assessment" filter.
 - The full history of stage changes, which the interface never showed.
 

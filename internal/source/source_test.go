@@ -557,33 +557,6 @@ func TestGetro_cents_become_whole_amounts(t *testing.T) {
 	}
 }
 
-func TestGetro_IndustryTagsMappedToIndustries(t *testing.T) {
-	const listURL = "https://jobs.framework.ventures/jobs"
-	body := `<html><head></head><body><script id="__NEXT_DATA__" type="application/json">` +
-		`{"props":{"pageProps":{"initialState":{"jobs":{"found":[` +
-		`{"title":"Chain Engineer","slug":"chain-eng-001","url":"https://jobs.ashbyhq.com/abc/001",` +
-		`"organization":{"name":"Nexus Protocol","slug":"nexus-protocol","industryTags":["Blockchain","Fintech"]},` +
-		`"locations":[],"locationDetails":[],"createdAt":0,"workMode":"","compensationAmountMinCents":0,"compensationAmountMaxCents":0,"compensationCurrency":"","compensationPeriod":""}` +
-		`]}}}}}</script></body></html>`
-	m := fetchtest.NewMap()
-	m.Set(listURL, fetchtest.MapEntry{Response: fetch.Response{URL: listURL, Status: 200, Body: []byte(body)}})
-	mod, site := source.For(mustParseURL(t, "https://jobs.framework.ventures/"))
-	ps, err := mod.List(context.Background(), m, site)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(ps) == 0 {
-		t.Fatal("no postings")
-	}
-	got := make(map[string]bool)
-	for _, ind := range ps[0].Industries {
-		got[ind] = true
-	}
-	if !got["Web3"] || !got["Finance"] {
-		t.Errorf("industries: got %v, want [Web3 Finance]", ps[0].Industries)
-	}
-}
-
 func TestAshby_1_YEAR_interval_gives_per_year(t *testing.T) {
 	body := mustReadFile(t, "testdata/ashby.json")
 	apiURL := "https://api.ashbyhq.com/posting-api/job-board/nexgen?includeCompensation=true"

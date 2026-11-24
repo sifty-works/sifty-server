@@ -17,7 +17,6 @@ import (
 
 	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/db"
-	"github.com/sifty-works/sifty-server/internal/industry"
 	"github.com/sifty-works/sifty-server/internal/server"
 )
 
@@ -86,7 +85,6 @@ type ProfilePatchReq struct {
 	TargetRoles        *[]string     `json:"targetRoles,omitempty"`
 	Keywords           *[]string     `json:"keywords,omitempty"`
 	AllOf              *[]string     `json:"allOf,omitempty"`
-	TargetIndustries   *[]string     `json:"targetIndustries,omitempty"`
 	Compensation       *Compensation `json:"compensation,omitempty"`
 	Engagement         *[]string     `json:"engagement,omitempty"`
 	Hours              *Hours        `json:"hours,omitempty"`
@@ -299,9 +297,6 @@ func clearInheritedUnchanged(patch *ProfilePatchReq, own, first ProfileData) {
 	}
 	if patch.PreferredLocations != nil && len(own.PreferredLocations) == 0 && jsonEqual(*patch.PreferredLocations, first.PreferredLocations) {
 		delete(patch.named, "preferredLocations")
-	}
-	if patch.TargetIndustries != nil && len(own.TargetIndustries) == 0 && jsonEqual(*patch.TargetIndustries, first.TargetIndustries) {
-		delete(patch.named, "targetIndustries")
 	}
 }
 
@@ -945,25 +940,9 @@ func ProfileSearch(ctx context.Context, database *db.DB, profileID int64) (Profi
 		return Profile{}, nil
 	}
 
-	industries := pd.TargetIndustries
-	if len(industries) > 0 {
-		allowed := make(map[string]bool, len(industry.Names()))
-		for _, n := range industry.Names() {
-			allowed[n] = true
-		}
-		filtered := industries[:0:0]
-		for _, n := range industries {
-			if allowed[n] {
-				filtered = append(filtered, n)
-			}
-		}
-		industries = filtered
-	}
-
 	return Profile{
-		TargetRoles:      pd.TargetRoles,
-		Keywords:         pd.Keywords,
-		AllOf:            pd.AllOf,
-		TargetIndustries: industries,
+		TargetRoles: pd.TargetRoles,
+		Keywords:    pd.Keywords,
+		AllOf:       pd.AllOf,
 	}, nil
 }

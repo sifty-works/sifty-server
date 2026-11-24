@@ -1,7 +1,6 @@
 sites:
   - host: web3.career
     module: links
-    industries: [Web3]
     skip_json_ld: true
     link_pattern: '^/[a-z0-9][a-z0-9-]*/\d{5,}$'
     content:
@@ -9,7 +8,6 @@ sites:
         substr: text-dark-grey-text
   - host: web3.careers
     module: links
-    industries: [Web3]
     skip_json_ld: true
     link_pattern: '^/[a-z0-9][a-z0-9-]*/\d{5,}$'
     content:
@@ -17,7 +15,6 @@ sites:
         substr: text-dark-grey-text
   - host: remote3.co
     module: feed
-    industries: [Web3]
     list_address: https://remote3.co/api/rss
     content:
       - attr: class
@@ -27,7 +24,6 @@ sites:
     list_address: https://weworkremotely.com/remote-jobs.rss
   - host: cryptocurrencyjobs.co
     module: feed
-    industries: [Web3]
     list_address: https://cryptocurrencyjobs.co/index.xml
   - host: jobs.framework.ventures
     module: getro

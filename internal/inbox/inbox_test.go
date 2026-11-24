@@ -59,7 +59,6 @@ func newServer(t *testing.T, d *db.DB, o serverOpts) *httptest.Server {
 		func(mux *http.ServeMux) {
 			inbox.RegisterRoutes(mux, d, testNowFn, logger,
 				func() bool { return o.collecting }, o.sourceNames, o.rules, o.changed, nil)
-			inbox.RegisterIndustryRoutes(mux, logger)
 			if o.withCandidate {
 				candidate.RegisterRoutes(mux, d, "", candidate.Readers{}, logger, nil, nil)
 			}
@@ -233,11 +232,10 @@ func post(url, title, company string) listing.Posting {
 }
 
 type profileData struct {
-	Name       string   `json:"name"`
-	Roles      []string `json:"targetRoles,omitempty"`
-	Keywords   []string `json:"keywords,omitempty"`
-	AllOf      []string `json:"allOf,omitempty"`
-	Industries []string `json:"targetIndustries,omitempty"`
+	Name     string   `json:"name"`
+	Roles    []string `json:"targetRoles,omitempty"`
+	Keywords []string `json:"keywords,omitempty"`
+	AllOf    []string `json:"allOf,omitempty"`
 }
 
 func writeProfile(t *testing.T, d *db.DB, id int, pd profileData) {

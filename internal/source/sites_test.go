@@ -133,20 +133,6 @@ func TestLoadSitesDuplicateHostRenamesFile(t *testing.T) {
 	}
 }
 
-func TestLoadSites_UnknownIndustryRenamesFile(t *testing.T) {
-	path := writeSitesYAML(t, "sites:\n  - host: board.example.com\n    module: feed\n    industries:\n      - NoSuchIndustry\n")
-	broken, err := source.LoadSites(path)
-	if err == nil {
-		t.Fatal("unknown industry should produce a recovery")
-	}
-	if broken == "" {
-		t.Error("file with unknown industry should be renamed")
-	}
-	if !strings.Contains(err.Error(), "unknown industry") {
-		t.Errorf("error should mention 'unknown industry': %s", err)
-	}
-}
-
 func listNamedFeed(t *testing.T, contentType, body string) ([]string, error) {
 	t.Helper()
 	t.Cleanup(func() { resetSites(t) })

@@ -743,19 +743,6 @@ func TestUpsert_DeleteTombstonesAddress(t *testing.T) {
 	}
 }
 
-func TestUpsert_NoIndustriesOnPostingLeavesIndustriesEmpty(t *testing.T) {
-	d := openTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	id, _, err := cat.Upsert(context.Background(), posting("https://example.com/industry/none", "Solidity Dev", "Co"), "src")
-	if err != nil {
-		t.Fatalf("upsert: %v", err)
-	}
-	var industries string
-	if d.QueryRow(`SELECT industries FROM vacancy WHERE id=?`, id).Scan(&industries); industries != `[]` {
-		t.Errorf("posting without industries: got %q, want []", industries)
-	}
-}
-
 func TestUpsert_FTSPreservedOnUnchangedUpsert(t *testing.T) {
 	d := openTestDB(t)
 	cat := catalog.New(d, fixedNow())
@@ -769,77 +756,6 @@ func TestUpsert_FTSPreservedOnUnchangedUpsert(t *testing.T) {
 	var n int
 	if d.QueryRow(`SELECT count(*) FROM vacancy_fts WHERE rowid=?`, id).Scan(&n); n != 1 {
 		t.Errorf("FTS row count after unchanged upsert: got %d, want 1", n)
-	}
-}
-
-func TestUpsert_IndustriesStoredOnInsert(t *testing.T) {
-	d := openTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	p := posting("https://example.com/jobs/ind1", "Chain Engineer", "Nexus")
-	p.Industries = []string{"Web3", "Finance"}
-	id, _, err := cat.Upsert(context.Background(), p, "src")
-	if err != nil {
-		t.Fatalf("upsert: %v", err)
-	}
-	var industries string
-	d.QueryRow(`SELECT industries FROM vacancy WHERE id=?`, id).Scan(&industries)
-	if !strings.Contains(industries, "Web3") || !strings.Contains(industries, "Finance") {
-		t.Errorf("industries on insert: got %q, want Web3 and Finance", industries)
-	}
-}
-
-func TestUpsert_IndustriesUnionedOnUpdate(t *testing.T) {
-	d := openTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	p := posting("https://example.com/jobs/ind2", "Chain Engineer", "Nexus")
-	p.Industries = []string{"Web3"}
-	id, _, _ := cat.Upsert(context.Background(), p, "src")
-	p.Industries = []string{"Finance"}
-	cat.Upsert(context.Background(), p, "src")
-	var industries string
-	d.QueryRow(`SELECT industries FROM vacancy WHERE id=?`, id).Scan(&industries)
-	if !strings.Contains(industries, "Web3") || !strings.Contains(industries, "Finance") {
-		t.Errorf("industries union on update: got %q, want Web3 and Finance", industries)
-	}
-}
-
-func TestUpsert_UnlabelledUpdateKeepsExistingIndustries(t *testing.T) {
-	d := openTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	p := posting("https://example.com/jobs/ind3", "Platform Engineer", "Acme")
-	p.Industries = []string{"Software"}
-	id, _, _ := cat.Upsert(context.Background(), p, "src")
-	p.Industries = nil
-	cat.Upsert(context.Background(), p, "src")
-	var industries string
-	d.QueryRow(`SELECT industries FROM vacancy WHERE id=?`, id).Scan(&industries)
-	if !strings.Contains(industries, "Software") {
-		t.Errorf("unlabelled update: got %q, want Software preserved", industries)
-	}
-}
-
-func TestUpsert_IndustriesUnionedOnMerge(t *testing.T) {
-	d := openTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	p1 := posting("https://acme.com/jobs/proto1", "Protocol Engineer", "Nexus Labs")
-	p1.Industries = []string{"Web3"}
-	cat.Upsert(context.Background(), p1, "src1")
-	p2 := posting("https://acme.com/jobs/proto2", "Protocol Engineer", "Nexus Labs")
-	p2.Industries = []string{"Finance"}
-	cat.Upsert(context.Background(), p2, "src2")
-	p3 := posting("https://other.example.com/jobs/pe", "Protocol Engineer", "Nexus Labs")
-	p3.Industries = []string{"Security"}
-	id, outcome, err := cat.Upsert(context.Background(), p3, "src3")
-	if err != nil {
-		t.Fatalf("merge upsert: %v", err)
-	}
-	if outcome != catalog.OutcomeMerged {
-		t.Errorf("outcome: got %v, want OutcomeMerged", outcome)
-	}
-	var industries string
-	d.QueryRow(`SELECT industries FROM vacancy WHERE id=?`, id).Scan(&industries)
-	if !strings.Contains(industries, "Web3") || !strings.Contains(industries, "Finance") || !strings.Contains(industries, "Security") {
-		t.Errorf("merge union: got %q, want Web3, Finance, Security", industries)
 	}
 }
 

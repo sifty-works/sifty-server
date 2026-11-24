@@ -558,29 +558,6 @@ func TestImport_ProfileEngagementAndHours(t *testing.T) {
 	}
 }
 
-func TestImport_ProfileTargetIndustriesListedNotImported(t *testing.T) {
-	fromDir := makeOldDir(t, "")
-	odb := openOldDB(t, fromDir)
-	insertProfile(t, odb, "p1", "Ind", "2024-01-01T00:00:00Z", false)
-	odb.Exec(`UPDATE user_profiles SET data=? WHERE id='p1'`,
-		`{"targetIndustries":["fintech","healthtech"]}`)
-
-	targetDir := t.TempDir()
-	report := runImport(t, fromDir, targetDir)
-
-	pd := readProfileData(t, targetDir, 1)
-	if len(pd.TargetIndustries) != 0 {
-		t.Errorf("TargetIndustries: got %d, want 0 (not imported)", len(pd.TargetIndustries))
-	}
-
-	if !strings.Contains(report, "fintech") || !strings.Contains(report, "healthtech") {
-		t.Errorf("report does not list previous target industries; got:\n%s", report)
-	}
-	if !strings.Contains(report, "not imported") {
-		t.Errorf("report does not say 'not imported'; got:\n%s", report)
-	}
-}
-
 func TestImport_ActiveProfileMapped(t *testing.T) {
 	fromDir := makeOldDir(t, "")
 	odb := openOldDB(t, fromDir)
@@ -783,20 +760,16 @@ func TestImport_NoticePeriodFreeTextDroppedWhenStructured(t *testing.T) {
 	}
 }
 
-func TestImport_UserTargetRolesAndIndustriesReportedAsNotImported(t *testing.T) {
+func TestImport_UserTargetRolesReportedAsNotImported(t *testing.T) {
 	fromDir := makeOldDir(t, "")
 	insertUserRow(t, fromDir, `{
-		"targetRoles": ["Software Engineer","Staff Engineer"],
-		"targetIndustries": ["fintech"]
+		"targetRoles": ["Software Engineer","Staff Engineer"]
 	}`)
 	targetDir := t.TempDir()
 	report := runImport(t, fromDir, targetDir)
 
 	if !strings.Contains(report, "targetRoles") {
 		t.Errorf("report should mention targetRoles as not imported: %s", report)
-	}
-	if !strings.Contains(report, "targetIndustries") {
-		t.Errorf("report should mention targetIndustries as not imported: %s", report)
 	}
 	if !strings.Contains(report, "not imported") {
 		t.Errorf("report should say not imported: %s", report)

@@ -794,24 +794,6 @@ func TestCollect_ExcludedAfterDetail(t *testing.T) {
 	checkExclusionRun(t, e, 1)
 }
 
-func TestCollect_BoardIndustriesFillPostingWithoutOwnIndustries(t *testing.T) {
-	const listURL = "https://web3.career/"
-	const vacURL = "https://web3.career/developer/12345"
-	listBody := `<html><body><a href="` + vacURL + `">Chain Developer</a></body></html>`
-	e := newEnv(t)
-	e.fm.Set(listURL, fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "text/html", Body: []byte(listBody)}})
-	e.fm.Set(vacURL, fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "text/html", Body: []byte(exclusionDetailPage)}})
-	addSource(t, e, listURL)
-	runCollect(t, e)
-	var industries string
-	if err := e.db.QueryRow(`SELECT industries FROM vacancy WHERE url=?`, vacURL).Scan(&industries); err != nil {
-		t.Fatalf("vacancy not found: %v", err)
-	}
-	if !strings.Contains(industries, "Web3") {
-		t.Errorf("board industries: got %q, want Web3 for web3.career posting", industries)
-	}
-}
-
 const (
 	noEmployerListURL = "https://feeds.example.com/openings.xml"
 	noEmployerURL     = "https://feeds.example.com/openings/101"
