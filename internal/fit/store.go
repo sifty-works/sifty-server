@@ -240,13 +240,18 @@ func recomputePass(ctx context.Context, database *db.DB, cat *catalog.Catalog, r
 		}
 		rows.Close()
 	}
-	written := 0
-	for after := int64(0); total > 0; {
+	written, waiting := 0, len(stale)
+	for after := int64(0); waiting > 0; {
 		batch, err := cat.VacancyTexts(ctx, after, 200)
 		if err != nil || len(batch) == 0 {
 			return written, err
 		}
 		after = batch[len(batch)-1].ID
+		for _, t := range batch {
+			if len(stale[t.ID]) > 0 {
+				waiting--
+			}
+		}
 		n, err := writeBatch(ctx, database, batch, stale, r)
 		if err != nil {
 			return written, err

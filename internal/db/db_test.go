@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/sifty-works/sifty-server/internal/db"
 )
@@ -218,4 +220,69 @@ func makeMigrations(n int) map[string]string {
 		out[name] = fmt.Sprintf("CREATE TABLE IF NOT EXISTS m%d (id INTEGER PRIMARY KEY);", i)
 	}
 	return out
+}
+
+func TestReadDoesNotWaitForOpenWriteTransaction(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "test.db"), db.Migrations)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	tx, err := d.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES ('held', 'yes')`); err != nil {
+		t.Fatalf("write in transaction: %v", err)
+	}
+
+	readCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	var n int
+	if err := d.QueryRowContext(readCtx, `SELECT count(*) FROM settings WHERE key = 'held'`).Scan(&n); err != nil {
+		t.Fatalf("read while another connection held a write transaction: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("read saw %d uncommitted rows", n)
+	}
+}
+
+func TestReadThenWriteTransactionsDoNotFailWhenTheyOverlap(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "test.db"), db.Migrations)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	errs := make(chan error, 8)
+	for i := 0; i < 8; i++ {
+		go func(i int) {
+			tx, err := d.BeginTx(ctx, nil)
+			if err != nil {
+				errs <- err
+				return
+			}
+			defer tx.Rollback()
+			var n int
+			if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM settings`).Scan(&n); err != nil {
+				errs <- err
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+			if _, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?)`, fmt.Sprintf("k%d", i), "v"); err != nil {
+				errs <- err
+				return
+			}
+			errs <- tx.Commit()
+		}(i)
+	}
+	for i := 0; i < 8; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("overlapping transaction: %v", err)
+		}
+	}
 }

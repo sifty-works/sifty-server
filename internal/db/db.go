@@ -17,6 +17,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+const poolSize = 4
+
 //go:embed all:migrations
 var embedded embed.FS
 
@@ -41,7 +43,7 @@ func Open(path string, migrations fs.FS) (*DB, error) {
 		return nil, fmt.Errorf("db: listing migrations: %w", err)
 	}
 
-	dsn := path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+	dsn := path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_txlock=immediate"
 	sqldb, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("db: open %s: %w", path, err)
@@ -71,7 +73,7 @@ func Open(path string, migrations fs.FS) (*DB, error) {
 
 	pending := pendingMigrations(all, version)
 	if len(pending) == 0 {
-		return &DB{DB: sqldb, Version: version}, nil
+		return pooled(sqldb, version), nil
 	}
 
 	isNew := version == 0 && dbIsEmpty(sqldb)
@@ -101,7 +103,13 @@ func Open(path string, migrations fs.FS) (*DB, error) {
 		version = m.version
 	}
 
-	return &DB{DB: sqldb, Version: version}, nil
+	return pooled(sqldb, version), nil
+}
+
+func pooled(sqldb *sql.DB, version int) *DB {
+	sqldb.SetMaxOpenConns(poolSize)
+	sqldb.SetMaxIdleConns(poolSize)
+	return &DB{DB: sqldb, Version: version}
 }
 
 type migration struct {

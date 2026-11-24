@@ -3,6 +3,7 @@ package fit_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -111,6 +112,39 @@ func TestRecomputeOnlyRecomputesResultsThatAreOutOfDate(t *testing.T) {
 	d.QueryRow(`SELECT count(*) FROM fit`).Scan(&n)
 	if n != 6 {
 		t.Errorf("rows after a new vacancy: %d, want 6", n)
+	}
+}
+
+func TestRecomputeWritesEveryChangedVacancyAndReadsNoBatchPastTheLast(t *testing.T) {
+	d, cat, ids := fixture(t)
+	for i := 3; i <= 650; i++ {
+		_, _, err := cat.Upsert(ctx, listing.Posting{URL: fmt.Sprintf("https://jobs.example.org/%d", i), Title: "Backend Engineer",
+			Company: fmt.Sprintf("Company %d", i), Text: "<p>Remote role</p>", TextState: listing.TextFull}, "fixture")
+		if err != nil {
+			t.Fatalf("upsert %d: %v", i, err)
+		}
+	}
+	recompute(t, d, nil)
+
+	late := int64(600)
+	for _, n := range []int{1, 600} {
+		if _, _, err := cat.Upsert(ctx, listing.Posting{URL: fmt.Sprintf("https://jobs.example.org/%d", n), Title: "Backend Engineer",
+			Company: "Acme", Text: "<p>Salary: EUR 95,000 per year. Fully remote.</p>", TextState: listing.TextFull}, "fixture"); err != nil {
+			t.Fatalf("change vacancy %d: %v", n, err)
+		}
+	}
+	var calls []int
+	recompute(t, d, func(written, total int, _ string) { calls = append(calls, total) })
+
+	if len(calls) != 3 || calls[0] != 4 {
+		t.Errorf("progress calls with totals %v, want three calls with total 4: batches 1 to 3 hold the changed vacancies and batch 4 is not read", calls)
+	}
+	for _, pid := range []int64{1, 2} {
+		for _, vid := range []int64{ids[0], late} {
+			if got := stored(t, d, pid, vid); got.version != 2 {
+				t.Errorf("profile %d vacancy %d: result of the changed vacancy not recomputed: %+v", pid, vid, got)
+			}
+		}
 	}
 }
 
