@@ -4,7 +4,7 @@ What the user gets: the application is one program that starts on an empty data 
 
 ## Where data lives
 
-- Everything the application stores lives in one folder, chosen by `--data-dir`, then the `SIFTY_DATA_DIR` environment variable, then `./data`. The path is made absolute. The folder is created with access for the user who runs the application only. The browser that reads application forms uses its own installation outside this folder.
+- Everything the application stores lives in one folder, chosen by `--data-dir`, then the `SIFTY_DATA_DIR` environment variable, then a `data` folder beside the working folder when one is already there, and otherwise the application folder of this user: `Library/Application Support/Sifty` on macOS and `.config/sifty` elsewhere. The path is made absolute. The folder is created with access for the user who runs the application only. The browser that reads application forms uses its own installation outside this folder.
 - Only a browser on this machine can use the application; other web pages cannot make it act. A second copy started on the same data folder refuses to start.
 - **What leaves the machine:**
   - requests to the job sites of the sources, and to the pages of vacancies;

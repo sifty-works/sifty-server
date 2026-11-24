@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 )
 
 var version = "dev"
@@ -69,7 +71,7 @@ func parseServeFlags(args []string) (serveFlags, error) {
 
 	f := serveFlags{port: -1}
 	var portVal int
-	fs.StringVar(&f.dataDir, "data-dir", "", "data folder (default: $SIFTY_DATA_DIR, then ./data)")
+	fs.StringVar(&f.dataDir, "data-dir", "", "data folder (default: $SIFTY_DATA_DIR, then ./data if it exists, then the application folder of this user)")
 	fs.IntVar(&portVal, "port", 0, "listen port (0 = take a free port; omit = use settings or default 7373)")
 	fs.BoolVar(&f.offline, "offline", false, "disable all network requests and model calls")
 	fs.BoolVar(&f.debug, "debug", false, "enable debug mode")
@@ -108,5 +110,19 @@ func resolveDataDir(flagValue string) string {
 	if v := os.Getenv("SIFTY_DATA_DIR"); v != "" {
 		return v
 	}
-	return "./data"
+	return defaultDataDir()
+}
+
+func defaultDataDir() string {
+	if st, err := os.Stat("data"); err == nil && st.IsDir() {
+		return "./data"
+	}
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "./data"
+	}
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(base, "Sifty")
+	}
+	return filepath.Join(base, "sifty")
 }
