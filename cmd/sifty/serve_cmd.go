@@ -69,7 +69,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 	defer logClose()
 
-	settingsPath := filepath.Join(dataDir, "sifty.yaml")
+	settingsPath := filepath.Join(dataDir, settingsFileName)
 	store, cfgResult, err := config.Open(settingsPath)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -175,7 +175,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		return len(r.Active("collect")) > 0
 	}
 
-	filesDir := filepath.Join(dataDir, "files")
+	filesDir := filepath.Join(dataDir, filesDirName)
 
 	handler := server.New(server.Options{
 		Version:           version,

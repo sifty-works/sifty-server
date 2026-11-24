@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -198,6 +199,20 @@ func dbIsEmpty(db *sql.DB) bool {
 func vacuumInto(db *sql.DB, dst string) error {
 	_, err := db.Exec("VACUUM INTO ?", dst)
 	return err
+}
+
+func CopyReadOnly(path, dst string) error {
+	u := url.URL{Scheme: "file", Path: path, RawQuery: "mode=ro&_pragma=busy_timeout(5000)"}
+	sqldb, err := sql.Open("sqlite", u.String())
+	if err != nil {
+		return fmt.Errorf("db: open %s: %w", path, err)
+	}
+	defer sqldb.Close()
+	sqldb.SetMaxOpenConns(1)
+	if err := vacuumInto(sqldb, dst); err != nil {
+		return fmt.Errorf("db: copying %s: %w", path, err)
+	}
+	return nil
 }
 
 func pruneBackups(dir string, keep int) error {

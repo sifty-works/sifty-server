@@ -40,7 +40,7 @@ func cmdImportV1(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	}
 
 	dbPath := filepath.Join(absData, dbFileName)
-	settingsPath := filepath.Join(absData, "sifty.yaml")
+	settingsPath := filepath.Join(absData, settingsFileName)
 
 	if err := importv1.Import(ctx, absFrom, dbPath, settingsPath, stdout); err != nil {
 		fmt.Fprintln(stderr, err)

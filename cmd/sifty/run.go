@@ -28,6 +28,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return cmdServe(ctx, rest, stdout, stderr)
 	case "config":
 		return cmdConfig(rest, stdout, stderr)
+	case "backup":
+		return cmdBackup(rest, stdout, stderr)
 	case "import-v1":
 		return cmdImportV1(ctx, rest, stdout, stderr)
 	case "gen-api":
@@ -95,6 +97,7 @@ func usage() string {
 
 Commands:
   serve          Start the application server
+  backup         Write the database, settings and documents to one archive
   import-v1      Import data from the previous application
   config         Manage configuration
   gen-api        Generate api/openapi.yaml from the route registry

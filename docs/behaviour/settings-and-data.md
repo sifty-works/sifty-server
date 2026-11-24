@@ -68,6 +68,7 @@ A change applies at once without a restart, except a change of the port. A chang
 - Of My data and of each profile only the latest version is kept; there is no history of edits.
 - The application is for one user; it keeps no user accounts.
 - Changes of the database layout are applied automatically at start, inside one transaction, after the application has copied the database into the backups folder of the data folder; the last five copies are kept. An older version of the application refuses to open a database of a newer layout.
+- **Backup.** `sifty backup [--data-dir <folder>] [--out <file>]` writes one `.tar.gz` archive, by default `sifty-backup-<UTC time>.tar.gz` in the working folder, and prints its path and size. It holds a consistent copy of the database (taken while the application runs, and without changing the database), the settings file, the site descriptions file `vocab/sites.yaml` when the user has one, and the `files` folder (documents and photo). It leaves out the secrets file, earlier database copies, logs, the lock and everything else in the folder, and says what it left out. Unpacked into an empty folder, the archive is a data folder the application opens with the same vacancies, profiles and documents. The command refuses to write over an existing file and refuses a folder with no database, each with a sentence that names the path.
 
 ## Errors
 

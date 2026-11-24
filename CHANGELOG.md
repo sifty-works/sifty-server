@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- `sifty backup [--data-dir <folder>] [--out <file>]` writes the database, the settings file, `vocab/sites.yaml` and the documents and photo into one `.tar.gz` archive, while the application runs and without changing the database; it leaves out the secrets file, earlier database copies and logs, and refuses to overwrite an existing file.
 - The SQL of My data, profiles, documents, suggestions and Questions & Answers now lives in one repository file of the `candidate` package, and the handlers and services call it; nothing the user sees and nothing in the interface description changes.
 - The list, the vacancy page and decisions no longer wait for a collection, a reading or a recompute that is writing: the database keeps four connections instead of one, and a write waits only for another write. A recompute of Fits you after one changed role stops once the changed results are written, where before it read the whole catalogue again.
 - The unused Word document reader and the unused `shortlistcheck.Version` are removed; a `.docx` upload is still refused as before. 170 lines removed.
