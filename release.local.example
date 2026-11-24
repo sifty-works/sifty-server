@@ -1,0 +1,3 @@
+data_dir=/path/to/sifty-data
+releases_dir=/path/to/sifty-releases
+repo_dir=/path/to/sifty-server

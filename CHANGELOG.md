@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- `make release` builds the application into its own folder, waits until no collection is running, switches the running application to the new build and checks that it answers with the new version, or else switches back and restores the database copy the new build made; then it moves these entries under the new version, tags and pushes it. `make rollback` returns to the previous build and, when that release changed the database layout, restores the copy made before it and says which one. Both read the data folder, the folder of builds and the checkout from an untracked `release.local`.
 - Web client 0.23.0: Undo beside a decision taken in this session returns the role to the stage it came from, where before the button did nothing; the Settings screen draws one page shell when the server is not running, instead of a second navigation rail inside the first.
 - The Money tile picks its mark after rounding, so a sum just under the next unit is no longer written with the lower one: 999,950 reads "$1M" instead of "$1000k", and 999.5 reads "1k" instead of "1000".
 - Web client 0.22.0: the Inbox asks the server for 100 roles at a time and carries "Show more roles" under the list, while the stage counts, the Sources counts and the "Showing N / M roles" line read the whole selection; the Filters panel has no Industries group, a list row and the vacancy page carry no industries, and a profile has no target industries.

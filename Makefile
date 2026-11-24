@@ -3,7 +3,7 @@ VERSION  := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev
 LDFLAGS  := -X main.version=$(VERSION)
 GO_BUILD := go build -ldflags "$(LDFLAGS)"
 
-.PHONY: build dev check budget clean web release uncomment
+.PHONY: build dev check budget clean web release rollback uncomment
 
 web:
 	@set -euo pipefail; \
@@ -63,9 +63,10 @@ release: web
 	  echo "Publish a new web client built against the current API description." >&2; \
 	  exit 1; \
 	fi
-	mkdir -p bin
-	$(GO_BUILD) -o $(BINARY) ./cmd/sifty
-	@echo "Release binary built: $(BINARY) version $(VERSION)"
+	@bash scripts/release.sh
+
+rollback:
+	@CONFIRM=$(CONFIRM) bash scripts/rollback.sh
 
 check: build
 	@echo "--- gofmt ---"

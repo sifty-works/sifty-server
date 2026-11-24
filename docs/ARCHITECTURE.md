@@ -184,7 +184,7 @@ type Response struct { Text string; InTokens, OutTokens int }
 
 - `make web`: downloads the pinned web client archive, verifies its SHA-256 (refuses and deletes on mismatch), and unpacks it into `web/dist`; skipped when `web/dist` already holds the pinned version. `make build` = `make web` + `go build`.
 - `make dev`: starts `sifty serve --offline` on a copy of the data (port 7300) and prints how to run the web client (`npm run dev` in a sifty-web checkout). `--offline` forbids every network request and model call. `SIFTY_REPLAY_DIR=<folder>` adds `--replay <folder>`, which serves requests from recorded responses instead of making real HTTP calls.
-- `make release`: runs `make web`, then refuses when `web/dist/api.sha256` (the SHA-256 of the description the web client was built against) differs from the SHA-256 of `api/openapi.yaml`, then builds the release binary.
+- `make release`: runs `make web`, then refuses when `web/dist/api.sha256` (the SHA-256 of the description the web client was built against) differs from the SHA-256 of `api/openapi.yaml`, then runs the release steps `docs/PROCESS.md` describes: the build, the switch of the running application with its way back, the tag and the push. `make rollback` returns to the previous build.
 - `make check`, `make budget`, `make rollback`: see `PROCESS.md`. Neither runs npm.
 - Commands: `serve` (`--offline`, `--replay <folder>`, `--port`, `--debug`, `--data-dir`), `backup` (database copy and the user's files in one archive), `import-v1`, `config defaults`, `version`.
 

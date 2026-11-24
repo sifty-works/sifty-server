@@ -16,6 +16,11 @@ make build          # download the pinned web client, then go build
 make dev            # server on port 7300 (offline, with a fixture data folder)
 ```
 
+## Releasing and rolling back
+
+1. Copy `release.local.example` to `release.local` (untracked) and set the data folder of the running application, the folder that holds builds and the checkout to release. The port is read from `sifty.yaml` in the data folder.
+2. `make release` builds, switches the running application to the new build and tags the release; `make rollback` returns to the previous build. `docs/PROCESS.md` describes both.
+
 ## Developing the web client against a local server
 
 1. Run `make dev` in this repository (starts the server on port 7300).
