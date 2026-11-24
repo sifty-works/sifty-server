@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- The Money tile picks its mark after rounding, so a sum just under the next unit is no longer written with the lower one: 999,950 reads "$1M" instead of "$1000k", and 999.5 reads "1k" instead of "1000".
 - Web client 0.22.0: the Inbox asks the server for 100 roles at a time and carries "Show more roles" under the list, while the stage counts, the Sources counts and the "Showing N / M roles" line read the whole selection; the Filters panel has no Industries group, a list row and the vacancy page carry no industries, and a profile has no target industries.
 - Industries are gone from the application: the Inbox has no Industries filter and no industry counts, a list row and the vacancy page carry no industries, a profile has no target industries and no longer narrows its Inbox by them, `GET /api/industries` is no longer served, and collection no longer derives industries from board tags or from a site's description. A profile that still holds target industries keeps them stored and ignores them. A migration drops the stored industries of every vacancy; vacancies and decisions are kept.
 - Saving My data or a profile now stores every field the save names, whatever its value: a list left empty in the editor and sent as "none" is cleared exactly as an empty list is, where before it kept its old entries; a field the save does not name keeps its stored value, and an empty profile name is still ignored. The interface description is unchanged.

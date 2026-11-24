@@ -448,15 +448,17 @@ func cash(low, high float64) string {
 }
 
 func compact(x float64) (string, string) {
-	for _, u := range []struct {
-		size float64
-		unit string
-	}{{1e6, "M"}, {1e3, "k"}} {
-		if x >= u.size {
-			return strconv.FormatFloat(math.Round(x/u.size*10)/10, 'f', -1, 64), u.unit
-		}
+	if math.Round(x) < 1000 {
+		return amount(x), ""
 	}
-	return amount(x), ""
+	if v := tenths(x / 1e3); v < 1000 {
+		return strconv.FormatFloat(v, 'f', -1, 64), "k"
+	}
+	return strconv.FormatFloat(tenths(x/1e6), 'f', -1, 64), "M"
+}
+
+func tenths(x float64) float64 {
+	return math.Round(x*10) / 10
 }
 
 func list(xs []string, empty string) string {
