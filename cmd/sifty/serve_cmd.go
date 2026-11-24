@@ -200,7 +200,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			}
 			return m
 		}
-		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r, modelReady(store, offline))
+		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r, modelReady(store, offline), filepath.Join(dataDir, logDir, logFileName), heldKeys(store, secrets))
 	})
 
 	srv := &http.Server{
@@ -268,9 +268,8 @@ func openLog(dataDir string, stderr io.Writer) (*slog.Logger, func(), error) {
 		return nil, nil, err
 	}
 
-	tee := io.MultiWriter(stderr, logFile)
-	handler := slog.NewTextHandler(tee, &slog.HandlerOptions{Level: slog.LevelDebug})
-	logger := slog.New(handler)
+	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
+	logger := slog.New(slog.NewMultiHandler(slog.NewTextHandler(stderr, opts), slog.NewJSONHandler(logFile, opts)))
 
 	return logger, func() { logFile.Close() }, nil
 }

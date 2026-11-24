@@ -21,7 +21,7 @@ These rules come from what made the previous application grow to several times t
 - One process, written in Go, with SQLite (pure Go driver) and the web client embedded in the binary. A second server on the same data folder is refused by a lock file `<data>/sifty.lock`.
 - The server listens on `127.0.0.1` only, checks Host and Origin, requires JSON for every request that changes something, and limits a body to 1 MB except document uploads. Requests of 500 ms or more, other than model calls, are logged.
 - Each capability has three layers: **handler** (parses and checks input, calls the service, writes JSON) → **service** (domain rules) → **repo** (SQL only, typed rows and typed errors). A foundation package `db` opens the database, runs migrations and makes backups; no other package reaches the raw connection. It keeps a pool of four connections, so a read does not wait for a write while a connection is free; a transaction takes the write lock when it begins and waits for another writer inside SQLite, up to the busy timeout of five seconds.
-- **Errors are typed:** `Invalid` → 422, `NotFound` → 404, `Conflict` → 409, `Busy` → 423, anything else and panics → 500 with "Internal error, see log #id" and a log entry. A Go error text never reaches the user. The store returns codes; texts for the user live in the service or the client.
+- **Errors are typed:** `Invalid` → 422, `NotFound` → 404, `Conflict` → 409, `Busy` → 423, anything else and panics → 500 with "Internal error, see log #id" and a log entry. A Go error text never reaches the user outside Monitor › Logs, which shows the log's warnings and errors as written, with keys masked. The store returns codes; texts for the user live in the service or the client.
 
 ## Capabilities and packages
 
@@ -211,7 +211,7 @@ The web client lives in `github.com/sifty-works/sifty-web`. Its source is in tha
 | Questions & Answers | `GET/POST/PATCH/DELETE /api/qa` |
 | Reference | `GET /api/reference` (countries, regions and time-zone bands from the `places` vocabulary, and option sets; shipped as embedded data) |
 | Application | `GET /api/vacancies/{id}/application`; `PATCH …/application/fields/{field}`; `POST …/application/{write,paste,questions,retry}`; `POST /api/vacancies/{id}/locate`; `POST /api/vacancies/{id}/shortlist-check/retry` |
-| Settings and status | `GET/PUT /api/settings`, `GET/PUT /api/settings/file`; `GET/PATCH /api/models` (providers with their cost and state, the provider of each kind of work, paid bulk permission, the pause switch, the daily limit and the day's background calls); `POST /api/providers/{name}/check`; `GET /api/work` (running jobs, queued jobs by kind with the reason they wait, and failures of the last 7 days); `GET /api/status` (or event stream); `GET /api/version` |
+| Settings and status | `GET/PUT /api/settings`, `GET/PUT /api/settings/file`; `GET/PATCH /api/models` (providers with their cost and state, the provider of each kind of work, paid bulk permission, the pause switch, the daily limit and the day's background calls); `POST /api/providers/{name}/check`; `GET /api/work` (running jobs, queued jobs by kind with the reason they wait, and failures of the last 7 days); `GET /api/logs` (the same failures, and the last 200 warnings and errors of the log with keys masked); `GET /api/status` (or event stream); `GET /api/version` |
 
 ## Import of the old application
 
@@ -230,7 +230,7 @@ These are targets the coordinator checks at acceptance of every change (see `PRO
 | Measure | Budget |
 |---|---|
 | Backend code | at most 18,500 lines |
-| Frontend code | at most 6,000 lines |
+| Frontend code | at most 6,200 lines |
 | Database per vacancy | at most 18 KB |
 | Model calls for a new vacancy text | 1 |
 | Model calls for a change of profile or My data | 0 for Fits you and the counter; Shortlist checks become outdated and run again only when their vacancy is opened |
@@ -239,4 +239,4 @@ These are targets the coordinator checks at acceptance of every change (see `PRO
 | Network per collection run | 1 request per source (2 for Hacker News), plus 1 per vacancy without text in the listing that is new, or known without text and not requested in the last 7 days, plus 1 per posting without a company that is new, or whose stored vacancy has none and was not asked in the last 7 days; a posting that is still without a company is not stored, so every run offers it again and requests its page again: a known cost, made visible by the count of postings without an employer on the source |
 | List API | under 50 ms at the 95th percentile for 1,200 rows; vacancy view under 30 ms; decision under 20 ms |
 
-Size by capability (backend, then frontend, in lines), measured for a capability that is delivered and estimated for the rest: collection 4,450 and 400 (fetching, the listing model and its normalisation, the catalogue, sources, collection runs, and data lines such as heading lists and site configurations); assessment 3,100 and 700; inbox 1,600 and 1,500; profiles 2,700 and 2,350; application 2,800 and 800; foundation 3,700 and 700 (settings pages). That is about 18,350 and 6,450, so the backend keeps a reserve of 150 lines: a capability that needs more takes it from another by the owner's decision. The frontend estimate is about 450 lines over its budget; the profile editors are where it must be recovered, with one generic section editor instead of one editor per section. The frontend budget is checked in sifty-web by its `scripts/budget.sh`.
+Size by capability (backend, then frontend, in lines), measured for a capability that is delivered and estimated for the rest: collection 4,450 and 400 (fetching, the listing model and its normalisation, the catalogue, sources, collection runs, and data lines such as heading lists and site configurations); assessment 3,100 and 700; inbox 1,600 and 1,500; profiles 2,700 and 2,350; application 2,800 and 800; foundation 3,700 and 900 (settings pages, with the Monitor logs page). That is about 18,350 and 6,650, so the backend keeps a reserve of 150 lines: a capability that needs more takes it from another by the owner's decision. The frontend estimate is about 450 lines over its budget; the profile editors are where it must be recovered, with one generic section editor instead of one editor per section. The frontend budget is checked in sifty-web by its `scripts/budget.sh`.

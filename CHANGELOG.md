@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- `GET /api/logs` lists the jobs that failed in the last seven days and the last 200 warnings and errors of the log, newest first, with every held API key shown as `***`. The log file is now written as JSON lines, and the number in "see log #N" starts from the start time, so it does not repeat after a restart. The frontend budget rises to 6,200 lines for the Logs page.
 - Settings has a Monitor group. Its Background work page shows what runs, what waits and why, and what failed in the last seven days, each with its reason in a sentence (web client 0.24.0).
 - `GET /api/work` lists what background work is running, what waits and why (paused, the daily limit, a held provider, a paid provider not allowed, a retry time), and what failed in the last seven days, each with a sentence instead of the Go error, which goes to the log under the job's id. The sentence is made when a job fails, so failures recorded before this version keep their old text until they age out of the seven days. A document analysis whose provider does not answer now says so.
 - `sifty backup [--data-dir <folder>] [--out <file>]` writes the database, the settings file, `vocab/sites.yaml` and the documents and photo into one `.tar.gz` archive, while the application runs and without changing the database; it leaves out the secrets file, earlier database copies and logs, and refuses to overwrite an existing file.

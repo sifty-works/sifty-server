@@ -70,6 +70,10 @@ const (
 
 var counter atomic.Uint64
 
+func init() {
+	counter.Store(uint64(time.Now().Unix()))
+}
+
 type Options struct {
 	Version           string
 	APISha256         string

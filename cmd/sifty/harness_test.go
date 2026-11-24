@@ -116,7 +116,7 @@ func newRouteServerWithReaders(t *testing.T, d *db.DB, r *runner.Runner, readers
 		Logger:            logger,
 		BinaryUploadPaths: []string{"/api/documents"},
 	}, func(mux *http.ServeMux) {
-		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, enqueueRecomputeFit(r), t.TempDir(), readers, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r, nil)
+		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, enqueueRecomputeFit(r), t.TempDir(), readers, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r, nil, filepath.Join(t.TempDir(), logFileName), nil)
 	})
 	ts := httptest.NewUnstartedServer(h)
 	ts.Listener = l

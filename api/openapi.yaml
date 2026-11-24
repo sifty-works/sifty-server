@@ -1656,6 +1656,48 @@ components:
             required:
                 - force
             type: object
+        logAttr:
+            properties:
+                key:
+                    type: string
+                value:
+                    type: string
+            required:
+                - key
+                - value
+            type: object
+        logEntry:
+            properties:
+                attrs:
+                    items:
+                        $ref: '#/components/schemas/logAttr'
+                    type: array
+                level:
+                    type: string
+                message:
+                    type: string
+                time:
+                    type: string
+            required:
+                - time
+                - level
+                - message
+                - attrs
+            type: object
+        logsResp:
+            properties:
+                entries:
+                    items:
+                        $ref: '#/components/schemas/logEntry'
+                    type: array
+                failed:
+                    items:
+                        $ref: '#/components/schemas/workFailed'
+                    type: array
+            required:
+                - failed
+                - entries
+            type: object
         modelsPatch:
             properties:
                 allowPaidBulk:
@@ -2097,6 +2139,18 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/PreviewResp'
+                    description: OK
+    /api/logs:
+        get:
+            operationId: getApiLogs
+            responses:
+                4XX:
+                    $ref: '#/components/responses/Error'
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/logsResp'
                     description: OK
     /api/me:
         get:

@@ -177,19 +177,30 @@ func workHandler(database *db.DB, gate *models.Gate, r *runner.Runner, now func(
 		if out.Waiting, err = waitingWork(ctx, gate, queued, now()); err != nil {
 			return workResp{}, err
 		}
-		failed, err := r.Failed(now().Add(-failedWindow), failedLimit)
-		if err != nil {
+		if out.Failed, err = failedWork(ctx, database, r, now); err != nil {
 			return workResp{}, err
-		}
-		for _, j := range failed {
-			item := workFailed{ID: j.ID, Kind: j.Kind, Label: label(j.Kind), At: j.Updated.UTC().Format(time.RFC3339), Reason: j.Error}
-			if item.Subject, err = subjectOf(ctx, database, j); err != nil {
-				return workResp{}, err
-			}
-			out.Failed = append(out.Failed, item)
 		}
 		return out, nil
 	}
+}
+
+func failedWork(ctx context.Context, database *db.DB, r *runner.Runner, now func() time.Time) ([]workFailed, error) {
+	out := []workFailed{}
+	if r == nil {
+		return out, nil
+	}
+	failed, err := r.Failed(now().Add(-failedWindow), failedLimit)
+	if err != nil {
+		return nil, err
+	}
+	for _, j := range failed {
+		item := workFailed{ID: j.ID, Kind: j.Kind, Label: label(j.Kind), At: j.Updated.UTC().Format(time.RFC3339), Reason: j.Error}
+		if item.Subject, err = subjectOf(ctx, database, j); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, nil
 }
 
 func waitingWork(ctx context.Context, gate *models.Gate, queued []runner.Job, now time.Time) ([]workWaiting, error) {

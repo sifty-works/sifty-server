@@ -48,6 +48,8 @@ func registerAllRoutes(
 	col *collect.Collector,
 	r *runner.Runner,
 	modelReady func(kind string) error,
+	logPath string,
+	heldKeys func() []string,
 ) {
 	enqueue := func(kind, subject string) (int64, error) {
 		if r == nil {
@@ -81,6 +83,7 @@ func registerAllRoutes(
 	}
 	server.Handle(mux, "POST /api/providers/{name}/check", logger, models.CheckProviderHandler(gate))
 	server.Handle(mux, "GET /api/work", logger, workHandler(database, gate, r, now))
+	server.Handle(mux, "GET /api/logs", logger, logsHandler(database, r, now, logPath, heldKeys))
 	server.Handle(mux, "GET /api/models", logger, models.ModelsHandler(gate))
 	server.Handle(mux, "PATCH /api/models", logger, models.PatchModelsHandler(gate))
 	inbox.RegisterRoutes(mux, database, now, logger, collectActive, sourceNames, rules, recomputeFit, enqueueModelWork)

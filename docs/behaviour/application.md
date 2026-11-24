@@ -72,7 +72,7 @@ Settings › Monitor › Background work lists what runs, what waits and what fa
 - **Waiting:** the queued jobs of each kind with their count. When a kind waits for something other than its turn, the reason stands next to it: background model work is paused; the daily limit of model calls is reached, until a time; the provider is held, until a time, because it did not answer or kept giving answers that could not be used; the provider is paid and "Allow paid bulk work" is off; or the job waits to try again at a time.
 - **Failed:** the jobs that failed in the last 7 days, newest first, at most 50, each with its kind, subject, time and the reason as a sentence.
 
-The reason of a failure is a sentence made from the kind of error when the job fails: a text too long for the chosen model, no model chosen, offline mode, a paid provider refused, a provider that did not answer, a provider whose answers could not be used. Any other failure reads "Failed; the log has the details under job #N", and the log holds the error under that number. An error text never appears on this page.
+The reason of a failure is a sentence made from the kind of error when the job fails: a text too long for the chosen model, no model chosen, offline mode, a paid provider refused, a provider that did not answer, a provider whose answers could not be used. Any other failure reads "Failed; the log has the details under job #N", and the log holds the error under that number. An error text never appears on this page; Settings › Monitor › Logs shows the log's warnings and errors, with API keys hidden (see `settings-and-data.md`).
 
 **Rules of background work:**
 
