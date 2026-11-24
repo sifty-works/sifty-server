@@ -119,7 +119,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		logger.Warn("secrets.env load failed", "err", err)
 		secrets = map[string]string{}
 	}
-	gate := models.NewGate(database, store, offline, secrets)
+	gate := models.NewGate(database, store, offline, secrets, logger)
 	defer gate.Stop(context.Background())
 
 	var fetcher fetch.Fetcher

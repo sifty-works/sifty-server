@@ -3,7 +3,10 @@ package models
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +20,8 @@ type Gate struct {
 	store   *config.Store
 	offline bool
 	secrets map[string]string
+	logger  *slog.Logger
+	now     func() time.Time
 
 	mu      sync.Mutex
 	entries map[string]*providerEntry
@@ -27,12 +32,14 @@ type providerEntry struct {
 	mu       chan struct{}
 	waitUser int32
 
-	stateMu   sync.RWMutex
-	state     string
-	loading   bool
-	loadStart time.Time
-	loadModel string
-	loaded    bool
+	stateMu         sync.RWMutex
+	state           string
+	stateAt         time.Time
+	requestFailures int
+	loading         bool
+	loadStart       time.Time
+	loadModel       string
+	loaded          bool
 }
 
 func newEntry(m Model, modelName string) *providerEntry {
@@ -41,11 +48,17 @@ func newEntry(m Model, modelName string) *providerEntry {
 	return &providerEntry{model: m, mu: ch, loadModel: modelName}
 }
 
-func NewGate(database *db.DB, store *config.Store, offline bool, secrets map[string]string) *Gate {
+const providerRetryDelay = 5 * time.Minute
+const requestFailuresBeforeHold = 3
+
+func NewGate(database *db.DB, store *config.Store, offline bool, secrets map[string]string, logger *slog.Logger) *Gate {
 	if secrets == nil {
 		secrets = map[string]string{}
 	}
-	return &Gate{db: database, store: store, offline: offline, secrets: secrets, entries: map[string]*providerEntry{}}
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	return &Gate{db: database, store: store, offline: offline, secrets: secrets, logger: logger, now: time.Now, entries: map[string]*providerEntry{}}
 }
 
 func (g *Gate) For(kind, class string, vacancy ...int64) Model {
@@ -87,15 +100,15 @@ func (c *gatedCall) Complete(ctx context.Context, r Request) (Response, error) {
 	}
 
 	if c.background {
-		paused, _ := c.gate.IsPaused(ctx)
-		entry.stateMu.RLock()
-		ok := entry.state == "ok" || entry.state == ""
-		entry.stateMu.RUnlock()
-		if paused || !ok {
-			return Response{}, WaitError{RetryAfter: time.Now().Add(5 * time.Minute)}
+		paused, err := c.gate.IsPaused(ctx)
+		if err != nil || paused {
+			return Response{}, WaitError{RetryAfter: c.gate.now().Add(providerRetryDelay)}
 		}
 		if cfg.DailyModelLimit > 0 {
-			n, _ := countTodayCalls(ctx, c.gate.db)
+			n, err := countTodayCalls(ctx, c.gate.db)
+			if err != nil {
+				return Response{}, WaitError{RetryAfter: c.gate.now().Add(providerRetryDelay)}
+			}
 			if n >= cfg.DailyModelLimit {
 				next := time.Now().UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)
 				return Response{}, WaitError{RetryAfter: next}
@@ -120,6 +133,12 @@ func (c *gatedCall) Complete(ctx context.Context, r Request) (Response, error) {
 		}
 	}
 	defer func() { entry.mu <- struct{}{} }()
+
+	if c.background {
+		if until, held := entry.heldUntil(c.gate.now()); held {
+			return Response{}, WaitError{RetryAfter: until}
+		}
+	}
 
 	start := time.Now()
 	entry, err = c.gate.loadIfNeeded(ctx, entry, pc)
@@ -162,14 +181,38 @@ func (g *Gate) loadIfNeeded(ctx context.Context, e *providerEntry, pc config.Pro
 	return e, err
 }
 
-func (g *Gate) updateState(e *providerEntry, err error) {
-	e.stateMu.Lock()
-	if err == nil {
-		e.state = "ok"
-	} else {
-		e.state = err.Error()
+func (e *providerEntry) heldUntil(now time.Time) (time.Time, bool) {
+	e.stateMu.RLock()
+	defer e.stateMu.RUnlock()
+	if e.state == "" || e.state == "ok" {
+		return time.Time{}, false
 	}
-	e.stateMu.Unlock()
+	until := e.stateAt.Add(providerRetryDelay)
+	return until, now.Before(until)
+}
+
+func (g *Gate) updateState(e *providerEntry, err error) {
+	var re requestError
+	isRequest := errors.As(err, &re)
+	if errors.Is(err, context.Canceled) || errors.Is(err, ErrPromptTooLong) {
+		return
+	}
+	e.stateMu.Lock()
+	defer e.stateMu.Unlock()
+	switch {
+	case err == nil:
+		e.state = "ok"
+		e.requestFailures = 0
+	case isRequest:
+		e.requestFailures++
+		if e.requestFailures >= requestFailuresBeforeHold {
+			e.state = err.Error()
+			e.stateAt = g.now()
+		}
+	default:
+		e.state = err.Error()
+		e.stateAt = g.now()
+	}
 }
 
 func (g *Gate) Check(ctx context.Context, name string) (string, error) {
@@ -318,7 +361,10 @@ func (g *Gate) journal(ctx context.Context, kind, provider, model string, backgr
 	if background {
 		bg = 1
 	}
-	g.db.ExecContext(ctx, `INSERT INTO model_call (created_at,kind,background,provider,model,chars_in,tokens_in,chars_out,tokens_out,duration_ms,outcome,vacancy_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+	_, err := g.db.ExecContext(context.WithoutCancel(ctx), `INSERT INTO model_call (created_at,kind,background,provider,model,chars_in,tokens_in,chars_out,tokens_out,duration_ms,outcome,vacancy_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
 		time.Now().UTC().Format(time.RFC3339), kind, bg, provider, model, charsIn, tokensIn, charsOut, tokensOut, durMS, outcome, vacancyID,
 	)
+	if err != nil {
+		g.logger.Error("model call not recorded", "kind", kind, "provider", provider, "err", err)
+	}
 }

@@ -130,9 +130,12 @@ func userFriendlyAnalyzeError(err error) string {
 	if errors.Is(err, models.ErrOffline) {
 		return "Model calls are unavailable in offline mode. Open Settings."
 	}
+	if errors.Is(err, models.ErrPromptTooLong) {
+		return "The document is too long for the chosen model. Choose a model with a longer context in Settings."
+	}
 	return "The analysis could not be completed. Try again."
 }
 
 func isPermanentAnalyzeError(err error) bool {
-	return errors.Is(err, models.ErrNoProvider) || errors.Is(err, models.ErrOffline)
+	return errors.Is(err, models.ErrNoProvider) || errors.Is(err, models.ErrOffline) || errors.Is(err, models.ErrPromptTooLong)
 }

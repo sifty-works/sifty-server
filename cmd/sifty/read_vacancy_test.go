@@ -194,6 +194,32 @@ func TestReadVacancy_paid_bulk_refused_leaves_job_waiting(t *testing.T) {
 	t.Fatal("job did not go back to queued after ErrBulkOnPaid")
 }
 
+func TestReadVacancy_prompt_too_long_fails_job_at_once(t *testing.T) {
+	fix := newReadVacancyFix(t, "https://jobs.example.com/rv-long")
+	fix.fm.AddError(fmt.Errorf("%w: length 90000, limit 8000", models.ErrPromptTooLong))
+
+	fix.r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", fix.id)})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go fix.r.Start(ctx)
+
+	var j runner.Job
+	waitFor(t, 5*time.Second, func() bool {
+		jj, ok := fix.r.Last("read_vacancy")
+		if ok && jj.State == "failed" {
+			j = jj
+			return true
+		}
+		return false
+	})
+	if j.Attempts != 1 {
+		t.Errorf("attempts = %d, want 1", j.Attempts)
+	}
+	if n := len(fix.fm.Calls()); n != 1 {
+		t.Errorf("model calls = %d, want 1", n)
+	}
+}
+
 func TestReadVacancy_three_model_errors_fail_job(t *testing.T) {
 	fix := newReadVacancyFix(t, "https://jobs.example.com/rv6")
 	fix.fm.AddError(errors.New("model error"))

@@ -27,8 +27,8 @@ func newCLIClaude(endpoint, model, _ string, timeoutMS, contextChars int, _ map[
 }
 
 func (a *cliClaudeAdapter) Complete(ctx context.Context, r Request) (Response, error) {
-	if a.maxCtx > 0 && len(r.Prompt) > a.maxCtx {
-		return Response{}, fmt.Errorf("prompt length %d exceeds context limit %d", len(r.Prompt), a.maxCtx)
+	if err := checkPromptLength(r.Prompt, a.maxCtx); err != nil {
+		return Response{}, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
@@ -41,7 +41,7 @@ func (a *cliClaudeAdapter) Complete(ctx context.Context, r Request) (Response, e
 	}
 	out, err := RunCLI(ctx, a.program, args, r.Prompt, IsolatedEnv(), maxModelCLIOutput)
 	if err != nil {
-		return Response{}, err
+		return Response{}, cliRunFailure(err)
 	}
 	var res struct {
 		IsError          bool            `json:"is_error"`
@@ -49,7 +49,7 @@ func (a *cliClaudeAdapter) Complete(ctx context.Context, r Request) (Response, e
 		Result           string          `json:"result"`
 	}
 	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		return Response{}, fmt.Errorf("claude output is not valid JSON: %w", err)
+		return Response{}, requestFailure(fmt.Errorf("claude output is not valid JSON: %w", err))
 	}
 	if res.IsError {
 		return Response{}, fmt.Errorf("Not available: check that the Claude command line is signed in")

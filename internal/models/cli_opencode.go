@@ -28,8 +28,8 @@ func newCLIOpencode(endpoint, model, _ string, timeoutMS, contextChars int, _ ma
 }
 
 func (a *cliOpencodeAdapter) Complete(ctx context.Context, r Request) (Response, error) {
-	if a.maxCtx > 0 && len(r.Prompt) > a.maxCtx {
-		return Response{}, fmt.Errorf("prompt length %d exceeds context limit %d", len(r.Prompt), a.maxCtx)
+	if err := checkPromptLength(r.Prompt, a.maxCtx); err != nil {
+		return Response{}, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
@@ -42,7 +42,7 @@ func (a *cliOpencodeAdapter) Complete(ctx context.Context, r Request) (Response,
 		[]string{"run", "--pure", "--format", "json", "--model", a.model},
 		r.Prompt, env, maxModelCLIOutput)
 	if err != nil {
-		return Response{}, err
+		return Response{}, cliRunFailure(err)
 	}
 	var text strings.Builder
 	for _, line := range strings.Split(out, "\n") {
@@ -65,7 +65,7 @@ func (a *cliOpencodeAdapter) Complete(ctx context.Context, r Request) (Response,
 			return Response{}, fmt.Errorf("opencode error: %v", ev.Error)
 		}
 		if strings.Contains(ev.Type, "tool") || ev.Part.Type == "tool" {
-			return Response{}, fmt.Errorf("provider attempted a tool call")
+			return Response{}, requestFailure(fmt.Errorf("provider attempted a tool call"))
 		}
 		if ev.Type == "text" {
 			text.WriteString(ev.Part.Text)

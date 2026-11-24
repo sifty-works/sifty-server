@@ -57,7 +57,7 @@ func cliGate(t *testing.T, pc config.ProviderConfig) *models.Gate {
 	cfg.Providers = map[string]config.ProviderConfig{"p": pc}
 	cfg.Work = config.WorkConfig{"reading": "p"}
 	store := openTestStore(t, cfg)
-	gate := models.NewGate(openTestDB(t), store, false, nil)
+	gate := models.NewGate(openTestDB(t), store, false, nil, nil)
 	t.Cleanup(func() { gate.Stop(context.Background()) })
 	return gate
 }
@@ -129,6 +129,89 @@ func TestCLIClaudePromptOverContextRefused(t *testing.T) {
 	_, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "this prompt is too long"})
 	if err == nil {
 		t.Fatal("expected error for over-context prompt")
+	}
+}
+
+func TestCLIRequestFailureLeavesProviderStateAndProviderFailureSetsIt(t *testing.T) {
+	cases := []struct {
+		name   string
+		typ    string
+		reply  string
+		script string
+		holds  bool
+	}{
+		{"opencode tool call", "cli-opencode", `{"type":"tool_call","part":{"type":"tool","text":""}}` + "\n", "", false},
+		{"opencode no text", "cli-opencode", `{"type":"status","part":{"type":"status","text":"done"}}` + "\n", "", true},
+		{"claude answer that is not JSON", "cli-claude", "plain words", "", false},
+		{"claude output over the limit", "cli-claude", "", "head -c 9000000 /dev/zero | tr '\\0' 'a'\n", false},
+		{"opencode output over the limit", "cli-opencode", "", "head -c 9000000 /dev/zero | tr '\\0' 'a'\n", false},
+		{"opencode error event", "cli-opencode", `{"type":"error","error":"connection failed"}` + "\n", "", true},
+		{"claude not signed in", "cli-claude", `{"is_error":true,"result":"x"}`, "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			script := tc.script
+			if script == "" {
+				script = scriptReplying(t, tc.reply)
+			} else {
+				script = makeScript(t, script)
+			}
+			gate := cliGate(t, providerConfig(tc.typ, script, "m", "local"))
+			if _, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "hello"}); err == nil {
+				t.Fatal("expected an error")
+			}
+			state := gate.Status().Providers["p"].State
+			if held := state != "" && state != "ok"; held != tc.holds {
+				t.Errorf("provider state = %q, holds = %v, want holds = %v", state, held, tc.holds)
+			}
+		})
+	}
+}
+
+const toolCallReply = `{"type":"tool_call","part":{"type":"tool","text":""}}` + "\n"
+const textReply = `{"type":"text","part":{"type":"text","text":"fine"}}` + "\n"
+
+func backgroundCall(gate *models.Gate) error {
+	_, err := gate.For("reading", "background").Complete(context.Background(), models.Request{Prompt: "hello"})
+	return err
+}
+
+func isWait(err error) bool {
+	_, ok := err.(models.WaitError)
+	return ok
+}
+
+func TestThreeRequestFailuresInARowHoldTheProvider(t *testing.T) {
+	script := scriptReplying(t, toolCallReply)
+	gate := cliGate(t, providerConfig("cli-opencode", script, "m", "local"))
+	for i := range 3 {
+		if err := backgroundCall(gate); err == nil || isWait(err) {
+			t.Fatalf("call %d: expected the request failure, got %v", i+1, err)
+		}
+	}
+	if state := gate.Status().Providers["p"].State; state == "" || state == "ok" {
+		t.Fatalf("provider state after three request failures = %q, want held", state)
+	}
+	scriptReplying(t, textReply)
+	if err := backgroundCall(gate); !isWait(err) {
+		t.Fatalf("expected WaitError with no request made, got %v", err)
+	}
+}
+
+func TestSuccessBetweenRequestFailuresResetsTheCount(t *testing.T) {
+	script := scriptReplying(t, toolCallReply)
+	gate := cliGate(t, providerConfig("cli-opencode", script, "m", "local"))
+	backgroundCall(gate)
+	backgroundCall(gate)
+	scriptReplying(t, textReply)
+	if err := backgroundCall(gate); err != nil {
+		t.Fatalf("success call failed: %v", err)
+	}
+	scriptReplying(t, toolCallReply)
+	backgroundCall(gate)
+	backgroundCall(gate)
+	if err := backgroundCall(gate); err == nil || isWait(err) {
+		t.Fatalf("the third failure after a success should reach the provider, got %v", err)
 	}
 }
 

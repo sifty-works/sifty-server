@@ -59,8 +59,8 @@ func (a *ollamaAdapter) Unload(ctx context.Context) {
 }
 
 func (a *ollamaAdapter) Complete(ctx context.Context, r Request) (Response, error) {
-	if a.maxCtx > 0 && len(r.Prompt) > a.maxCtx {
-		return Response{}, fmt.Errorf("prompt length %d exceeds context limit %d", len(r.Prompt), a.maxCtx)
+	if err := checkPromptLength(r.Prompt, a.maxCtx); err != nil {
+		return Response{}, err
 	}
 	numCtx := len(r.Prompt) + 512
 	if a.maxCtx > 0 && numCtx > a.maxCtx {

@@ -368,6 +368,28 @@ func TestOpeningThePageAfterAFailedCheckQueuesNothingAndRetryMakesExactlyOneMore
 	}
 }
 
+func TestPromptTooLongForTheProviderEndsTheCheckAtOnce(t *testing.T) {
+	f := newCheckFix(t, checkOpts{idle: true})
+	f.move(t, "inbox", "shortlist")
+	f.fm.AddError(fmt.Errorf("%w: length 90000, limit 8000", models.ErrPromptTooLong))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go f.r.Start(ctx)
+	waitFor(t, 5*time.Second, func() bool {
+		var n int
+		f.d.QueryRow(`SELECT count(*) FROM job WHERE kind='shortlist_check' AND state='failed'`).Scan(&n)
+		return n == 1
+	})
+	if n := len(f.fm.Calls()); n != 1 {
+		t.Errorf("model calls = %d, want 1", n)
+	}
+	var attempts int
+	f.d.QueryRow(`SELECT attempts FROM job WHERE kind='shortlist_check'`).Scan(&attempts)
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1", attempts)
+	}
+}
+
 func TestPaidProviderWithoutPaidBulkAllowanceEndsTheCheckWithItsReason(t *testing.T) {
 	var reqCount atomic.Int64
 	fakeProv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

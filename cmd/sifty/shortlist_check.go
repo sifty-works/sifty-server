@@ -65,7 +65,7 @@ func runShortlistCheck(
 		switch {
 		case errors.As(err, &we):
 			return runner.WaitUntil(we.RetryAfter)
-		case errors.Is(err, models.ErrBulkOnPaid), errors.Is(err, models.ErrNoProvider), errors.Is(err, models.ErrOffline):
+		case errors.Is(err, models.ErrBulkOnPaid), errors.Is(err, models.ErrNoProvider), errors.Is(err, models.ErrOffline), errors.Is(err, models.ErrPromptTooLong):
 			return runner.Permanent(err)
 		}
 		return fmt.Errorf("shortlist check: %w", err)

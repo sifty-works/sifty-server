@@ -75,7 +75,7 @@ func TestOllamaAdapterLoadsOnce(t *testing.T) {
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
 	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
-	gate := models.NewGate(openTestDB(t), store, false, nil)
+	gate := models.NewGate(openTestDB(t), store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	m := gate.For("reading", "user")
@@ -105,7 +105,7 @@ func TestOllamaRefusesOverContextPrompt(t *testing.T) {
 	}()
 	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
-	gate := models.NewGate(openTestDB(t), store, false, nil)
+	gate := models.NewGate(openTestDB(t), store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	_, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "this prompt is too long"})
@@ -124,7 +124,7 @@ func TestOllamaHonoursContext(t *testing.T) {
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
 	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
-	gate := models.NewGate(openTestDB(t), store, false, nil)
+	gate := models.NewGate(openTestDB(t), store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -158,7 +158,7 @@ func TestOpenAISendsKeyAndParsesAnswer(t *testing.T) {
 	cfg.AllowPaidBulk = true
 	store := openTestStore(t, cfg)
 	secrets := map[string]string{"TESTPROVIDER_KEY": "sk-test-key"}
-	gate := models.NewGate(openTestDB(t), store, false, secrets)
+	gate := models.NewGate(openTestDB(t), store, false, secrets, nil)
 	defer gate.Stop(context.Background())
 
 	resp, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "hello"})
@@ -201,7 +201,7 @@ func TestUserCallBeforeBackgroundCall(t *testing.T) {
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
 	cfg.Work = config.WorkConfig{"reading": "local", "shortlist_check": "local"}
 	store := openTestStore(t, cfg)
-	gate := models.NewGate(openTestDB(t), store, false, nil)
+	gate := models.NewGate(openTestDB(t), store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	done1 := make(chan error, 1)
@@ -231,7 +231,7 @@ func TestBackgroundWaitsWhilePaused(t *testing.T) {
 	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
 	d := openTestDB(t)
-	gate := models.NewGate(d, store, false, nil)
+	gate := models.NewGate(d, store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	gate.SetPaused(context.Background(), true)
@@ -257,7 +257,7 @@ func TestBackgroundWaitsAtDailyLimit(t *testing.T) {
 	cfg.DailyModelLimit = 2
 	store := openTestStore(t, cfg)
 	d := openTestDB(t)
-	gate := models.NewGate(d, store, false, nil)
+	gate := models.NewGate(d, store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	gate.For("reading", "background").Complete(context.Background(), models.Request{Prompt: "first"})
@@ -282,7 +282,7 @@ func TestDailyLimitOfZeroAllowsUnlimitedBackgroundCalls(t *testing.T) {
 	cfg.DailyModelLimit = 0
 	store := openTestStore(t, cfg)
 	d := openTestDB(t)
-	gate := models.NewGate(d, store, false, nil)
+	gate := models.NewGate(d, store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	for i := 0; i < 3; i++ {
@@ -305,7 +305,7 @@ func TestDailyLimitReducedOnRunningGateIsEnforced(t *testing.T) {
 	cfg.DailyModelLimit = 0
 	store := openTestStore(t, cfg)
 	d := openTestDB(t)
-	gate := models.NewGate(d, store, false, nil)
+	gate := models.NewGate(d, store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	gate.For("reading", "background").Complete(context.Background(), models.Request{Prompt: "first"})
@@ -334,7 +334,7 @@ func TestBulkOnPaidRefusedUnlessAllowed(t *testing.T) {
 	cfg.Providers = map[string]config.ProviderConfig{"remote": providerConfig("openai", srv.URL, "gpt-4o", "paid")}
 	cfg.Work = config.WorkConfig{"reading": "remote"}
 	store := openTestStore(t, cfg)
-	gate := models.NewGate(openTestDB(t), store, false, nil)
+	gate := models.NewGate(openTestDB(t), store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	_, err := gate.For("reading", "background").Complete(context.Background(), models.Request{Prompt: "hello"})
@@ -343,7 +343,7 @@ func TestBulkOnPaidRefusedUnlessAllowed(t *testing.T) {
 	}
 
 	store.Update(func(c *config.Config) error { c.AllowPaidBulk = true; return nil })
-	gate2 := models.NewGate(openTestDB(t), store, false, nil)
+	gate2 := models.NewGate(openTestDB(t), store, false, nil, nil)
 	defer gate2.Stop(context.Background())
 	_, err = gate2.For("reading", "background").Complete(context.Background(), models.Request{Prompt: "hello"})
 	if err != nil {
@@ -367,7 +367,7 @@ func TestRevokedPaidBulkPermissionRefusesNextCallOnSameGate(t *testing.T) {
 	cfg.Work = config.WorkConfig{"reading": "remote"}
 	cfg.AllowPaidBulk = true
 	store := openTestStore(t, cfg)
-	gate := models.NewGate(openTestDB(t), store, false, nil)
+	gate := models.NewGate(openTestDB(t), store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	_, err := gate.For("reading", "background").Complete(context.Background(), models.Request{Prompt: "first"})
@@ -403,7 +403,7 @@ func TestModelCallJournalRecorded(t *testing.T) {
 	cfg.AllowPaidBulk = true
 	store := openTestStore(t, cfg)
 	d := openTestDB(t)
-	gate := models.NewGate(d, store, false, nil)
+	gate := models.NewGate(d, store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "test"})
@@ -427,7 +427,7 @@ func TestOfflineMakesNoRequest(t *testing.T) {
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
 	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
-	gate := models.NewGate(openTestDB(t), store, true, nil)
+	gate := models.NewGate(openTestDB(t), store, true, nil, nil)
 	defer gate.Stop(context.Background())
 
 	_, err := gate.For("reading", "user").Complete(context.Background(), models.Request{Prompt: "hello"})
@@ -455,7 +455,7 @@ func TestCheckWithFailingEndpointReturnsError(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
 	store := openTestStore(t, cfg)
-	gate := models.NewGate(openTestDB(t), store, false, nil)
+	gate := models.NewGate(openTestDB(t), store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	state, err := gate.Check(context.Background(), "local")
@@ -487,7 +487,7 @@ func TestOllamaSendsFormatAndThink(t *testing.T) {
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
 	cfg.Work = config.WorkConfig{"reading": "local"}
 	store := openTestStore(t, cfg)
-	gate := models.NewGate(openTestDB(t), store, false, nil)
+	gate := models.NewGate(openTestDB(t), store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	schema := json.RawMessage(`{"type":"object","properties":{}}`)
@@ -538,7 +538,7 @@ func TestCheckJournalsNonZeroDuration(t *testing.T) {
 	cfg.Providers = map[string]config.ProviderConfig{"local": providerConfig("ollama", srv.URL, "phi3", "local")}
 	store := openTestStore(t, cfg)
 	d := openTestDB(t)
-	gate := models.NewGate(d, store, false, nil)
+	gate := models.NewGate(d, store, false, nil, nil)
 	defer gate.Stop(context.Background())
 
 	gate.Check(context.Background(), "local")
@@ -547,5 +547,209 @@ func TestCheckJournalsNonZeroDuration(t *testing.T) {
 	d.QueryRowContext(context.Background(), `SELECT duration_ms FROM model_call WHERE kind='check'`).Scan(&durMS)
 	if durMS == 0 {
 		t.Error("check journal: duration_ms is 0, want non-zero")
+	}
+}
+
+type gateFixture struct {
+	gate     *models.Gate
+	db       *db.DB
+	requests atomic.Int32
+	failing  atomic.Bool
+	offset   atomic.Int64
+}
+
+func newGateFixture(t *testing.T, contextChars, dailyLimit int, handler http.HandlerFunc) *gateFixture {
+	t.Helper()
+	f := &gateFixture{}
+	if handler == nil {
+		handler = func(w http.ResponseWriter, r *http.Request) {
+			f.requests.Add(1)
+			if f.failing.Load() {
+				http.Error(w, "down", http.StatusInternalServerError)
+				return
+			}
+			w.Write(ollamaReply("ok"))
+		}
+	}
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	pc := providerConfig("ollama", srv.URL, "phi3", "local")
+	if contextChars > 0 {
+		pc.Context = contextChars
+	}
+	cfg := config.Defaults()
+	cfg.Providers = map[string]config.ProviderConfig{"local": pc}
+	cfg.Work = config.WorkConfig{"reading": "local"}
+	cfg.DailyModelLimit = dailyLimit
+	f.db = openTestDB(t)
+	f.gate = models.NewGate(f.db, openTestStore(t, cfg), false, nil, nil)
+	t.Cleanup(func() { f.gate.Stop(context.Background()) })
+	start := time.Now()
+	f.gate.SetClock(func() time.Time { return start.Add(time.Duration(f.offset.Load())) })
+	return f
+}
+
+func (f *gateFixture) advance(d time.Duration) { f.offset.Add(int64(d)) }
+
+func (f *gateFixture) background(ctx context.Context, prompt string) (models.Response, error) {
+	return f.gate.For("reading", "background").Complete(ctx, models.Request{Prompt: prompt})
+}
+
+func (f *gateFixture) providerState() string {
+	return f.gate.Status().Providers["local"].State
+}
+
+func TestPromptTooLongFailsOnlyThatCallAndLeavesProviderUsable(t *testing.T) {
+	f := newGateFixture(t, 20, 0, nil)
+
+	_, err := f.background(context.Background(), "this prompt is much too long for the context")
+	if !errors.Is(err, models.ErrPromptTooLong) {
+		t.Fatalf("expected ErrPromptTooLong, got %v", err)
+	}
+	if s := f.providerState(); s != "" && s != "ok" {
+		t.Fatalf("provider state after a too long prompt = %q, want ok", s)
+	}
+
+	resp, err := f.background(context.Background(), "short")
+	if err != nil {
+		t.Fatalf("next background call failed: %v", err)
+	}
+	if resp.Text != "ok" {
+		t.Errorf("next call reply = %q, want the model's answer", resp.Text)
+	}
+}
+
+func TestUnreachableProviderHoldsBackgroundCallsAndIsProbedEveryFiveMinutes(t *testing.T) {
+	f := newGateFixture(t, 0, 0, nil)
+	f.failing.Store(true)
+
+	if _, err := f.background(context.Background(), "first"); err == nil {
+		t.Fatal("expected the failing provider to return an error")
+	} else if _, wait := err.(models.WaitError); wait {
+		t.Fatalf("the first failure should be the provider's error, got %v", err)
+	}
+	if s := f.providerState(); s == "" || s == "ok" {
+		t.Fatalf("provider state after a failure = %q, want the failure", s)
+	}
+
+	expectHeld := func(label string) {
+		t.Helper()
+		seen := f.requests.Load()
+		if _, err := f.background(context.Background(), label); err == nil {
+			t.Fatalf("%s: expected a wait", label)
+		} else if _, wait := err.(models.WaitError); !wait {
+			t.Fatalf("%s: expected WaitError, got %v", label, err)
+		}
+		if f.requests.Load() != seen {
+			t.Fatalf("%s: a held provider was called", label)
+		}
+	}
+
+	f.advance(4 * time.Minute)
+	expectHeld("inside five minutes")
+
+	f.advance(2 * time.Minute)
+	seen := f.requests.Load()
+	if _, err := f.background(context.Background(), "failing probe"); err == nil {
+		t.Fatal("expected the probe to fail")
+	} else if _, wait := err.(models.WaitError); wait {
+		t.Fatalf("the probe should reach the provider, got %v", err)
+	}
+	if f.requests.Load() == seen {
+		t.Fatal("the probe did not reach the provider")
+	}
+
+	f.advance(4 * time.Minute)
+	expectHeld("inside five minutes of a failed probe")
+
+	f.failing.Store(false)
+	f.advance(2 * time.Minute)
+	resp, err := f.background(context.Background(), "probe")
+	if err != nil {
+		t.Fatalf("probe after the second hold failed: %v", err)
+	}
+	if resp.Text != "ok" {
+		t.Errorf("probe reply = %q", resp.Text)
+	}
+	if s := f.providerState(); s != "ok" {
+		t.Errorf("provider state after a successful probe = %q, want ok", s)
+	}
+	if _, err := f.background(context.Background(), "work"); err != nil {
+		t.Errorf("work after the probe should continue, got %v", err)
+	}
+}
+
+func TestCancelledBackgroundCallCountsAgainstDailyLimit(t *testing.T) {
+	var f *gateFixture
+	started := make(chan struct{})
+	f = newGateFixture(t, 0, 1, func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req map[string]interface{}
+		json.Unmarshal(body, &req)
+		if p, _ := req["prompt"].(string); p == "" {
+			w.Write(ollamaReply(""))
+			return
+		}
+		f.requests.Add(1)
+		close(started)
+		<-r.Context().Done()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := f.background(ctx, "work")
+		done <- err
+	}()
+	<-started
+	cancel()
+	if err := <-done; err == nil {
+		t.Fatal("expected the cancelled call to fail")
+	}
+
+	var n int
+	if err := f.db.QueryRow(`SELECT count(*) FROM model_call WHERE background = 1`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("model_call rows for the cancelled call = %d, want 1", n)
+	}
+	if s := f.providerState(); s != "" && s != "ok" {
+		t.Errorf("a cancelled call set the provider state to %q", s)
+	}
+	_, err := f.background(context.Background(), "next")
+	if _, wait := err.(models.WaitError); !wait {
+		t.Fatalf("expected WaitError at the daily limit, got %v", err)
+	}
+	if f.requests.Load() != 1 {
+		t.Errorf("model requests = %d, want 1", f.requests.Load())
+	}
+}
+
+func TestBackgroundWaitsWhenPauseSwitchCannotBeRead(t *testing.T) {
+	f := newGateFixture(t, 0, 0, nil)
+	f.db.Close()
+
+	_, err := f.background(context.Background(), "work")
+	if _, wait := err.(models.WaitError); !wait {
+		t.Fatalf("expected WaitError with an unreadable database, got %v", err)
+	}
+	if f.requests.Load() != 0 {
+		t.Fatal("the model was called although the pause switch could not be read")
+	}
+}
+
+func TestBackgroundWaitsWhenTodaysCallsCannotBeCounted(t *testing.T) {
+	f := newGateFixture(t, 0, 5, nil)
+	if _, err := f.db.Exec(`DROP TABLE model_call`); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := f.background(context.Background(), "work")
+	if _, wait := err.(models.WaitError); !wait {
+		t.Fatalf("expected WaitError when calls cannot be counted, got %v", err)
+	}
+	if f.requests.Load() != 0 {
+		t.Fatal("the model was called although today's calls could not be counted")
 	}
 }

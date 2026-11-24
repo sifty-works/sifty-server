@@ -47,6 +47,9 @@ func runReadVacancy(
 		if errors.Is(err, models.ErrBulkOnPaid) {
 			return runner.WaitUntil(time.Now().Add(paidBulkDelay))
 		}
+		if errors.Is(err, models.ErrPromptTooLong) {
+			return runner.Permanent(err)
+		}
 		return err
 	}
 
