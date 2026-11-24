@@ -103,7 +103,7 @@ Tests check behaviour through public boundaries, so the code behind those bounda
 
 ## Budgets
 
-The budgets in `docs/ARCHITECTURE.md`, section "Budgets", are a target that the coordinator checks at acceptance. They are not a rule given to executors. `make budget` measures every budget it can on the code and on a fixture data folder, and it prints each measure next to its target. A change over a budget is merged only by the owner's decision, and that decision changes the budget table in the same merge. The weekly review looks at how the measures move over time.
+The budgets in `docs/ARCHITECTURE.md`, section "Budgets", are a target that the coordinator checks at acceptance. They are not a rule given to executors. `make budget` measures every budget it can on the code and on a fixture data folder, and it prints each measure next to its target. A change over a budget is merged only by the owner's decision, and that decision changes the budget table and adds an entry to `docs/budget-log.md`, naming what the lines are spent on, in the same merge. The weekly review looks at how the measures move over time.
 
 ## Weekly review
 

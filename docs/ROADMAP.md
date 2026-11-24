@@ -18,10 +18,6 @@ The order in which Sifty is built. Each slice delivers behaviour the user can se
 
 ## Status
 
-Slices 1 to 7 are accepted, and the two refinements carried past slice 7 are merged: a requirement row carries one + and one -, each offering the skills it names as a list, and the Models section of Settings shows the answer to the change made last.
+Slices 1 to 9 are accepted: collection and the four lists, every kind of source, profiles and the visibility they decide, Fits you, the requirements read from a vacancy text, documents with their proposed facts, and the Shortlist check that stands beside the requirements the code left undecided.
 
-Slices 1 to 8 are accepted. A document arrives as a file, as pasted text or as a link, keeps its extracted text, is analysed into proposed facts, and takes Accept and Reject with their conflicts; the Files tab of the profile shows the documents and, beside them, the suggestions to review; the import carries documents with their files and the suggestions nobody has decided.
-
-Slices 1 to 9 are accepted. A vacancy entering Shortlist is compared with the user's own data in one model call, repeated once when it decides nothing, and the answer stands beside the requirements the code left undecided, with its date, its state and a way to run it again; it runs again only when its inputs change and the vacancy page is opened.
-
-Slice 10 is next. The frontend stands at 5,620 lines of 6,000 and slice 10 is estimated at about 800, so it does not fit: before it starts, the owner decides where those lines come from.
+Slice 10 is next. The frontend stands at 5,746 lines of 6,000 and slice 10 is estimated at about 800, so it does not fit. Either the profile editors give those lines back, as the Budgets section of `docs/ARCHITECTURE.md` says they should, or the budget rises; whichever happens is recorded in `docs/budget-log.md`.

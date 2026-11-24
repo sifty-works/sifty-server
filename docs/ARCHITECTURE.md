@@ -225,7 +225,7 @@ The web client lives in `github.com/sifty-works/sifty-web`. Its source is in tha
 
 ## Budgets
 
-These are targets the coordinator checks at acceptance of every change (see `PROCESS.md`). Going over one needs the owner's explicit decision.
+These are targets the coordinator checks at acceptance of every change (see `PROCESS.md`). Going over one needs the owner's explicit decision, and every change of this table is recorded in `docs/budget-log.md` with what the lines are spent on.
 
 | Measure | Budget |
 |---|---|
