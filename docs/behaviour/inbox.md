@@ -11,6 +11,7 @@ What the user gets: for the chosen profile, the vacancies that fit its search, i
 - Changing the profile reloads the list for that profile.
 - The list width is changed by dragging its edge within limits; a double click resets it; the width is remembered in the browser.
 - When the server does not answer, a banner reads "Sifty server is not responding. Retrying…".
+- A list that cannot be loaded shows an error, not an empty list: when the server answers with an error, the list and the detail area show its sentence; Saved answers and the excluded words of a profile say that they could not be loaded.
 - Every message the client shows is of one of two kinds. A notice reporting something done disappears by itself after five seconds; a failure stays until it is dismissed or the action is tried again. Both close with a cross, and Escape closes the newest message on the page. A new message in the same place replaces the one standing there, so messages never stack up. An action the user asked for that fails always says so; a background load or refresh that fails stays silent.
 - While a local model loads, a strip reads "Loading model <name> · m:ss", or "Model load failed: …".
 
