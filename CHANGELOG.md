@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Settings › Monitor › Background work, through `GET /api/work`, names the provider and model that serve a running job that uses a model; waiting counts are computed by one grouped query instead of reading every queued job.
 ## 0.2.0
 
 - At start, API keys the application holds are scrubbed from the lines already in `logs/sifty.log` and `logs/sifty.log.1`, written before keys were masked; a file with no key is not rewritten. Keys no longer held, such as the key of a removed provider, stay in old lines.

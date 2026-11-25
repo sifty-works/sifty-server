@@ -100,6 +100,11 @@ type workProgress struct {
 	Total int `json:"total"`
 }
 
+type workModel struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+}
+
 type workRunning struct {
 	ID       int64         `json:"id"`
 	Kind     string        `json:"kind"`
@@ -107,6 +112,7 @@ type workRunning struct {
 	Subject  string        `json:"subject"`
 	Progress *workProgress `json:"progress"`
 	Since    string        `json:"since"`
+	Model    *workModel    `json:"model,omitempty"`
 }
 
 type workReason struct {
@@ -167,9 +173,10 @@ func workHandler(database *db.DB, gate *models.Gate, r *runner.Runner, now func(
 			if j.Total > 0 {
 				item.Progress = &workProgress{Done: j.Done, Total: j.Total}
 			}
+			item.Model = runningModel(gate, j.Kind)
 			out.Running = append(out.Running, item)
 		}
-		queued, err := r.Queued()
+		queued, err := r.QueuedByKind()
 		if err != nil {
 			return workResp{}, err
 		}
@@ -199,28 +206,33 @@ func failedWork(ctx context.Context, database *db.DB, r *runner.Runner, now func
 	return out, nil
 }
 
-func waitingWork(ctx context.Context, gate *models.Gate, queued []runner.Job, now time.Time) ([]workWaiting, error) {
-	var order []string
-	byKind := map[string][]runner.Job{}
-	for _, j := range queued {
-		if _, seen := byKind[j.Kind]; !seen {
-			order = append(order, j.Kind)
-		}
-		byKind[j.Kind] = append(byKind[j.Kind], j)
-	}
+func waitingWork(ctx context.Context, gate *models.Gate, queued []runner.QueuedKind, now time.Time) ([]workWaiting, error) {
 	out := []workWaiting{}
-	for _, kind := range order {
-		jobs := byKind[kind]
-		reason, err := waitReason(ctx, gate, jobKinds[kind].work, jobs, now)
+	for _, q := range queued {
+		reason, err := waitReason(ctx, gate, jobKinds[q.Kind].work, q.NotBefore, now)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, workWaiting{Kind: kind, Label: label(kind), Count: len(jobs), Reason: reason})
+		out = append(out, workWaiting{Kind: q.Kind, Label: label(q.Kind), Count: q.Count, Reason: reason})
 	}
 	return out, nil
 }
 
-func waitReason(ctx context.Context, gate *models.Gate, work string, jobs []runner.Job, now time.Time) (*workReason, error) {
+func runningModel(gate *models.Gate, kind string) *workModel {
+	work := jobKinds[kind].work
+	if gate == nil || work == "" {
+		return nil
+	}
+	cfg := gate.Store().Get()
+	provider := cfg.WorkProviderFor(work)
+	pc, ok := cfg.Providers[provider]
+	if !ok {
+		return nil
+	}
+	return &workModel{Provider: provider, Model: pc.Model}
+}
+
+func waitReason(ctx context.Context, gate *models.Gate, work string, earliest, now time.Time) (*workReason, error) {
 	if gate != nil && work != "" {
 		cfg := gate.Store().Get()
 		paused, err := gate.IsPaused(ctx)
@@ -244,12 +256,6 @@ func waitReason(ctx context.Context, gate *models.Gate, work string, jobs []runn
 		}
 		if pc, ok := cfg.Providers[provider]; ok && pc.Cost == "paid" && !cfg.AllowPaidBulk {
 			return &workReason{Code: "paid", Text: "Waiting for your permission to use a paid provider. Allow paid bulk work in Settings.", Provider: provider}, nil
-		}
-	}
-	earliest := jobs[0].NotBefore
-	for _, j := range jobs {
-		if j.NotBefore.Before(earliest) {
-			earliest = j.NotBefore
 		}
 	}
 	if earliest.After(now) {

@@ -68,7 +68,7 @@ Diagnostic panels (questionnaire coverage, the technical record of form reading,
 
 Settings › Monitor › Background work lists what runs and what waits, and Settings › Monitor › Logs what failed:
 
-- **Running:** each running job with what it is (Collection, Reading vacancy text, Recomputing Fits you, Shortlist check, Document analysis, Text retention), its subject in words (the vacancy's title and company, or the document's name; none for collection, recomputation and retention), its progress when it has one, and since when.
+- **Running:** each running job with what it is (Collection, Reading vacancy text, Recomputing Fits you, Shortlist check, Document analysis, Text retention), its subject in words (the vacancy's title and company, or the document's name; none for collection, recomputation and retention), its progress when it has one, and since when. A job that uses a model (Reading vacancy text, Shortlist check, Document analysis) also names the provider and model that serve its kind of work in the current settings; this is not necessarily the one that served a call already under way, because a change of provider in Settings applies to the next call.
 - **Waiting:** the queued jobs of each kind with their count. When a kind waits for something other than its turn, the reason stands next to it: background model work is paused; the daily limit of model calls is reached, until a time; the provider is held, until a time, because it did not answer or kept giving answers that could not be used; the provider is paid and "Allow paid bulk work" is off; or the job waits to try again at a time.
 - **Failed:** the jobs that failed in the last 7 days, newest first, at most 50, each with its kind, subject, time and the reason as a sentence.
 

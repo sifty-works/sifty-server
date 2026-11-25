@@ -317,8 +317,36 @@ func (r *Runner) Active(kinds ...string) []Job {
 	return jobs
 }
 
-func (r *Runner) Queued() ([]Job, error) {
-	return r.selectJobs(true, `state='queued' ORDER BY priority DESC, created ASC, id ASC`)
+type QueuedKind struct {
+	Kind      string
+	Count     int
+	NotBefore time.Time
+}
+
+func (r *Runner) QueuedByKind() ([]QueuedKind, error) {
+	rows, err := r.db.Query(
+		`SELECT kind, count(*), min(not_before) FROM (
+		     SELECT kind, not_before,
+		            row_number() OVER (ORDER BY priority DESC, created ASC, id ASC) AS pos
+		     FROM job WHERE state='queued')
+		 GROUP BY kind ORDER BY min(pos)`)
+	if err != nil {
+		return nil, fmt.Errorf("runner: count queued jobs: %w", err)
+	}
+	defer rows.Close()
+	var out []QueuedKind
+	for rows.Next() {
+		var q QueuedKind
+		var notBefore string
+		if err := rows.Scan(&q.Kind, &q.Count, &notBefore); err != nil {
+			return nil, fmt.Errorf("runner: count queued jobs: %w", err)
+		}
+		if q.NotBefore, err = time.Parse(time.RFC3339, notBefore); err != nil {
+			return nil, fmt.Errorf("runner: count queued jobs: %w", err)
+		}
+		out = append(out, q)
+	}
+	return out, rows.Err()
 }
 
 func (r *Runner) selectJobs(strict bool, tail string, args ...any) ([]Job, error) {
