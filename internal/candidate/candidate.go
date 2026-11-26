@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/db"
@@ -225,21 +227,75 @@ func normalizeDemographics(d *Demographics) *Demographics {
 }
 
 func roleClause(role string) (string, []any) {
-	norm := listing.FTSNorm(role)
-	if strings.TrimSpace(norm) == "" {
-		return "1=0", nil
-	}
-	matchArg := `title: "` + strings.ReplaceAll(norm, `"`, `""`) + `"`
-	return `v.id IN (SELECT rowid FROM vacancy_fts WHERE vacancy_fts MATCH ?)`, []any{matchArg}
+	return formsClause("title", role)
 }
 
 func termClause(term string) (string, []any) {
-	norm := listing.FTSNorm(term)
-	if strings.TrimSpace(norm) == "" {
+	return formsClause("{title tags text}", term)
+}
+
+func formsClause(columns, term string) (string, []any) {
+	words := strings.Fields(listing.FTSNorm(term))
+	if len(words) == 0 {
 		return "1=0", nil
 	}
-	matchArg := `{title tags text}: "` + strings.ReplaceAll(norm, `"`, `""`) + `"`
+	head := strings.Join(words[:len(words)-1], " ")
+	if head != "" {
+		head += " "
+	}
+	last := words[len(words)-1]
+	forms := []string{last}
+	if takesForms(term) {
+		forms = wordForms(last)
+	}
+	phrases := make([]string, len(forms))
+	for i, form := range forms {
+		phrases[i] = `" ` + head + form + ` "`
+	}
+	matchArg := columns + ": (" + strings.Join(phrases, " OR ") + ")"
 	return `v.id IN (SELECT rowid FROM vacancy_fts WHERE vacancy_fts MATCH ?)`, []any{matchArg}
+}
+
+func takesForms(term string) bool {
+	words := strings.FieldsFunc(term, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	if len(words) == 0 {
+		return false
+	}
+	runes := []rune(words[len(words)-1])
+	if len(runes) <= 2 {
+		return false
+	}
+	for _, r := range runes[1:] {
+		if unicode.IsUpper(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func wordForms(w string) []string {
+	forms := []string{w}
+	sibilant := hasAnySuffix(w, "s", "x", "z", "ch", "sh")
+	if utf8.RuneCountInString(w) < 5 || !strings.HasSuffix(w, "s") || hasAnySuffix(w, "ss", "us", "is", "os") {
+		if sibilant {
+			return append(forms, w+"es")
+		}
+		return append(forms, w+"s")
+	}
+	forms = append(forms, w[:len(w)-1])
+	if strings.HasSuffix(w, "es") && hasAnySuffix(w[:len(w)-2], "s", "x", "z", "ch", "sh") {
+		forms = append(forms, w[:len(w)-2])
+	}
+	return forms
+}
+
+func hasAnySuffix(w string, suffixes ...string) bool {
+	for _, s := range suffixes {
+		if strings.HasSuffix(w, s) {
+			return true
+		}
+	}
+	return false
 }
 
 func LoadMe(ctx context.Context, database *db.DB) (MeData, error) {
