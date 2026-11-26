@@ -1,0 +1,144 @@
+headings:
+  - {text: "about the role", kind: role}
+  - {text: "about this role", kind: role}
+  - {text: "about the job", kind: role}
+  - {text: "about the position", kind: role}
+  - {text: "about the opportunity", kind: role}
+  - {text: "the role", kind: role}
+  - {text: "the opportunity", kind: role}
+  - {text: "responsibilities", kind: role}
+  - {text: "key responsibilities", kind: role}
+  - {text: "your responsibilities", kind: role}
+  - {text: "what you'll do", kind: role}
+  - {text: "what you will do", kind: role}
+  - {text: "your role", kind: role}
+  - {text: "your impact", kind: role}
+  - {text: "role overview", kind: role}
+  - {text: "overview", kind: role}
+  - {text: "job description", kind: role}
+  - {text: "description", kind: role}
+  - {text: "a day in the life", kind: role}
+  - {text: "aufgaben", kind: role}
+  - {text: "deine aufgaben", kind: role}
+  - {text: "ihre aufgaben", kind: role}
+  - {text: "requirements", kind: requirements}
+  - {text: "qualifications", kind: requirements}
+  - {text: "minimum qualifications", kind: requirements}
+  - {text: "basic qualifications", kind: requirements}
+  - {text: "what we're looking for", kind: requirements}
+  - {text: "what we are looking for", kind: requirements}
+  - {text: "what you'll bring", kind: requirements}
+  - {text: "what you will bring", kind: requirements}
+  - {text: "who you are", kind: requirements}
+  - {text: "about you", kind: requirements}
+  - {text: "skills", kind: requirements}
+  - {text: "skills and experience", kind: requirements}
+  - {text: "your profile", kind: requirements}
+  - {text: "must have", kind: requirements}
+  - {text: "must haves", kind: requirements}
+  - {text: "must-have", kind: requirements}
+  - {text: "must-haves", kind: requirements}
+  - {text: "you have", kind: requirements}
+  - {text: "you should have", kind: requirements}
+  - {text: "competencies", kind: requirements}
+  - {text: "education", kind: requirements}
+  - {text: "anforderungen", kind: requirements}
+  - {text: "dein profil", kind: requirements}
+  - {text: "ihr profil", kind: requirements}
+  - {text: "nice to have", kind: nice_to_have}
+  - {text: "nice to haves", kind: nice_to_have}
+  - {text: "nice-to-have", kind: nice_to_have}
+  - {text: "nice-to-haves", kind: nice_to_have}
+  - {text: "preferred qualifications", kind: nice_to_have}
+  - {text: "preferred", kind: nice_to_have}
+  - {text: "bonus points", kind: nice_to_have}
+  - {text: "bonus", kind: nice_to_have}
+  - {text: "desirable", kind: nice_to_have}
+  - {text: "it's a plus", kind: nice_to_have}
+  - {text: "ideally", kind: nice_to_have}
+  - {text: "even better if", kind: nice_to_have}
+  - {text: "standout", kind: nice_to_have}
+  - {text: "pluses", kind: nice_to_have}
+  - {text: "benefits", kind: offer}
+  - {text: "perks", kind: offer}
+  - {text: "perks and benefits", kind: offer}
+  - {text: "what we offer", kind: offer}
+  - {text: "we offer", kind: offer}
+  - {text: "compensation", kind: offer}
+  - {text: "salary", kind: offer}
+  - {text: "pay range", kind: offer}
+  - {text: "pay transparency", kind: offer}
+  - {text: "why join us", kind: offer}
+  - {text: "why you'll love", kind: offer}
+  - {text: "wir bieten", kind: offer}
+  - {text: "was wir bieten", kind: offer}
+  - {text: "base salary", kind: offer}
+  - {text: "employee benefits", kind: offer}
+  - {text: "our benefits", kind: offer}
+  - {text: "pay", kind: offer}
+  - {text: "remuneration", kind: offer}
+  - {text: "salary range", kind: offer}
+  - {text: "total compensation", kind: offer}
+  - {text: "what is in it for you", kind: offer}
+  - {text: "what we bring", kind: offer}
+  - {text: "what we pay", kind: offer}
+  - {text: "what we provide", kind: offer}
+  - {text: "what you get", kind: offer}
+  - {text: "what's in it for you", kind: offer}
+  - {text: "why join", kind: offer}
+  - {text: "why us", kind: offer}
+  - {text: "why work with us", kind: offer}
+  - {text: "why you'll love it here", kind: offer}
+  - {text: "about the team", kind: company}
+  - {text: "the team", kind: company}
+  - {text: "our team", kind: company}
+  - {text: "about us", kind: company}
+  - {text: "who we are", kind: company}
+  - {text: "our mission", kind: company}
+  - {text: "our values", kind: company}
+  - {text: "culture", kind: company}
+  - {text: "diversity", kind: company}
+  - {text: "about the company", kind: company}
+  - {text: "über uns", kind: company}
+  - {text: "how to apply", kind: process}
+  - {text: "hiring process", kind: process}
+  - {text: "interview process", kind: process}
+  - {text: "what to expect", kind: process}
+  - {text: "application process", kind: process}
+  - {text: "next steps", kind: process}
+contains:
+  - {text: "nice to have", kind: nice_to_have}
+  - {text: "nice-to-have", kind: nice_to_have}
+  - {text: "preferred", kind: nice_to_have}
+  - {text: "bonus point", kind: nice_to_have}
+  - {text: "a plus", kind: nice_to_have}
+  - {text: "desirable", kind: nice_to_have}
+  - {text: "even better", kind: nice_to_have}
+  - {text: "requirements", kind: requirements}
+  - {text: "qualifications", kind: requirements}
+  - {text: "looking for", kind: requirements}
+  - {text: "you bring", kind: requirements}
+  - {text: "you'll bring", kind: requirements}
+  - {text: "must have", kind: requirements}
+  - {text: "must-have", kind: requirements}
+  - {text: "who you are", kind: requirements}
+  - {text: "responsibilities", kind: role}
+  - {text: "what you'll do", kind: role}
+  - {text: "what you will do", kind: role}
+  - {text: "first 30", kind: role}
+  - {text: "first 60", kind: role}
+  - {text: "first 90", kind: role}
+  - {text: "benefits", kind: offer}
+  - {text: "perks", kind: offer}
+  - {text: "compensation", kind: offer}
+  - {text: "salary", kind: offer}
+  - {text: "we offer", kind: offer}
+  - {text: "why join", kind: offer}
+  - {text: "how to apply", kind: process}
+  - {text: "hiring process", kind: process}
+  - {text: "interview process", kind: process}
+  - {text: "application process", kind: process}
+  - {text: "about us", kind: company}
+  - {text: "our mission", kind: company}
+  - {text: "our values", kind: company}
+  - {text: "equal opportunity", kind: company}

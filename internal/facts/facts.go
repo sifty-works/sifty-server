@@ -2,6 +2,18 @@ package facts
 
 type Kind string
 
+const (
+	Money       Kind = "money"
+	WorkMode    Kind = "work_mode"
+	Engagement  Kind = "engagement"
+	Place       Kind = "place"
+	TimeZone    Kind = "time_zone"
+	Hours       Kind = "hours"
+	Language    Kind = "language"
+	Requirement Kind = "requirement"
+	Analysed    Kind = "analysed"
+)
+
 type Flag string
 
 const (
@@ -33,6 +45,7 @@ type Source struct {
 type Fact struct {
 	Vacancy       int64
 	Version       int64
+	Worker        string
 	Kind          Kind
 	Value         string
 	Flag          Flag

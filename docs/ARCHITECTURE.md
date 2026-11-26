@@ -58,6 +58,20 @@ func SaveReading(ctx context.Context, db *db.DB, vacancyID, version int64, reade
 - `Posting` carries the structured fields a source states (salary, employment type and the like) as a compact `source_fields` value, which the reader uses before asking a model.
 - Sources are read in parallel, one after another within one requested host (boards sharing a Greenhouse, Lever or Ashby API form one group). Each source's result is written to `source_run`.
 
+### Analysis
+
+```go
+type Worker interface { Name() string; Version() int; Produces() []facts.Kind; Extract(ctx context.Context, doc *Doc) ([]facts.Fact, error) }
+func Split(doc *Doc) ([]Section, []Span)                                      // the sections stage: the heading map applied to the stored body
+func Analyse(ctx context.Context, database *db.DB, load Loader, id, version int64) error
+```
+
+- Analysis loads the stored text of a vacancy (its body, and `listing.PlainText` of it as `Doc.Original`, which `cmd/sifty` supplies through the `Loader`), splits it into sections, runs the workers of its one list in order (site fields, conditions, requirement lines) and saves what each found through `facts`. It calls no model and writes nothing to `vacancy`; the heading map is applied when analysing, so `listing.Normalize` and the stored text are unchanged.
+- A section is named by the heading that opens it, found as h2–h4 in the stored body, as a paragraph wholly in bold, or as a short line ending in a colon: `role`, `requirements`, `nice_to_have`, `offer`, `company`, `process`; the text before the first heading is `intro` and a heading the map does not know opens `other`. The map is the embedded `sections.yaml`: normalised exact headings, "contains" keywords, and "about <the vacancy's company>". A heading the map does not know that lies deeper than its parent stays inside the parent section.
+- `fact` rows hold vacancy, version, worker, kind, value, flag (required, preferred), the quote's position, who found it (site field or vocabulary; aggregator or employer, from the vacancy's address) and the worker's version. Positions are offsets in `listing.PlainText` of the stored body; a change of `PlainText`, of the heading map or of a vocabulary raises the versions of the workers that use it. Every worker runs for every kind; the orchestrator then chooses between the values by one rule and saves only the effective facts, so `facts.Load` returns what is saved: when the address is an aggregator's, a value stated in the vacancy text (a quote position, from a labelled line or a vocabulary) replaces a site field's value of the same kind, and when it is the employer's own board, a site value (field or labelled line) replaces the vocabulary's value of that kind. A worker's rows are replaced as a set, together with one `analysed` row that records the version it ran at; a vacancy is pending when a worker has no `analysed` row at its current version. Money and hours values are JSON; a required language is a kind of its own.
+- A place found in the text must be a recognised one (a country, region, worldwide, or a city of the `places` city list, alone or followed by its state or country), read item by item from lists, parentheses and the segments of a pipe-separated header line, and never from a part marked preferred; a work-mode cue in the offer or company sections counts only when no other section states one, and a language counts as required only with a cue of using it. Requirement lines come from the `requirements` and `nice_to_have` sections only, flagged required or preferred by the section and by marker words; a text with no such section uses its lines that state a requirement. A term met only in the company, offer or process sections is not a requirement and a language met there is not a required language.
+- The job `analyze_vacancy` (one at a time, resumed after a restart) is queued when `recompute_fit` starts, which happens at start and right after each collection run, for every vacancy that is visible in a profile, has its full text and is pending. The site-field rules live in `analysis` and `reading` calls them until its removal.
+
 ### Assessment
 
 ```go
@@ -159,6 +173,7 @@ type Response struct { Text string; InTokens, OutTokens int }
 | `exclusion` | scope (all profiles or one), kind (word or company), value |
 | `domain_block` | blocked domain and until when |
 | `source_run` | per run and source (keyed by the source's normalised address): status, counts found, new, updated, unchanged, excluded, removed, and error |
+| `fact` | vacancy, version, worker, kind, value, flag, quote position, way and origin, worker version: what analysis by code found; rows go with their vacancy |
 | `vacancy_reading` | the model's reading of a vacancy version with its `reader_version`: conditions and requirements, quotes as offsets |
 | `fit` | profile, vacancy, vacancy version, hash of the profile's inputs, hash of the listing fields, state, Fits you (stored for SQL sorting and filtering); the requirements score, counts ✓ ✕ ? and reading state join it when requirements are read |
 | `shortlist_check` | profile, vacancy, digest of inputs, result, date |

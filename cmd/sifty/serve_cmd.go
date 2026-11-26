@@ -15,6 +15,7 @@ import (
 	"time"
 
 	siftyapi "github.com/sifty-works/sifty-server/api"
+	"github.com/sifty-works/sifty-server/internal/analysis"
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/collect"
@@ -362,6 +363,9 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 		Name:   "recompute_fit",
 		Resume: true,
 		Run: func(runCtx context.Context, j *runner.Job) error {
+			if err := queueAnalysis(runCtx, database, r); err != nil {
+				return err
+			}
 			rel, err := j.Lane(runCtx, "cpu")
 			if err != nil {
 				return err
@@ -372,6 +376,13 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 		Follow: func(runCtx context.Context, enqueue func(runner.Spec) (int64, error)) error {
 			return queueReadings(runCtx, database, enqueue, store, offline, reading.ReaderVersion())
 		},
+	})
+
+	r.Register(runner.Kind{
+		Name:   analysis.Kind,
+		Resume: true,
+		Serial: true,
+		Run:    analysis.Job(database, loadForAnalysis(database)),
 	})
 
 	r.Register(runner.Kind{

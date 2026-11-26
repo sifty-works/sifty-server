@@ -30,6 +30,7 @@ var jobKinds = map[string]jobKind{
 	"collect":          {label: "Collection"},
 	"recompute_fit":    {label: "Recomputing Fits you"},
 	"retention":        {label: "Text retention"},
+	"analyze_vacancy":  {label: "Analyzing vacancy", subject: analysisSubject},
 	"read_vacancy":     {label: "Reading vacancy text", work: "reading", subject: readSubject},
 	"shortlist_check":  {label: "Shortlist check", work: "shortlist_check", subject: shortlistSubject},
 	"analyze_document": {label: "Document analysis", work: "reading", subject: documentSubject},

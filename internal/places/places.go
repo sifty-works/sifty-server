@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -43,6 +44,8 @@ type vocabulary struct {
 		Aliases, Countries []string
 	}
 	Worldwide, Ignore, Prefixes, Qualifiers, Separators []string
+	Cities                                              map[string][]string
+	States                                              []string
 	Bands                                               []struct {
 		Code, Label string
 		Min, Max    float64
@@ -51,17 +54,19 @@ type vocabulary struct {
 }
 
 var (
-	vocab     = mustLoad()
-	index     = map[string][]string{}
-	ignored   = map[string]bool{}
-	bandsOf   = map[string][]string{}
-	splitRe   *regexp.Regexp
-	abbrevRe  *regexp.Regexp
-	offsetRe  = regexp.MustCompile(`(?i)(?:UTC|GMT)\s*([+\-])\s*(\d{1,2})(?::(\d{2}))?`)
-	widenRe   = regexp.MustCompile(`(?i)(?:±|[+\-]/?[+\-]?)\s*(\d+(?:\.\d+)?)\s*h(?:ours?)?`)
-	countries []ReferenceCountry
-	regions   []ReferenceRegion
-	bands     []ReferenceTimeZoneBand
+	vocab       = mustLoad()
+	index       = map[string][]string{}
+	ignored     = map[string]bool{}
+	cityIndex   = map[string]string{}
+	bandsOf     = map[string][]string{}
+	splitRe     *regexp.Regexp
+	abbrevRe    *regexp.Regexp
+	plusMinusRe = regexp.MustCompile(`^\s*±\s*\d+(?:\.\d+)?`)
+	offsetRe    = regexp.MustCompile(`(?i)(?:UTC|GMT)\s*([+\-])\s*(\d{1,2})(?::(\d{2}))?`)
+	widenRe     = regexp.MustCompile(`(?i)(?:±|[+\-]/?[+\-]?)\s*(\d+(?:\.\d+)?)\s*h(?:ours?)?`)
+	countries   []ReferenceCountry
+	regions     []ReferenceRegion
+	bands       []ReferenceTimeZoneBand
 )
 
 func mustLoad() vocabulary {
@@ -94,6 +99,11 @@ func init() {
 		bandsOf[c.Code] = c.Bands
 		if i < len(vocab.Countries) {
 			countries = append(countries, ReferenceCountry{c.Code, c.Name})
+		}
+	}
+	for code, names := range vocab.Cities {
+		for _, n := range names {
+			cityIndex[strings.ToLower(n)] = code
 		}
 	}
 	for _, w := range vocab.Ignore {
@@ -165,6 +175,33 @@ func Resolve(label string) Place {
 	return p
 }
 
+func IsCity(label string) bool {
+	_, ok := cityIndex[strings.ToLower(strings.TrimSpace(label))]
+	return ok && unicode.IsUpper([]rune(strings.TrimSpace(label))[0])
+}
+
+func IsState(token string) bool { return slices.Contains(vocab.States, strings.TrimSpace(token)) }
+
+func Recognised(label string) bool {
+	if _, ok := lookup(label); ok {
+		return true
+	}
+	known := false
+	for _, part := range splitLabel(label) {
+		low := strings.ToLower(part)
+		if ignored[low] {
+			continue
+		}
+		if _, ok := lookup(part); !ok {
+			if _, city := cityIndex[low]; !city || !unicode.IsUpper([]rune(part)[0]) {
+				return false
+			}
+		}
+		known = true
+	}
+	return known
+}
+
 func Codes(name string) []string {
 	cs, _ := lookup(name)
 	return cs
@@ -212,6 +249,28 @@ func ZoneBands(text string) []string {
 		}
 	}
 	return out
+}
+
+func ZoneMention(text string) (start, end int, ok bool) {
+	loc := offsetRe.FindStringIndex(text)
+	if loc == nil {
+		for _, l := range abbrevRe.FindAllStringIndex(text, -1) {
+			if m := text[l[0]:l[1]]; m == strings.ToUpper(m) {
+				loc = l
+				break
+			}
+		}
+	}
+	if loc == nil {
+		return 0, 0, false
+	}
+	start, end = loc[0], loc[1]
+	if w := widenRe.FindStringIndex(text[end:]); w != nil && strings.TrimSpace(text[end:end+w[0]]) == "" {
+		end += w[1]
+	} else if w := plusMinusRe.FindStringIndex(text[end:]); w != nil {
+		end += w[1]
+	}
+	return start, end, true
 }
 
 func lookup(part string) ([]string, bool) {

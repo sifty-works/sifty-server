@@ -47,6 +47,8 @@ Weights live in configuration. The weights of onsite work authorization and of r
 
 Structured fields the source states, the location, the tags and labelled lines ("Salary: …", "Location: …", "Time zone: …") are read by code first. A stored reading fills what code did not find; a model fills only what neither found. Every value the model gives must cite an exact excerpt of the vacancy text, or it is dropped. Engagement, work mode and hours are accepted from the model only when the excerpt is a phrase of the right kind.
 
+Code also finds these facts by itself, without a model, for every vacancy visible in a profile, as the background work "Analyzing vacancy" (see `application.md`): money, work mode, engagement, place, time zone, hours, required languages and the requirement lines, each with the excerpt it was found in. Nothing the user sees reads them yet.
+
 ## In the lists
 
 - Every row in all four lists shows Fits you as a filled mark with its bucket, and the requirements counter. The tooltip reads "Fits you 82: Strong", followed by the counter when requirements are read (" · ✓ 4 · ✕ 1 · ? 6").
