@@ -315,10 +315,12 @@ func openLog(dataDir string, stderr io.Writer) (*slog.Logger, func(func() []stri
 	return logger, mask.setKeys, func() { logFile.Close() }, nil
 }
 
-func runRetention(ctx context.Context, j *runner.Job, cat *catalog.Catalog, database *db.DB, log *slog.Logger, now time.Time) error {
-	cutoff := now.UTC().Add(-24 * time.Hour)
-
-	ids, err := cat.RetainableExpired(ctx, cutoff)
+func runRetention(ctx context.Context, j *runner.Job, cat *catalog.Catalog, database *db.DB, log *slog.Logger, now time.Time, maxAgeMonths int) error {
+	var oldest time.Time
+	if maxAgeMonths > 0 {
+		oldest = now.AddDate(0, -maxAgeMonths, 0)
+	}
+	ids, err := cat.Removable(ctx, now.UTC().Add(-24*time.Hour), oldest)
 	if err != nil {
 		return fmt.Errorf("retention: load: %w", err)
 	}
@@ -333,7 +335,7 @@ func runRetention(ctx context.Context, j *runner.Job, cat *catalog.Catalog, data
 		}
 		j.Progress(done+1, len(ids), "")
 	}
-	log.Info("retention: removed expired vacancies", "count", len(ids))
+	log.Info("retention: removed expired and old undecided vacancies", "count", len(ids))
 
 	modelCallCutoff := now.UTC().Add(-90 * 24 * time.Hour)
 	if _, err := database.ExecContext(ctx, `DELETE FROM model_call WHERE created_at < ?`, modelCallCutoff.Format(time.RFC3339)); err != nil {
@@ -405,7 +407,7 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 		Name:   "retention",
 		Resume: true,
 		Run: func(runCtx context.Context, j *runner.Job) error {
-			return runRetention(runCtx, j, cat, database, logger, now())
+			return runRetention(runCtx, j, cat, database, logger, now(), store.Get().Collection.MaxAgeMonths)
 		},
 	})
 }
