@@ -1,0 +1,42 @@
+# Allowed imports and SQL calls of each package of the repository, one line per package:
+#   <package>: <imports allowed>
+# Names are relative to the module path; database/sql is listed where SQL is allowed.
+# A package whose line does not list database/sql may not call the database either
+# (QueryContext, ExecContext, QueryRowContext, BeginTx, Exec, Query, QueryRow).
+# An exception is a single import, or a file that calls the database, with its reason:
+#   <package> -> <import>  # <reason>
+#   <file path> -> sql  # <reason>
+# Test files are not checked. A new package, a new import between packages and a
+# new SQL call outside a repo need a change to this file, which only the owner's
+# decision allows. An entry that nothing uses any more is reported; remove it.
+# scripts/layers.sh compares this file with `go list`; make check runs it.
+
+api:
+cmd/sifty: api internal/apperr internal/candidate internal/catalog internal/collect internal/config internal/db internal/fetch internal/fetch/fetchtest internal/fit internal/inbox internal/models internal/reading internal/runner internal/server internal/shortlistcheck internal/source web
+cmd/uncomment:
+internal/apperr:
+internal/candidate: database/sql internal/apperr internal/db internal/fetch internal/listing internal/models internal/places internal/reading internal/server
+internal/catalog: database/sql internal/db internal/listing internal/reading internal/source
+internal/collect: internal/apperr internal/catalog internal/config internal/db internal/fetch internal/listing internal/runner internal/server internal/source
+internal/config: internal/apperr
+internal/db: database/sql
+internal/fetch: internal/db
+internal/fetch/fetchtest: internal/fetch
+internal/fit: database/sql internal/apperr internal/candidate internal/catalog internal/config internal/db internal/listing internal/places internal/reading internal/skills
+internal/inbox: database/sql internal/apperr internal/candidate internal/catalog internal/config internal/db internal/fit internal/listing internal/models internal/places internal/server internal/shortlistcheck internal/skills
+internal/listing:
+internal/models: database/sql internal/apperr internal/config internal/db
+internal/places:
+internal/reading: internal/config internal/models
+internal/runner: database/sql internal/db
+internal/server: internal/apperr internal/models
+internal/shortlistcheck: database/sql internal/candidate internal/db internal/fit internal/models internal/reading
+internal/skills: internal/candidate internal/reading
+internal/source: internal/fetch internal/listing
+web:
+
+cmd/sifty -> database/sql  # shortlist_check.go matches sql.ErrNoRows in the command; SQL belongs in a repo
+cmd/sifty/queue_readings.go -> sql  # the reading queue still runs SQL in the command; to move into a repo
+cmd/sifty/serve_cmd.go -> sql  # the model-call cleanup still runs SQL in the command; to move into a repo
+internal/collect/source_run.go -> sql  # the source-run log still runs SQL in the collect package; to move into a repo
+internal/fetch/blocks.go -> sql  # the block list still runs SQL in the fetch package; to move into a repo

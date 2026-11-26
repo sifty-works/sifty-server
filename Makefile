@@ -73,6 +73,8 @@ check: build
 	 fi
 	@echo "--- go vet ---"
 	go vet ./...
+	@echo "--- layers ---"
+	@bash scripts/layers.sh
 	@echo "--- go test ---"
 	go test ./...
 	@echo "--- openapi ---"
