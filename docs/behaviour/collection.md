@@ -70,14 +70,14 @@ There is one list of exclusions, described in full in `inbox.md`. For collection
 
 ## What the user sees of progress and errors
 
-- During a run, the Sources page and the Inbox header show "Collecting… 5 of 14 sources".
+- During a run, the Sources page and the status bar show "Collecting… 5 of 14 sources".
 - After a run, the Sources table shows each source's status in a Status column:
   - After a successful run: "Last success 2 Jan 15:04 · 10 seen · 3 new", followed by " · 2 without an employer" when the run did not store some postings for lack of a company.
   - After a failed run: the error in words ("Blocked by site", "Timed out", "Site not answering", "Not found", "Nothing recognised on the page"), followed by " · last success 2 Jan 15:04" when there was a prior success.
   - "No vacancies in 30 days" when the source's first run is at least 30 days old and no run in the last 30 days found a vacancy. This replaces the success form.
 - A source whose last three runs (at least three) all ended in error or empty is marked with ⚠ in the Status column.
 - The Inbox header shows "N sources need attention" (or "1 source needs attention") as a link to the Sources page when any enabled source needs attention.
-- A run where every source failed is shown as failed with a message in the Inbox header.
+- A run where every source failed is shown as failed with a message on the Sources page and in the status bar.
 
 ## Actions on a vacancy
 

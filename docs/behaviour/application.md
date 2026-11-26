@@ -55,7 +55,7 @@ Diagnostic panels (questionnaire coverage, the technical record of form reading,
 
 | Work | Started by | What the user sees | Model calls |
 |---|---|---|---|
-| Collection | interval, opening the application, "Collect jobs" (see `collection.md`) | progress in the header and on the Sources page | none |
+| Collection | interval, opening the application, "Collect jobs" (see `collection.md`) | progress in the status bar and on the Sources page | none |
 | Reading vacancy texts | new or changed texts, a vacancy becoming visible (see `assessment.md`) | the requirements counter's states | 1 per text |
 | Recomputing Fits you | changes of vacancies, goals, My data, or weights | dimmed results until done | none |
 | Text retention | daily (see `settings-and-data.md`) | "Text removed after 60 days unseen" | none |
@@ -65,6 +65,8 @@ Diagnostic panels (questionnaire coverage, the technical record of form reading,
 | Write, Paste | the buttons on the Application tab | the Application tab's states | 1 each |
 | Document analysis | Analyze or Retry (see `profiles.md`) | the document's state | 1 per chunk |
 | Provider check | "Check" in Settings (see `settings-and-data.md`) | the answer of the check | 1 |
+
+A one-line status bar along the bottom of every page shows, on the left, the running job with its subject and, for a job that uses a model, the provider and model ("Reading vacancy text: <title> at <company> · <provider> (<model>)"; collection reads "Collecting… 5 of 14 sources"), and on the right the waiting count of each kind. When work waits for something other than its turn, or the last collection run failed, the bar turns amber and shows the reason or the run's message. With nothing running it reads "Nothing running · last collection <time> · N vacancies in the catalogue"; when the work cannot be loaded, "Background work could not be loaded." Clicking the bar opens Settings › Monitor › Background work.
 
 Settings › Monitor › Background work lists what runs and what waits, and Settings › Monitor › Logs what failed:
 

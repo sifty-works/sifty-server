@@ -4,8 +4,9 @@ What the user gets: for the chosen profile, the vacancies that fit its search, i
 
 ## Layout
 
-- The header carries the stage tabs "Inbox N", "Shortlist N" and "Archive N", the profile switcher, the Settings button and, during collection, "Collecting… 5 of 14 sources". Archive counts Applied and Dismissed together.
-- The Inbox header also shows "N sources need attention" and the message of a failed collection run (see `collection.md`).
+- The header carries the stage tabs "Inbox N", "Shortlist N" and "Archive N", the profile switcher, the Settings button. Archive counts Applied and Dismissed together.
+- The Inbox header also shows "N sources need attention" (see `collection.md`).
+- A status bar along the bottom of every page shows what runs, what waits and why (see `application.md`).
 - Archive has two tabs, Applied and Dismissed.
 - Opening a profile or Settings replaces the working area. Changing the stage clears the selected vacancy, the held Unread row, the error and the notice; Archive opens on Applied.
 - Changing the profile reloads the list for that profile.
