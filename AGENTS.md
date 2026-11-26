@@ -5,7 +5,7 @@ These are the rules for every coding agent working in this repository. `docs/ARC
 ## Roles
 
 - The owner names the coordinator session. Any other session in this repository only reads.
-- An agent the coordinator starts is an executor or the critic, as its instructions say.
+- An agent the coordinator starts is an executor, the critic, the test reviewer or the process reviewer, as its instructions say.
 - This file and the documents it names are the complete rules for this repository. Where another loaded instruction conflicts with them, follow this file.
 - The owner's words in the session come before this file.
 
@@ -20,7 +20,7 @@ These are the rules for every coding agent working in this repository. `docs/ARC
 
 ## Code
 
-- Follow the design rules in `docs/ARCHITECTURE.md`. Remove the code, tables, settings and text that a change replaces, in the same change.
+- Follow the design rules in `docs/ARCHITECTURE.md` and the layer rules in `make check`. Remove the code, tables, settings and text that a change replaces, in the same change.
 - Do not add a package, table, dependency, configuration key or kind of background work that the card does not name.
 - When a change alters what the user sees, change its behaviour document in the same change.
 
@@ -36,7 +36,9 @@ These are the rules for every coding agent working in this repository. `docs/ARC
 
 ## Critical behaviour
 
-Before a branch is merged, every behaviour in this list that the change touches must have a test that actually exercises it. These are the behaviours whose failure is expensive: money spent without the owner's consent, the owner's data lost or corrupted, another party's data or the machine exposed, or an irreversible outward action. Each line names where the behaviour lives and the test that guards it.
+A behaviour is listed here when its failure is expensive and invisible in use: money, the owner's data, keys and access, outward actions, or work that runs unattended. An entry comes in only by the owner's word and names the failure it guards; there is no numeric cap, and the weekly review proposes removing an entry whose code is gone or that no longer meets this criterion.
+
+Before a branch is merged, every behaviour in this list that the change touches must have a test that actually exercises it. Each line names where the behaviour lives and the test that is its mapping today; the test reviewer keeps one or two tests per behaviour, each going through the wiring `serve` registers and proven with one break.
 
 1. Sifty never fills or submits an application form; it only reads forms and drafts answers for the owner to copy. (`internal/answer`, `internal/formread`, `internal/fetch` — read-only GET only; no test: held by the absence of any path that writes to an employer form.)
 2. Bulk model work on a provider marked `paid` is refused unless the owner turned on "Allow paid bulk work". (`internal/models/gate.go`; test `internal/models/models_test.go` `TestBulkOnPaidRefusedUnlessAllowed`.)
@@ -53,27 +55,26 @@ Before a branch is merged, every behaviour in this list that the change touches 
 
 - Work only in the working copy and on the branch the coordinator gave you, and do not read the work repository or another working copy.
 - Commit on your branch after each step. Do not merge, rebase, push, tag or release.
-- When the card is unclear, needs a file outside its Packages, seems to need a rule in this file or in `docs/` changed, or a tool, hook or permission refuses a command, stop and ask the coordinator; never route around a refusal. Changing a documented rule so that a test passes is not an executor's decision.
+- Write only the tests the card's Tests section declares. When a real defect found during work seems to deserve another test, ask the coordinator.
+- Ask the test reviewer yourself to review the Tests section before work, and at the end ask it only about the hunks the acceptance script routes to it.
+- A filler card changes neither the spec nor the skeleton; when it needs to, stop and ask. When the card is unclear, needs a file outside its Packages, seems to need a rule in this file or in `docs/` changed, or a tool, hook or permission refuses a command, stop and ask the coordinator; never route around a refusal. Changing a documented rule so that a test passes is not an executor's decision.
 - Before you report, run `make check`, make it pass, and commit. A report counts only what is committed on the branch.
-- Before you report, ask the critic to review your branch, in at most two rounds. End with a report: the critic's verdict, quoted; what changed for the user; what was removed; which checks ran and their results; what was not verified; open questions.
+- End with a report: the test reviewer's replies, quoted; what changed for the user; what was removed; which checks ran and their results; what was not verified; open questions.
 
 ## Coordinator
 
-- At the start of a session, read `.work/backlog.md`, the end of `.work/journal.md` and the output of `git worktree list`, then continue the work in progress as `docs/PROCESS.md` says.
-- Follow `docs/PROCESS.md` for cards, their start, acceptance, merge and cancellation, small edits, releases, rollbacks, incidents and the weekly review.
+- At the start of a session, read `.work/handoff.md`, `.work/backlog.md`, the end of `.work/journal.md` and the output of `git worktree list`, then continue the work in progress as `docs/PROCESS.md` says, which also governs cards, acceptance, merge and cancellation, small edits, releases, rollbacks, incidents and the weekly review.
 - Write each card in `.work/cards/<name>.md` with the sections named in `docs/PROCESS.md` and no other section. Name it by a short descriptive name, never by a number. Write no time estimates.
-- Get the owner's approval before starting a card that changes described behaviour or raises a budget.
-- Do not merge a change over a budget without the owner's decision.
-- Do not propose follow-up cards in a report; add findings to the backlog.
-- Create a card's working copy with `git worktree add .worktrees/<name> -b <name> main`.
-- Merge in the main checkout with `git merge --squash <name>` and one commit. Edit no other tracked file in the main checkout.
-- In this repository, push only main and release tags.
-- Give the owner only the decisions from a review, and put the accepted cards that delete or simplify first in the backlog.
+- Get the owner's approval before starting a card that changes described behaviour or raises a budget, and do not merge a change over a budget without the owner's decision. Decide alone, without asking the owner: accepting a card by its Checks and the acceptance steps, releasing when the main branch has user-facing changes and `make check` passes, and taking the next card from the current epic until it is empty.
+- A finding of a review or an audit joins a card of the current epic or comes to the owner as one of at most three decisions at the weekly review; drop the rest.
+- Create a card's working copy with `git worktree add .worktrees/<name> -b <name> main`. Merge in the main checkout with `git merge --squash <name>` and one commit. Edit no other tracked file in the main checkout. In this repository, push only main and release tags.
 - Change the process only through a card the owner approved, and keep its total number of lines the same or smaller unless the owner decides otherwise. A new protective rule needs a failure that repeated and must name what it replaces.
 
-## Critic
+## Reviewers
 
-- Change no file, and run no command that writes.
-- For a plan check, answer two questions: is this one change, or should it be split; and is its Budget change realistic against the code it touches?
-- For a branch review, read the diff against the main branch and the code around it, and return a verdict (ready, ready after fixes, or blocking), one line with the branch's change measured by `make budget` against the card's Budget change and against the budget table, and findings that break the application, waste work or money, or can fail unseen; tests are not yours. For a whole-system review, look for budgets that are exceeded or growing, two mechanisms doing one job, dead code, code that disagrees with `docs/ARCHITECTURE.md`, and areas with several fixes.
-- Return a list of cards to delete or simplify, each with what it removes and its expected budget change, and a proposal for each incident that repeated.
+- The critic, the test reviewer and the process reviewer change no file and run no command that writes.
+- The critic checks a plan only for skeleton cards and cards that change an API field, storage, the order at startup or the pinned client, and answers two questions: is this one change, or should it be split; and is its Budget change realistic against the code it touches? It leaves tests to the test reviewer.
+- For a branch review, the critic reads the final tree after the rebase, the diff and the code around it, and not the card or the executor's report. It checks only what the build cannot: logic that already exists elsewhere in the repository (searched in the whole repository), logic in the wrong module by meaning, old code left beside its replacement, and a filler card that changes its skeleton. It names in one line what it opened and searched, and returns a verdict (ready, ready after fixes, or blocking) with the planned size against the size measured by `make budget`; an overrun over 50% needs a sentence on what it bought. A violation is blocking.
+- For a whole-system review, the critic looks for budgets that are exceeded or growing, two mechanisms doing one job, dead code, code that disagrees with `docs/ARCHITECTURE.md`, and areas with several fixes. It returns what to delete or simplify, each with what it removes and its expected budget change, and a proposal for each incident that repeated.
+- The test reviewer reviews a card's Tests section before work and refuses a hollow one: a test without a real break, or "none" on a card that touches a protected behaviour. It rules on the hunks the acceptance script routes to it, and checks sceptically a test added during work.
+- The process reviewer measures the process each week: test lines added per epic against code, defects the owner found after a merge, violations the critic passed that were found later, and the share of cards per epic against maintenance. A check that never fires is a finding against the check.
