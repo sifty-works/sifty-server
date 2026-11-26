@@ -25,7 +25,6 @@ import (
 	"github.com/sifty-works/sifty-server/internal/fetch/fetchtest"
 	"github.com/sifty-works/sifty-server/internal/fit"
 	"github.com/sifty-works/sifty-server/internal/models"
-	"github.com/sifty-works/sifty-server/internal/reading"
 	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/server"
 	"github.com/sifty-works/sifty-server/internal/shortlistcheck"
@@ -156,11 +155,12 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		logger.Info("interrupted analyses set back to ready", "count", n)
 	}
 	rules := fitRules(store)
-	recomputeFit := enqueueRecomputeFit(r)
+	recomputeFit := enqueueRecomputeFit(database, r, logger)
 	recomputeFit()
 
 	blocked := offline && flags.replayDir == ""
 	col := collect.New(store, cat, r, fetcher, database, blocked, nil, logger)
+	col.Follow = func(ctx context.Context) error { return queueAnalysis(ctx, database, r) }
 	col.Register()
 
 	col.OnTick = func(now time.Time) {
@@ -362,10 +362,8 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 	r.Register(runner.Kind{
 		Name:   "recompute_fit",
 		Resume: true,
+		After:  []string{analysis.Kind},
 		Run: func(runCtx context.Context, j *runner.Job) error {
-			if err := queueAnalysis(runCtx, database, r); err != nil {
-				return err
-			}
 			rel, err := j.Lane(runCtx, "cpu")
 			if err != nil {
 				return err
@@ -373,28 +371,14 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 			defer rel()
 			return fit.Recompute(runCtx, database, fitRules(store), j.Progress)
 		},
-		Follow: func(runCtx context.Context, enqueue func(runner.Spec) (int64, error)) error {
-			return queueReadings(runCtx, database, enqueue, store, offline, reading.ReaderVersion())
-		},
 	})
 
 	r.Register(runner.Kind{
 		Name:   analysis.Kind,
 		Resume: true,
 		Serial: true,
+		Then:   []string{"recompute_fit"},
 		Run:    analysis.Job(database, loadForAnalysis(database)),
-	})
-
-	r.Register(runner.Kind{
-		Name:    "read_vacancy",
-		Resume:  true,
-		Serial:  true,
-		Patient: true,
-		Then:    []string{"recompute_fit"},
-		Run: func(runCtx context.Context, j *runner.Job) error {
-			return runReadVacancy(runCtx, j, database,
-				func(vid int64) models.Model { return gate.For(models.NamedTask("reading").Work, "background", vid) })
-		},
 	})
 
 	r.Register(runner.Kind{

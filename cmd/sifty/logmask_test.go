@@ -50,7 +50,7 @@ func TestServerLogsHideHeldKeysCarriedByAProviderError(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "secrets.env"), []byte("OTHER_KEY="+fileKey+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cfg := fmt.Sprintf("providers:\n  box: {type: openai, model: m, cost: local, endpoint: %q, key_env: BOX_KEY}\nwork: {reading: box}\n", closedEndpoint(t)+"/"+fileKey+"/"+envKey)
+	cfg := fmt.Sprintf("providers:\n  box: {type: openai, model: m, cost: local, endpoint: %q, key_env: BOX_KEY}\nwork: {shortlist_check: box}\n", closedEndpoint(t)+"/"+fileKey+"/"+envKey)
 	if err := os.WriteFile(filepath.Join(dir, "sifty.yaml"), []byte(cfg), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -61,9 +61,10 @@ func TestServerLogsHideHeldKeysCarriedByAProviderError(t *testing.T) {
 	v := insertFullVacancy(t, d, "https://jobs.example.com/mask", "Backend Engineer", "Stackworks")
 	ts := time.Now().UTC().Format(time.RFC3339)
 	if _, err := d.Exec(`INSERT INTO job (kind,subject,priority,state,attempts,not_before,progress,error,params,created,updated)
-		VALUES ('read_vacancy',?,0,'queued',0,?,'{}','',NULL,?,?)`, fmt.Sprintf("%d/1", v), ts, ts, ts); err != nil {
+		VALUES ('shortlist_check',?,0,'queued',0,?,'{}','',NULL,?,?)`, fmt.Sprintf("1/%d", v), ts, ts, ts); err != nil {
 		t.Fatalf("seed job: %v", err)
 	}
+	seedFacts(t, d, v, "mask", "Fluent German")
 	d.Close()
 
 	var stderr lockedBuffer

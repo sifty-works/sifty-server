@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/collect"
 	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/db"
+	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/server"
@@ -121,7 +123,7 @@ func newRouteServerWithReaders(t *testing.T, d *db.DB, r *runner.Runner, readers
 		Logger:            logger,
 		BinaryUploadPaths: []string{"/api/documents"},
 	}, func(mux *http.ServeMux) {
-		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, enqueueRecomputeFit(r), t.TempDir(), readers, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r, nil, filepath.Join(t.TempDir(), logFileName), nil)
+		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, enqueueRecomputeFit(d, r, logger), t.TempDir(), readers, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r, nil, filepath.Join(t.TempDir(), logFileName), nil)
 	})
 	ts := httptest.NewUnstartedServer(h)
 	ts.Listener = l
@@ -191,4 +193,48 @@ func waitForDocState(t *testing.T, base string, docID float64, wantState string,
 		}
 		return false
 	})
+}
+
+type testClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func newTestClock() *testClock      { return &testClock{now: time.Now()} }
+func (c *testClock) Now() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.now }
+func (c *testClock) Advance(d time.Duration) {
+	c.mu.Lock()
+	c.now = c.now.Add(d)
+	c.mu.Unlock()
+}
+
+func insertFullVacancy(t *testing.T, d *db.DB, url, title, company string) (id int64) {
+	t.Helper()
+	cat := catalog.New(d, func() time.Time { return time.Now() })
+	body := "<p>Join our " + title + " team at " + company + ". Full-time position with competitive salary. The role involves building distributed systems and collaborating with cross-functional teams.</p>"
+	id, _, err := cat.Upsert(context.Background(), listing.Posting{
+		URL:       url,
+		Title:     title,
+		Company:   company,
+		Text:      body,
+		TextState: listing.TextFull,
+	}, "src")
+	if err != nil {
+		t.Fatalf("upsert vacancy: %v", err)
+	}
+	return id
+}
+
+func insertProfile(t *testing.T, d *db.DB, id int, roles ...string) {
+	t.Helper()
+	rolesJSON := `["` + roles[0] + `"`
+	for _, r := range roles[1:] {
+		rolesJSON += `,"` + r + `"`
+	}
+	rolesJSON += `]`
+	_, err := d.Exec(`INSERT INTO profile (id, data) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET data=excluded.data`,
+		id, `{"name":"Tester","targetRoles":`+rolesJSON+`}`)
+	if err != nil {
+		t.Fatalf("insert profile: %v", err)
+	}
 }

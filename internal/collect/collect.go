@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ type Collector struct {
 	log     *slog.Logger
 
 	OnTick func(now time.Time)
+	Follow func(ctx context.Context) error
 
 	mu      sync.Mutex
 	written int64
@@ -54,5 +56,13 @@ func New(
 }
 
 func (c *Collector) Register() {
-	c.runner.Register(runner.Kind{Name: "collect", Run: c.run, Resume: false, Then: []string{"recompute_fit"}})
+	c.runner.Register(runner.Kind{
+		Name: "collect", Run: c.run, Resume: false, Then: []string{"recompute_fit"},
+		Follow: func(ctx context.Context, _ func(runner.Spec) (int64, error)) error {
+			if c.Follow == nil {
+				return nil
+			}
+			return c.Follow(ctx)
+		},
+	})
 }

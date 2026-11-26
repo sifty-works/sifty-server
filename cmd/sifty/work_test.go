@@ -74,9 +74,10 @@ func startWorkServe(t *testing.T, cost, extraYAML string, handler http.HandlerFu
 	ts := time.Now().UTC().Format(time.RFC3339)
 	for _, id := range []int64{a, b} {
 		if _, err := d.Exec(`INSERT INTO job (kind,subject,priority,state,attempts,not_before,progress,error,params,created,updated)
-			VALUES ('read_vacancy',?,0,'queued',0,?,'{}','',NULL,?,?)`, fmt.Sprintf("%d/1", id), ts, ts, ts); err != nil {
+			VALUES ('shortlist_check',?,0,'queued',0,?,'{}','',NULL,?,?)`, fmt.Sprintf("1/%d", id), ts, ts, ts); err != nil {
 			t.Fatalf("seed job: %v", err)
 		}
+		seedFacts(t, d, id, "work", "Fluent German")
 	}
 	if seed != nil {
 		seed(d)
@@ -95,7 +96,7 @@ func TestWorkExplainsAHeldProviderWithoutItsErrorText(t *testing.T) {
 	}, nil)
 	var q *workWaiting
 	waitFor(t, 5*time.Second, func() bool {
-		q = waitingFor(getWork(t, s.base), "read_vacancy")
+		q = waitingFor(getWork(t, s.base), "shortlist_check")
 		return q != nil && q.Count == 2 && q.Reason != nil && q.Reason.Code == "held"
 	})
 	if q.Reason.Text == "" || strings.Contains(q.Reason.Text, secret) || strings.Contains(q.Reason.Text, "status 500") {
@@ -108,6 +109,8 @@ func TestLogsListRecentFailuresWithSentencesAndNoGoText(t *testing.T) {
 	tooLong := insertFullVacancy(t, d, "https://jobs.example.com/f1", "Long Posting", "Acme")
 	broken := insertFullVacancy(t, d, "https://jobs.example.com/f2", "Odd Posting", "Globex")
 	old := insertFullVacancy(t, d, "https://jobs.example.com/f3", "Old Posting", "Initech")
+	seedFacts(t, d, tooLong, "f1", "Fluent German")
+	seedFacts(t, d, broken, "f2", "Fluent German")
 
 	clk := newTestClock()
 	r := runner.New(d, nil, clk.Now, slog.Default())
@@ -120,8 +123,8 @@ func TestLogsListRecentFailuresWithSentencesAndNoGoText(t *testing.T) {
 
 	oldAt := time.Now().UTC().Add(-8 * 24 * time.Hour).Format(time.RFC3339)
 	if _, err := d.Exec(`INSERT INTO job (kind,subject,priority,state,attempts,not_before,progress,error,params,created,updated)
-		VALUES ('read_vacancy',?,0,'failed',3,?,'{}','Failed; the log has the details under job #1',NULL,?,?)`,
-		fmt.Sprintf("%d/1", old), oldAt, oldAt, oldAt); err != nil {
+		VALUES ('shortlist_check',?,0,'failed',3,?,'{}','Failed; the log has the details under job #1',NULL,?,?)`,
+		fmt.Sprintf("1/%d", old), oldAt, oldAt, oldAt); err != nil {
 		t.Fatalf("seed old failure: %v", err)
 	}
 
@@ -129,9 +132,9 @@ func TestLogsListRecentFailuresWithSentencesAndNoGoText(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go r.Start(ctx)
-	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", tooLong)})
+	r.Enqueue(runner.Spec{Kind: "shortlist_check", Subject: fmt.Sprintf("1/%d", tooLong)})
 	waitFor(t, 5*time.Second, func() bool { return len(getLogs(t, base).Failed) == 1 })
-	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", broken)})
+	r.Enqueue(runner.Spec{Kind: "shortlist_check", Subject: fmt.Sprintf("1/%d", broken)})
 	go func() {
 		for ctx.Err() == nil {
 			time.Sleep(5 * time.Millisecond)
@@ -147,7 +150,7 @@ func TestLogsListRecentFailuresWithSentencesAndNoGoText(t *testing.T) {
 		t.Errorf("prompt-too-long failure = %+v", first)
 	}
 	wantGeneric := fmt.Sprintf("Failed; the log has the details under job #%d", newest.ID)
-	if newest.Reason != wantGeneric || newest.Subject != "Odd Posting at Globex" || newest.Label != "Reading vacancy text" {
+	if newest.Reason != wantGeneric || newest.Subject != "Odd Posting at Globex" || newest.Label != "Shortlist check" {
 		t.Errorf("unknown-error failure = %+v, want reason %q", newest, wantGeneric)
 	}
 	if strings.Contains(newest.Reason, "10.9.8.7") {

@@ -1,6 +1,6 @@
 # Assessment
 
-What the user gets from assessment: every vacancy in their lists carries one number, Fits you, that says how well the vacancy fits their goals, and a counter of its requirements that says how well they fit the vacancy. Both are computed by code from the user's own data and never hide a vacancy; after a correction the open vacancy changes at once and the others follow in the background. A model is used only to read a vacancy's facts and requirements once per text, and for one check of a shortlisted vacancy.
+What the user gets from assessment: every vacancy in their lists carries one number, Fits you, that says how well the vacancy fits their goals, and a counter of its requirements that says how well they fit the vacancy. Both are computed by code from the user's own data and never hide a vacancy; after a correction the open vacancy changes at once and the others follow in the background. Vacancies are read by code; a model is used only for one check of a shortlisted vacancy.
 
 ## What the user states
 
@@ -31,23 +31,21 @@ Weights live in configuration. The weights of onsite work authorization and of r
 
 **Location.** The Location criterion compares the vacancy's places with the profile's preferred locations; without preferred locations it cannot be compared. A vacancy matches when one of its places lies in a preferred country or region, and in the preferred city when both name a city; it is a mismatch when every place is known and none matches. A remote vacancy that names no place, or only worldwide ones ("Anywhere", "Remote", telecommute), is unrestricted remote and matches both location criteria. Restricted remote ("US only", "EU") is checked against the user's work authorizations, not against where the user lives: covered when an eligible authorization covers one of its countries, not covered when the user states authorizations for its countries and none is eligible, unknown when the user states none or a place is unknown. Remote restriction cannot be compared for a vacancy that is not remote. When remote work is restricted or its places are unknown and the user wants remote work, Work mode is left to Remote restriction and cannot be compared. Onsite and hybrid vacancies are checked the same way, by the vacancy's country, for the Onsite work authorization criterion; when the vacancy states that it sponsors a work visa, a missing authorization is not a mismatch. Only an authorization marked eligible covers a country. Composite labels ("Berlin, Germany", "Remote (US or Canada)") are read with a vocabulary of countries and regions; a part the vocabulary does not know is taken as a city, and a place that names no country or region is unknown.
 
-**Time zone.** The vacancy's bands come from a stated time zone (an offset such as UTC+2 or an abbreviation such as CET, widened by "± N hours"), then from time-zone phrases in the text, which come from the model's reading, then from the countries and regions of its locations.
+**Time zone.** The vacancy's bands come from a stated time zone (an offset such as UTC+2 or an abbreviation such as CET, widened by "± N hours"), then from time-zone phrases in the text, then from the countries and regions of its locations.
 
 **Buckets.** Strong is 75 and above, Partial is 55 to 74, Weak is below 55, and Not scored has no number. The Fit filter of the Inbox uses these buckets.
 
 ## Requirements
 
-- A vacancy's requirements are read from its text once per text, each with its level (required or nice to have), alternatives and the exact phrase it was read from.
-- Each requirement is decided by code against My data: ✓ when the skill is in the user's skills by the skills vocabulary or the requirement is confirmed as had; ✕ when it is in the skills the user does not have or confirmed as not had; ? otherwise. Requirements about years of experience are not decided by code; the derived years are shown as evidence.
+- A vacancy's requirements are the lines of its requirement sections found by code (in a text with no such section, the lines that state a requirement), each with its level, required or nice to have, from its section and marker words.
+- Each requirement is decided by code against My data: ✓ when the skill is in the user's skills by the skills vocabulary or the requirement is confirmed as had; ✕ when it is in the skills the user does not have or confirmed as not had; ? otherwise. A requirement that asks for years of experience is not decided by code; the derived years are shown as evidence.
 - The counter "✓ 4 · ✕ 1 · ? 6" is shown in the Inbox row and on the vacancy page.
 - The requirements score is the average of ✓ = 1, ✕ = 0 and ? = 0.5, with required requirements counted twice and nice-to-have ones once. Without a decided requirement it counts as 0.5. It enters Fits you as the Requirements criterion.
 - Model matching of requirements is not part of the first version. A later checker can be connected through the same interface, and only after it decides hand-labelled examples better than code.
 
 ## Facts of a vacancy
 
-Structured fields the source states, the location, the tags and labelled lines ("Salary: …", "Location: …", "Time zone: …") are read by code first. A stored reading fills what code did not find; a model fills only what neither found. Every value the model gives must cite an exact excerpt of the vacancy text, or it is dropped. Engagement, work mode and hours are accepted from the model only when the excerpt is a phrase of the right kind.
-
-Code also finds these facts by itself, without a model, for every vacancy visible in a profile, as the background work "Analyzing vacancy" (see `application.md`): money, work mode, engagement, place, time zone, hours, required languages and the requirement lines, each with the excerpt it was found in. Nothing the user sees reads them yet.
+Facts are found by code, without a model, for every vacancy visible in a profile, as the background work "Analyzing vacancy" (see `application.md`): money, work mode, engagement, place, time zone, hours, required languages, the requirement lines and the offer. Structured fields the source states, the location, the tags and labelled lines ("Salary: …", "Location: …", "Time zone: …") are read first, then vocabularies over the whole text; each fact keeps the excerpt it was found in. When the address is an aggregator's, a value stated in the vacancy text replaces a field's value of the same kind; when it is the employer's own page, a field or labelled line replaces a vocabulary's value. Fits you, the requirements counter, the tiles and the offer read these facts and nothing else.
 
 ## In the lists
 
@@ -87,7 +85,7 @@ From top to bottom:
 
 ## Shortlist check
 
-- When a vacancy enters Shortlist, one model call compares the user's data with the vacancy's requirements. When that call decides no requirement at all, it is made once more, and the second answer is the answer. The model receives the vacancy's reading and text, the accepted data of My data and the profile including other requirements, and the text of documents marked "Use as evidence"; never contacts, legal name or application form answers (see `profiles.md`).
+- When a vacancy enters Shortlist, one model call compares the user's data with the vacancy's requirements. When that call decides no requirement at all, it is made once more, and the second answer is the answer. The model receives the vacancy's facts and text, the accepted data of My data and the profile including other requirements, and the text of documents marked "Use as evidence"; never contacts, legal name or application form answers (see `profiles.md`).
 - Its answer is shown next to the requirements that code left as ?, each with a short reason and the excerpt it relies on. It changes neither Fits you nor the counter.
 - When any of its inputs changes, the check is marked "Based on your data of <date>" and runs again the next time the vacancy page is opened. A change of profile or My data therefore makes no model call by itself.
 - States: "Checking…", "Waiting for the model: N ahead", and "Check failed: <reason>" with a "Retry" button shown only after a failure or an interruption. There is no Assess or Reassess button.
@@ -97,18 +95,18 @@ From top to bottom:
 
 | Change | What is recomputed | Model calls |
 |---|---|---|
-| New or changed vacancy text | its facts and requirements are read; its Fits you for every profile | 1 to read the text |
-| A vacancy becomes visible in a profile without having been read | its facts and requirements are read | 1 |
+| New or changed vacancy text | its facts and requirements are found; its Fits you for every profile, after that | none |
+| A vacancy becomes visible in a profile without having been analysed | its facts and requirements are found | none |
 | A change of goals or My data that enters Fits you | Fits you of every vacancy for the affected profiles, in the background; Shortlist checks marked outdated | none |
 | + or − on a requirement | this vacancy at once, the rest in the background | none |
 | A change of weights or vocabularies | everything | none |
-| A new version of the application that reads texts differently | requirements of every vacancy are read again, in the background, at low priority | 1 per text |
+| A new version of the application that reads texts differently | the facts of every vacancy are found again, in the background | none |
 | A vacancy enters Shortlist | the Shortlist check | 1, or 2 when the first decides nothing |
 | A shortlisted vacancy with an outdated check is opened | the Shortlist check | 1, or 2 when the first decides nothing |
 
 Fits you is recomputed in the background by code, with no model call: at start, after a collection run, and after My data or a profile is saved or a profile is created. Only results that are missing or out of date are recomputed, and the work repeats until none is left, so a change made while it runs is applied too.
 
-Texts are read in the background, one at a time, in the order the vacancies arrived, and only for vacancies visible in at least one profile. A reading is tried up to three times; when the model returns no requirements for a text that clearly states some, it is asked once more. Bulk reading refuses a provider that is neither local nor free unless the user allowed paid bulk work in Settings.
+Vacancy texts are analysed in the background, one at a time, in the order the vacancies arrived, and only for vacancies visible in at least one profile; Fits you is recomputed for them after their analysis, not before. Analysis is code and makes no model call.
 
 ## Not carried over
 

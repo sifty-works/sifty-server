@@ -44,7 +44,7 @@ The reason of a refused settings file is the sentence the settings screen gives 
 - **Exclusions:** the one list of exclusions (see `inbox.md`).
 - **Models:**
   - the providers, each marked local, free or paid;
-  - a provider for each kind of model work: **Reading** (facts and requirements of vacancies, and facts of profile documents), **Shortlist check**, and **Preparation** (form labels, drafts, cover letters, pasted forms);
+  - a provider for each kind of model work: **Reading** (facts of profile documents; vacancies are read by code, and the choice is kept for the model that will read what code leaves), **Shortlist check**, and **Preparation** (form labels, drafts, cover letters, pasted forms);
   - the state of each provider and a "Check" button that sends a fixed test prompt with no user data;
   - "Allow paid bulk work", off by default;
   - a switch that pauses background model work, and a daily limit of background model calls.
@@ -62,7 +62,7 @@ A change applies at once without a restart, except a change of the port. A chang
 - The first version supports four kinds of provider: **Ollama**, **OpenAI-compatible** (local or remote, with an API key), **Claude CLI** and **opencode CLI**. Anthropic models are reached through the Claude CLI or an OpenAI-compatible endpoint.
 - Each kind of model work uses its own provider. There is no silent fallback to another provider, and no fallback to a paid one.
 - Data leaves the machine only to the providers the user configured.
-- Bulk work (reading vacancy texts) refuses a provider marked paid, unless "Allow paid bulk work" is on.
+- Bulk work (analysing documents) refuses a provider marked paid, unless "Allow paid bulk work" is on.
 - A user's action goes ahead of background model work. One model serves one call at a time.
 - A provider that does not answer (it cannot be reached, loads no model, returns an error status, or its command line is not signed in or gives no text) holds background model work for five minutes at a time (Settings › Background work shows the hold and until when), and then the next background call tries it again by itself; its success lifts the hold. A failure of one request — a prompt longer than the context, a command-line answer that is not what was asked for, or an answer in which the model tried to call a tool — fails only that piece of work and holds nothing, unless three requests in a row fail this way, which holds the provider like one that does not answer; any success starts the count again. Background work also waits when the pause switch or today's calls cannot be read, and every call that may have been paid counts against the daily limit, even one the user cancelled.
 - **API keys** come only from the environment or from a secrets file in the data folder, read at start without overriding variables already set. Saving settings that contain a key in plain text is refused.
@@ -73,7 +73,7 @@ A change applies at once without a restart, except a change of the port. A chang
 ## Keeping data
 
 - An expired vacancy is removed automatically once a day when its expiry date has passed by more than a day and no application has been recorded for it, in any profile. A vacancy with an application stays and shows "Listing expired". Dismissed vacancies without an application are removed the same way. Removal leaves a mark of the vacancy's addresses so collection keeps it away. A vacancy is also removed manually by "Delete role…" (see `inbox.md`).
-- **Text retention.** Once a day, the text of a vacancy is removed when the vacancy is in no profile's Shortlist or Applied, was never opened or is dismissed in every profile that decided it, and has not been seen at any source for 60 days. The model's reading of that text goes with it. The row stays: title, company, addresses, dates and decisions. The vacancy page says "Text removed after 60 days unseen; it returns if the source shows the role again", and search finds it only by its title, company and tags. When a source shows it again, its text is fetched again and its decisions stay.
+- **Text retention.** Once a day, the text of a vacancy is removed when the vacancy is in no profile's Shortlist or Applied, was never opened or is dismissed in every profile that decided it, and has not been seen at any source for 60 days. The facts found in that text go with it. The row stays: title, company, addresses, dates and decisions. The vacancy page says "Text removed after 60 days unseen; it returns if the source shows the role again", and search finds it only by its title, company and tags. When a source shows it again, its text is fetched again and its decisions stay.
 - A full-text index of vacancy texts is kept for search.
 - Of My data and of each profile only the latest version is kept; there is no history of edits.
 - The application is for one user; it keeps no user accounts.

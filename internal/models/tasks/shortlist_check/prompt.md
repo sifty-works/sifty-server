@@ -2,7 +2,7 @@ You compare one candidate with the requirements of one saved job vacancy. The va
 
 You receive:
 - REQUIREMENTS TO DECIDE: requirements that a program could not decide from the candidate's skills. These are the only requirements to answer.
-- VACANCY READING and VACANCY TEXT: what the vacancy states.
+- VACANCY FACTS and VACANCY TEXT: what the vacancy states.
 - CANDIDATE: what the candidate has stated about themselves, and the text of their documents.
 
 Rules:

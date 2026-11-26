@@ -45,6 +45,7 @@ type Kind struct {
 	Resume  bool
 	Serial  bool
 	Patient bool
+	After   []string
 	Then    []string
 	Follow  func(ctx context.Context, enqueue func(Spec) (int64, error)) error
 }
@@ -262,9 +263,13 @@ func (r *Runner) Start(ctx context.Context) error {
 }
 
 func (r *Runner) Enqueue(s Spec) (int64, error) {
+	return r.enqueue(s, `'queued','running'`)
+}
+
+func (r *Runner) enqueue(s Spec, states string) (int64, error) {
 	var id int64
 	err := r.db.QueryRow(
-		`SELECT id FROM job WHERE kind=? AND subject=? AND state IN ('queued','running') LIMIT 1`,
+		`SELECT id FROM job WHERE kind=? AND subject=? AND state IN (`+states+`) LIMIT 1`,
 		s.Kind, s.Subject,
 	).Scan(&id)
 	if err == nil {
@@ -481,6 +486,13 @@ func (r *Runner) pickOne() (*Job, error) {
 				continue
 			}
 		}
+		if len(k.After) > 0 {
+			ph := strings.Repeat("?,", len(k.After))
+			var waiting bool
+			if err := r.db.QueryRow(`SELECT EXISTS (SELECT 1 FROM job WHERE kind IN (`+ph[:len(ph)-1]+`) AND state IN ('queued','running'))`, anyOf(k.After)...).Scan(&waiting); err != nil || waiting {
+				continue
+			}
+		}
 		names = append(names, "?")
 		args = append(args, name)
 	}
@@ -506,6 +518,14 @@ func (r *Runner) pickOne() (*Job, error) {
 		return nil, err
 	}
 	return &j, nil
+}
+
+func anyOf(xs []string) []any {
+	out := make([]any, len(xs))
+	for i, x := range xs {
+		out[i] = x
+	}
+	return out
 }
 
 func (r *Runner) markRunning(j *Job) error {
@@ -545,7 +565,7 @@ func (r *Runner) runJob(ctx context.Context, j *Job, kind Kind) {
 		}
 		if runErr == nil && ctx.Err() == nil {
 			for _, name := range kind.Then {
-				if _, err := r.Enqueue(Spec{Kind: name}); err != nil {
+				if _, err := r.enqueue(Spec{Kind: name}, `'queued'`); err != nil {
 					r.log.Error("runner: follow-up not queued", "id", j.ID, "kind", name, "error", err)
 				}
 			}

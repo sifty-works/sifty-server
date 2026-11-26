@@ -13,8 +13,8 @@ import (
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
+	"github.com/sifty-works/sifty-server/internal/facts"
 	"github.com/sifty-works/sifty-server/internal/listing"
-	"github.com/sifty-works/sifty-server/internal/reading"
 	"github.com/sifty-works/sifty-server/internal/skills"
 )
 
@@ -69,7 +69,7 @@ func Band(ctx context.Context, database *db.DB, profileID, vacancyID int64, r Ru
 	if err != nil {
 		return Fit{}, err
 	}
-	_, v, _, ok, err := LoadVacancy(ctx, catalog.New(database, nil), vacancyID)
+	v, _, _, ok, err := LoadVacancy(ctx, database, vacancyID)
 	if err != nil {
 		return Fit{}, err
 	}
@@ -117,22 +117,27 @@ func LoadProfile(ctx context.Context, database *db.DB, id int64, r Rules) (Profi
 	return Profile{id, v, Inputs(v, r)}, nil
 }
 
-func LoadProfiles(ctx context.Context, database *db.DB, r Rules) ([]Profile, error) {
+func ProfileIDs(ctx context.Context, database *db.DB) ([]int64, error) {
 	rows, err := database.QueryContext(ctx, `SELECT id FROM profile ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("fit: profiles: %w", err)
 	}
+	defer rows.Close()
 	var ids []int64
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
 			return nil, fmt.Errorf("fit: profiles: %w", err)
 		}
 		ids = append(ids, id)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("fit: profiles: %w", err)
+	return ids, rows.Err()
+}
+
+func LoadProfiles(ctx context.Context, database *db.DB, r Rules) ([]Profile, error) {
+	ids, err := ProfileIDs(ctx, database)
+	if err != nil {
+		return nil, err
 	}
 	var out []Profile
 	for _, id := range ids {
@@ -145,40 +150,63 @@ func LoadProfiles(ctx context.Context, database *db.DB, r Rules) ([]Profile, err
 	return out, nil
 }
 
-func LoadVacancy(ctx context.Context, cat *catalog.Catalog, id int64) (reading.Vacancy, reading.VacancyReading, int64, bool, error) {
-	batch, err := cat.VacancyTexts(ctx, id-1, 1)
+func LoadVacancy(ctx context.Context, database *db.DB, id int64) (Vacancy, string, int64, bool, error) {
+	batch, err := catalog.New(database, nil).VacancyTexts(ctx, id-1, 1)
 	if err != nil || len(batch) == 0 || batch[0].ID != id {
-		return reading.Vacancy{}, reading.VacancyReading{}, 0, false, err
+		return Vacancy{}, "", 0, false, err
 	}
-	raw, merged, err := vacancy(batch[0])
-	return raw, merged, batch[0].Version, err == nil, err
+	t := batch[0]
+	html, err := catalog.Body(t.Body)
+	if err != nil {
+		return Vacancy{}, "", 0, false, fmt.Errorf("fit: vacancy %d: %w", t.ID, err)
+	}
+	sets, err := facts.Load(ctx, database, id)
+	if err != nil {
+		return Vacancy{}, "", 0, false, err
+	}
+	row := listed{id: t.ID, version: t.Version, title: t.Title, textState: t.TextState}
+	return FromFacts(row.title, row.full(), sets[id]), listing.PlainText(html), t.Version, true, nil
 }
 
-func listingKey(t catalog.VacancyText) int64 {
+type listed struct {
+	id, version                              int64
+	title, location, tags, fields, textState string
+	factsKey                                 string
+}
+
+func (l listed) full() bool { return listing.TextState(l.textState) == listing.TextFull }
+
+func (l listed) key() int64 {
 	h := fnv.New64a()
-	fmt.Fprintf(h, "%d\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s",
-		t.Version, t.Title, t.Location, t.TagsJSON, t.FieldsJSON, t.ReaderVersion, t.ReadingCreated)
+	fmt.Fprintf(h, "%d\x00%s\x00%s\x00%s\x00%s\x00%s", l.version, l.title, l.location, l.tags, l.fields, l.factsKey)
 	return int64(h.Sum64())
 }
 
-func vacancy(t catalog.VacancyText) (reading.Vacancy, reading.VacancyReading, error) {
-	v := reading.Vacancy{Title: t.Title, Company: t.Company, Location: t.Location, Full: listing.TextState(t.TextState) == listing.TextFull}
-	json.Unmarshal([]byte(t.TagsJSON), &v.Tags)
-	json.Unmarshal([]byte(t.FieldsJSON), &v.Fields)
-	html, err := catalog.Body(t.Body)
+func listAfter(ctx context.Context, database *db.DB, after int64, limit int) ([]listed, map[int64]facts.Set, error) {
+	rows, err := database.QueryContext(ctx,
+		`SELECT v.id, v.version, v.title, v.location, v.tags, v.source_fields, v.text_state
+		 FROM vacancy v WHERE v.id>? ORDER BY v.id LIMIT ?`, after, limit)
 	if err != nil {
-		return v, reading.VacancyReading{}, fmt.Errorf("fit: vacancy %d: %w", t.ID, err)
+		return nil, nil, fmt.Errorf("fit: vacancies: %w", err)
 	}
-	v.Text = listing.PlainText(html)
-	code := reading.FromCode(v)
-	if t.ReadingRecord == "" {
-		return v, code, nil
+	defer rows.Close()
+	var out []listed
+	var ids []int64
+	for rows.Next() {
+		var l listed
+		if err := rows.Scan(&l.id, &l.version, &l.title, &l.location, &l.tags, &l.fields, &l.textState); err != nil {
+			return nil, nil, fmt.Errorf("fit: vacancies: scan: %w", err)
+		}
+		out, ids = append(out, l), append(ids, l.id)
 	}
-	var rec reading.Record
-	if json.Unmarshal([]byte(t.ReadingRecord), &rec) != nil {
-		return v, code, nil
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("fit: vacancies: %w", err)
 	}
-	return v, reading.Merge(code, rec), nil
+	sets, err := facts.Load(ctx, database, ids...)
+	for i := range out {
+		out[i].factsKey = sets[out[i].id].Key
+	}
+	return out, sets, err
 }
 
 func RecomputeVacancy(ctx context.Context, database *db.DB, vacancyID int64, r Rules) error {
@@ -186,55 +214,47 @@ func RecomputeVacancy(ctx context.Context, database *db.DB, vacancyID int64, r R
 	if err != nil {
 		return err
 	}
-	batch, err := catalog.New(database, nil).VacancyTexts(ctx, vacancyID-1, 1)
-	if err != nil || len(batch) == 0 || batch[0].ID != vacancyID {
+	batch, sets, err := listAfter(ctx, database, vacancyID-1, 1)
+	if err != nil || len(batch) == 0 || batch[0].id != vacancyID {
 		return err
 	}
-	stale := map[int64][]Profile{}
-	for _, p := range profiles {
-		stale[vacancyID] = append(stale[vacancyID], p)
-	}
-	_, err = writeBatch(ctx, database, batch, stale, r)
+	_, err = writeBatch(ctx, database, batch, sets, map[int64][]Profile{vacancyID: profiles}, r)
 	return err
 }
 
 func Recompute(ctx context.Context, database *db.DB, rules func() Rules, progress func(done, total int, current string)) error {
-	cat := catalog.New(database, nil)
 	for {
-		n, err := recomputePass(ctx, database, cat, rules(), progress)
+		n, err := recomputePass(ctx, database, rules(), progress)
 		if err != nil || n == 0 {
 			return err
 		}
 	}
 }
 
-func recomputePass(ctx context.Context, database *db.DB, cat *catalog.Catalog, r Rules, progress func(int, int, string)) (int, error) {
+func recomputePass(ctx context.Context, database *db.DB, r Rules, progress func(int, int, string)) (int, error) {
 	profiles, err := LoadProfiles(ctx, database, r)
 	if err != nil {
 		return 0, err
 	}
 	stale, total := map[int64][]Profile{}, 0
 	for _, p := range profiles {
-		rows, err := database.QueryContext(ctx, `SELECT v.id, v.version, v.title, v.location, v.tags, v.source_fields,
-			COALESCE(r.reader_version, ''), COALESCE(r.created, ''),
+		rows, err := database.QueryContext(ctx, `SELECT v.id, v.version, v.title, v.location, v.tags, v.source_fields, `+facts.KeySQL+`,
 			`+current+`, f.listing
-			FROM vacancy v `+Join+`
-			LEFT JOIN vacancy_reading r ON r.vacancy_id=v.id AND r.version=v.version`,
+			FROM vacancy v `+Join,
 			p.Inputs, p.ID)
 		if err != nil {
 			return 0, fmt.Errorf("fit: out of date: %w", err)
 		}
 		for rows.Next() {
-			var t catalog.VacancyText
+			var l listed
 			var ok bool
 			var stored sql.NullInt64
-			if err := rows.Scan(&t.ID, &t.Version, &t.Title, &t.Location, &t.TagsJSON, &t.FieldsJSON,
-				&t.ReaderVersion, &t.ReadingCreated, &ok, &stored); err != nil {
+			if err := rows.Scan(&l.id, &l.version, &l.title, &l.location, &l.tags, &l.fields, &l.factsKey, &ok, &stored); err != nil {
 				rows.Close()
 				return 0, fmt.Errorf("fit: out of date: %w", err)
 			}
-			if !ok || stored.Int64 != listingKey(t) {
-				stale[t.ID] = append(stale[t.ID], p)
+			if !ok || stored.Int64 != l.key() {
+				stale[l.id] = append(stale[l.id], p)
 				total++
 			}
 		}
@@ -242,17 +262,17 @@ func recomputePass(ctx context.Context, database *db.DB, cat *catalog.Catalog, r
 	}
 	written, waiting := 0, len(stale)
 	for after := int64(0); waiting > 0; {
-		batch, err := cat.VacancyTexts(ctx, after, 200)
+		batch, sets, err := listAfter(ctx, database, after, 200)
 		if err != nil || len(batch) == 0 {
 			return written, err
 		}
-		after = batch[len(batch)-1].ID
-		for _, t := range batch {
-			if len(stale[t.ID]) > 0 {
+		after = batch[len(batch)-1].id
+		for _, l := range batch {
+			if len(stale[l.id]) > 0 {
 				waiting--
 			}
 		}
-		n, err := writeBatch(ctx, database, batch, stale, r)
+		n, err := writeBatch(ctx, database, batch, sets, stale, r)
 		if err != nil {
 			return written, err
 		}
@@ -262,22 +282,19 @@ func recomputePass(ctx context.Context, database *db.DB, cat *catalog.Catalog, r
 	return written, nil
 }
 
-func writeBatch(ctx context.Context, database *db.DB, batch []catalog.VacancyText, stale map[int64][]Profile, r Rules) (int, error) {
+func writeBatch(ctx context.Context, database *db.DB, batch []listed, sets map[int64]facts.Set, stale map[int64][]Profile, r Rules) (int, error) {
 	tx, err := database.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("fit: write: %w", err)
 	}
 	defer tx.Rollback()
 	n := int64(0)
-	for _, t := range batch {
-		if len(stale[t.ID]) == 0 {
+	for _, l := range batch {
+		if len(stale[l.id]) == 0 {
 			continue
 		}
-		_, read, err := vacancy(t)
-		if err != nil {
-			return 0, err
-		}
-		for _, p := range stale[t.ID] {
+		read := FromFacts(l.title, l.full(), sets[l.id])
+		for _, p := range stale[l.id] {
 			f := Score(p.View, read, r)
 			var score, reqOK, reqNo, reqMaybe any
 			if f.State == Scored {
@@ -291,9 +308,9 @@ func writeBatch(ctx context.Context, database *db.DB, batch []catalog.VacancyTex
 				ON CONFLICT (profile, vacancy) DO UPDATE SET version=excluded.version, inputs=excluded.inputs,
 				listing=excluded.listing, state=excluded.state, score=excluded.score,
 				req_ok=excluded.req_ok, req_no=excluded.req_no, req_maybe=excluded.req_maybe`,
-				p.ID, t.ID, t.Version, p.Inputs, listingKey(t), f.State, score, reqOK, reqNo, reqMaybe, p.ID, t.ID)
+				p.ID, l.id, l.version, p.Inputs, l.key(), f.State, score, reqOK, reqNo, reqMaybe, p.ID, l.id)
 			if err != nil {
-				return 0, fmt.Errorf("fit: write %d: %w", t.ID, err)
+				return 0, fmt.Errorf("fit: write %d: %w", l.id, err)
 			}
 			k, _ := res.RowsAffected()
 			n += k

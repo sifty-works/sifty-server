@@ -2,23 +2,11 @@ package skills
 
 import (
 	_ "embed"
-	"fmt"
-	"regexp"
-	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/sifty-works/sifty-server/internal/candidate"
-	"github.com/sifty-works/sifty-server/internal/reading"
-)
-
-var (
-	leadKeyRe     = regexp.MustCompile(`(?i)\b(lead|leading|manage|managing|management|head|director|vp|cto|ceo|coo|president)\b`)
-	engKeyRe      = regexp.MustCompile(`(?i)\b(engineer|engineering|developer|architect|programmer|technical|backend|frontend|software)\b`)
-	yearsInTextRe = regexp.MustCompile(`(?i)\b\d+\+?\s+years?\b`)
 )
 
 //go:embed vocab.yaml
@@ -230,29 +218,24 @@ type Index struct {
 	absentNames map[string][]string
 }
 
-func NewIndex(skills []candidate.Skill, absent []candidate.AbsentSkill) *Index {
+func NewIndex(held, absent []string) *Index {
 	idx := &Index{
 		byGroup: map[string]bool{}, absentGroup: map[string]bool{},
 		skillNames: map[string][]string{}, absentNames: map[string][]string{},
 	}
-	for _, s := range skills {
-		for _, g := range groupsOf(defaultVocab.scanName(s.Name)) {
+	for _, name := range held {
+		for _, g := range groupsOf(defaultVocab.scanName(name)) {
 			idx.byGroup[g] = true
-			idx.skillNames[g] = append(idx.skillNames[g], s.Name)
+			idx.skillNames[g] = append(idx.skillNames[g], name)
 		}
 	}
-	for _, a := range absent {
-		for _, g := range groupsOf(defaultVocab.scanName(a.Name)) {
+	for _, name := range absent {
+		for _, g := range groupsOf(defaultVocab.scanName(name)) {
 			idx.absentGroup[g] = true
-			idx.absentNames[g] = append(idx.absentNames[g], a.Name)
+			idx.absentNames[g] = append(idx.absentNames[g], name)
 		}
 	}
 	return idx
-}
-
-func normalizeKey(s string) string {
-	s = strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(s)), " "))
-	return strings.Trim(s, ".,;:!?–—-'\"()")
 }
 
 type DecisionResult struct {
@@ -261,14 +244,8 @@ type DecisionResult struct {
 	NamedSkills []string
 }
 
-func reqGroups(req reading.Requirement) (named []string, anyOf bool, canDecide bool) {
-	if len(req.Alts) > 0 {
-		for _, alt := range req.Alts {
-			named = append(named, groupsOf(defaultVocab.scanName(alt))...)
-		}
-		return named, true, true
-	}
-	hits, rejected, toks, covered := defaultVocab.scan(req.Text)
+func groups(text string) (named []string, anyOf bool, canDecide bool) {
+	hits, rejected, toks, covered := defaultVocab.scan(text)
 	named = groupsOf(hits)
 	orPresent := false
 	leftover := len(rejected) > 0
@@ -288,21 +265,8 @@ func reqGroups(req reading.Requirement) (named []string, anyOf bool, canDecide b
 	return named, orPresent, !(leftover && !orPresent)
 }
 
-func DecideFull(req reading.Requirement, idx *Index, confirmed []candidate.ConfirmedFact, dy candidate.DerivedYears) DecisionResult {
-	key := normalizeKey(req.Text)
-	for _, c := range confirmed {
-		if normalizeKey(c.Text) == key {
-			v := "✓"
-			if !c.Have {
-				v = "✕"
-			}
-			return DecisionResult{Verdict: v, Evidence: "Confirmed by you"}
-		}
-	}
-	if req.Kind == "experience" {
-		return DecisionResult{Verdict: "?", Evidence: experienceEvidence(req.Text, dy)}
-	}
-	named, anyOf, canDecide := reqGroups(req)
+func Decide(text string, idx *Index) DecisionResult {
+	named, anyOf, canDecide := groups(text)
 	if !canDecide || len(named) == 0 {
 		return DecisionResult{Verdict: "?", NamedSkills: named}
 	}
@@ -321,32 +285,9 @@ func DecideFull(req reading.Requirement, idx *Index, confirmed []candidate.Confi
 	return DecisionResult{Verdict: v, Evidence: joinEvidence(ev), NamedSkills: named}
 }
 
-func Decide(req reading.Requirement, idx *Index, confirmed []candidate.ConfirmedFact) string {
-	return DecideFull(req, idx, confirmed, candidate.DerivedYears{}).Verdict
-}
-
-func NamedSkillsFor(req reading.Requirement) []string {
-	named, _, _ := reqGroups(req)
+func NamedSkills(text string) []string {
+	named, _, _ := groups(text)
 	return named
-}
-
-func experienceEvidence(text string, dy candidate.DerivedYears) string {
-	if !yearsInTextRe.MatchString(text) {
-		return ""
-	}
-	years := dy.Total
-	if leadKeyRe.MatchString(text) {
-		years = dy.Leading
-	} else if engKeyRe.MatchString(text) {
-		years = dy.Engineering
-	}
-	if years <= 0 {
-		return ""
-	}
-	if years == 1 {
-		return "1 year"
-	}
-	return fmt.Sprintf("%d years", years)
 }
 
 func joinEvidence(names []string) string {
@@ -378,76 +319,4 @@ func verdictForGroups(gs []string, anyOf bool, idx *Index) string {
 		return "✕"
 	}
 	return "?"
-}
-
-type AnswerResult struct {
-	Me             candidate.MeData
-	AddedSkills    []string
-	MovedSkills    []string
-	AddedConfirmed []string
-}
-
-func Answer(req reading.Requirement, have bool, chosenSkill string, me candidate.MeData) AnswerResult {
-	named := NamedSkillsFor(req)
-	toAct := named
-	if chosenSkill != "" {
-		toAct = []string{chosenSkill}
-	}
-	eqName := func(n string) func(candidate.Skill) bool {
-		return func(s candidate.Skill) bool { return strings.EqualFold(s.Name, n) }
-	}
-	eqAbsent := func(n string) func(candidate.AbsentSkill) bool {
-		return func(a candidate.AbsentSkill) bool { return strings.EqualFold(a.Name, n) }
-	}
-	var addedSkills, movedSkills, addedConfirmed []string
-	addConfirmed := func() {
-		eqText := func(f candidate.ConfirmedFact) bool { return f.Text == req.Text }
-		if !slices.ContainsFunc(me.ConfirmedFacts, eqText) {
-			me.ConfirmedFacts = append(me.ConfirmedFacts, candidate.ConfirmedFact{Text: req.Text, Have: have})
-			addedConfirmed = append(addedConfirmed, req.Text)
-		}
-	}
-	if len(toAct) > 0 {
-		for _, name := range toAct {
-			if have {
-				alreadyHeld := slices.ContainsFunc(me.Skills, eqName(name))
-				if !alreadyHeld {
-					me.Skills = append(me.Skills, candidate.Skill{Name: name, Level: "Proficient"})
-				}
-				before := len(me.AbsentSkills)
-				me.AbsentSkills = slices.DeleteFunc(me.AbsentSkills, eqAbsent(name))
-				switch {
-				case len(me.AbsentSkills) < before:
-					movedSkills = append(movedSkills, name)
-				case !alreadyHeld:
-					addedSkills = append(addedSkills, name)
-				}
-			} else {
-				alreadyAbsent := slices.ContainsFunc(me.AbsentSkills, eqAbsent(name))
-				if !alreadyAbsent {
-					me.AbsentSkills = append(me.AbsentSkills, candidate.AbsentSkill{Name: name})
-				}
-				before := len(me.Skills)
-				me.Skills = slices.DeleteFunc(me.Skills, eqName(name))
-				switch {
-				case len(me.Skills) < before:
-					movedSkills = append(movedSkills, name)
-				case !alreadyAbsent:
-					addedSkills = append(addedSkills, name)
-				}
-			}
-		}
-		if chosenSkill == "" || len(named) <= 1 {
-			want := "✓"
-			if !have {
-				want = "✕"
-			}
-			if Decide(req, NewIndex(me.Skills, me.AbsentSkills), me.ConfirmedFacts) != want {
-				addConfirmed()
-			}
-		}
-	} else {
-		addConfirmed()
-	}
-	return AnswerResult{Me: me, AddedSkills: addedSkills, MovedSkills: movedSkills, AddedConfirmed: addedConfirmed}
 }

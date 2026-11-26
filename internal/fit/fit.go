@@ -10,7 +10,6 @@ import (
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/places"
-	"github.com/sifty-works/sifty-server/internal/reading"
 	"github.com/sifty-works/sifty-server/internal/skills"
 )
 
@@ -89,7 +88,7 @@ var tiles = []struct {
 }{{"Money", []string{"money"}}, {"Location", []string{"location", "remote_restriction", "time_zone"}},
 	{"Work mode", []string{"work_mode"}}, {"Contract", []string{"engagement", "hours"}}}
 
-func Score(p ProfileView, v reading.VacancyReading, r Rules) Fit {
+func Score(p ProfileView, v Vacancy, r Rules) Fit {
 	g := p.Goals
 	var ps []places.Place
 	open, known := has(v.WorkModes, "remote"), true
@@ -123,15 +122,15 @@ func Score(p ProfileView, v reading.VacancyReading, r Rules) Fit {
 		u["work_mode"] = na
 	}
 	f := Fit{Bucket: "Not scored"}
-	if v.RequirementsRead {
-		idx := skills.NewIndex(p.Skills, p.AbsentSkills)
+	if v.Analysed {
+		idx := skills.NewIndex(names(p.Skills, func(s candidate.Skill) string { return s.Name }), names(p.AbsentSkills, func(s candidate.AbsentSkill) string { return s.Name }))
 		var reqNum, reqDen float64
 		for i, req := range v.Requirements {
 			w := 1.0
 			if req.Level == "required" {
 				w = 2.0
 			}
-			dr := skills.DecideFull(req, idx, p.Confirmed, p.DerivedYears)
+			dr := decide(req.Text, idx, p.Confirmed, p.DerivedYears)
 			switch dr.Verdict {
 			case "✓":
 				reqNum += w
@@ -144,7 +143,7 @@ func Score(p ProfileView, v reading.VacancyReading, r Rules) Fit {
 			}
 			reqDen += w
 			f.Requirements = append(f.Requirements, RequirementLine{
-				Index: i, Text: req.Text, Alts: req.Alts, Level: req.Level,
+				Index: i, Text: req.Text, Level: req.Level,
 				Verdict: dr.Verdict, Evidence: dr.Evidence, NamedSkills: dr.NamedSkills,
 			})
 		}
@@ -244,7 +243,7 @@ func tokens(s string) []string {
 	return out
 }
 
-func money(c *candidate.Compensation, m *reading.Money, rates map[string]float64) float64 {
+func money(c *candidate.Compensation, m *Money, rates map[string]float64) float64 {
 	if c == nil || c.CashMin == nil || *c.CashMin <= 0 || m == nil || m.Max <= 0 || m.Currency == "" ||
 		(m.Tax == "net") != strings.EqualFold(c.GrossNet, "net") {
 		return na
@@ -255,7 +254,7 @@ func money(c *candidate.Compensation, m *reading.Money, rates map[string]float64
 	return na
 }
 
-func convert(x float64, m *reading.Money, cur, period string, rates map[string]float64) float64 {
+func convert(x float64, m *Money, cur, period string, rates map[string]float64) float64 {
 	if cur != "" && !strings.EqualFold(cur, m.Currency) {
 		from, to := rates[m.Currency], rates[strings.ToUpper(cur)]
 		if from <= 0 || to <= 0 {
@@ -323,7 +322,7 @@ func restriction(auths []candidate.WorkAuthorization, ps []places.Place, remote,
 	return out
 }
 
-func hours(h *candidate.Hours, vh *reading.Hours) float64 {
+func hours(h *candidate.Hours, vh *Hours) float64 {
 	if h == nil || h.Mode == "" || vh == nil || vh.Mode == "" {
 		return na
 	}
@@ -373,7 +372,7 @@ func has(xs []string, x string) bool {
 	return false
 }
 
-func texts(p ProfileView, v reading.VacancyReading, open bool, rates map[string]float64) ([]string, []string, []string, []string) {
+func texts(p ProfileView, v Vacancy, open bool, rates map[string]float64) ([]string, []string, []string, []string) {
 	g := p.Goals
 	val := []string{"Not stated", "Not stated", list(v.WorkModes, "Not stated"), "Not stated"}
 	conv := []string{"", "", "", ""}

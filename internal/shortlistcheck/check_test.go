@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
+	"github.com/sifty-works/sifty-server/internal/fit"
 	"github.com/sifty-works/sifty-server/internal/models"
-	"github.com/sifty-works/sifty-server/internal/reading"
 	"github.com/sifty-works/sifty-server/internal/shortlistcheck"
 )
 
@@ -16,11 +16,11 @@ func facts() shortlistcheck.ProfileFacts {
 	return shortlistcheck.ProfileFacts{Skills: []candidate.Skill{{Name: "Go", Level: "Proficient"}}}
 }
 
-func vacancy() reading.VacancyReading {
-	return reading.VacancyReading{Title: "Backend Engineer", Full: true, RequirementsRead: true, Requirements: []reading.Requirement{
-		{Text: "Go", Kind: "skill", Level: "required"},
-		{Text: "Fluent German", Kind: "language", Level: "required"},
-		{Text: "Mentoring experience", Kind: "other", Level: "preferred"},
+func vacancy() fit.Vacancy {
+	return fit.Vacancy{Title: "Backend Engineer", Full: true, Analysed: true, Requirements: []fit.Requirement{
+		{Text: "Go", Level: "required"},
+		{Text: "Fluent German", Level: "required"},
+		{Text: "Mentoring experience", Level: "preferred"},
 	}}
 }
 
@@ -53,7 +53,7 @@ func TestOnlyRequirementsCodeLeftUndecidedAreAskedAndLocatedAnswersKept(t *testi
 	if len(calls) != 1 {
 		t.Fatalf("model calls = %d, want 1", len(calls))
 	}
-	asked := calls[0].Prompt[strings.LastIndex(calls[0].Prompt, "\nREQUIREMENTS TO DECIDE\n"):strings.LastIndex(calls[0].Prompt, "\nVACANCY READING")]
+	asked := calls[0].Prompt[strings.LastIndex(calls[0].Prompt, "\nREQUIREMENTS TO DECIDE\n"):strings.LastIndex(calls[0].Prompt, "\nVACANCY FACTS")]
 	if !strings.Contains(asked, "Fluent German") || !strings.Contains(asked, "Mentoring experience") {
 		t.Errorf("undecided requirements are not asked: %q", asked)
 	}
@@ -126,7 +126,7 @@ func TestRequirementCopiedWithTheLevelAndAlternativesThePromptPrintsIsStillMatch
 
 func TestRequirementWhoseOwnTextEndsInBracketsIsMatchedWhole(t *testing.T) {
 	v := vacancy()
-	v.Requirements = append(v.Requirements, reading.Requirement{Text: "Continuous Threat Exposure Management (CTEM)", Kind: "other", Level: "preferred"})
+	v.Requirements = append(v.Requirements, fit.Requirement{Text: "Continuous Threat Exposure Management (CTEM)", Level: "preferred"})
 	fm := &models.FakeModel{}
 	fm.AddReply(reply(answer("Continuous Threat Exposure Management (CTEM)", "met", "German (C1)")))
 	got, err := shortlistcheck.Checker{Model: fm, Text: "We hire a backend engineer."}.Check(context.Background(), facts(), evidence, v)

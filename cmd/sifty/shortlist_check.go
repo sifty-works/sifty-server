@@ -37,7 +37,7 @@ func runShortlistCheck(
 		return err
 	}
 
-	v, merged, _, ok, err := fit.LoadVacancy(ctx, catalog.New(database, nil), vacancyID)
+	v, text, _, ok, err := fit.LoadVacancy(ctx, database, vacancyID)
 	if err != nil || !ok {
 		return err
 	}
@@ -58,8 +58,8 @@ func runShortlistCheck(
 		return err
 	}
 
-	var checker shortlistcheck.ShortlistChecker = shortlistcheck.Checker{Model: model(vacancyID), Text: v.Text}
-	check, err := checker.Check(ctx, prof.View, candidate.EvidenceText(me, pd, docs), merged)
+	var checker shortlistcheck.ShortlistChecker = shortlistcheck.Checker{Model: model(vacancyID), Text: text}
+	check, err := checker.Check(ctx, prof.View, candidate.EvidenceText(me, pd, docs), v)
 	if err != nil {
 		return fmt.Errorf("shortlist check: %w", err)
 	}

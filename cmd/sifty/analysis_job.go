@@ -3,11 +3,15 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/sifty-works/sifty-server/internal/analysis"
+	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
+	"github.com/sifty-works/sifty-server/internal/fit"
 	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/runner"
 )
@@ -30,8 +34,31 @@ func loadForAnalysis(database *db.DB) analysis.Loader {
 	}
 }
 
+func visibleInAProfile(ctx context.Context, database *db.DB) (string, []any, error) {
+	ids, err := fit.ProfileIDs(ctx, database)
+	if err != nil {
+		return "", nil, err
+	}
+	clauses := []string{"EXISTS (SELECT 1 FROM decision d2 WHERE d2.vacancy=v.id)"}
+	var args []any
+	var failed []error
+	for _, id := range ids {
+		p, err := candidate.ProfileSearch(ctx, database, id)
+		if err != nil {
+			failed = append(failed, fmt.Errorf("analysis: profile %d: %w", id, err))
+			continue
+		}
+		f := candidate.Visibility(p)
+		if f.SQL != "" && f.SQL != "1=0" {
+			clauses = append(clauses, "("+f.SQL+")")
+			args = append(args, f.Args...)
+		}
+	}
+	return "(" + strings.Join(clauses, " OR ") + ")", args, errors.Join(failed...)
+}
+
 func queueAnalysis(ctx context.Context, database *db.DB, r *runner.Runner) error {
-	visible, args, profileErr := readingVisibility(ctx, database)
+	visible, args, profileErr := visibleInAProfile(ctx, database)
 	if visible == "" {
 		return profileErr
 	}

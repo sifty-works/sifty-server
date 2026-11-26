@@ -11,7 +11,7 @@ import (
 var sectionsYAML []byte
 
 type sectionEntry struct{ Text, Kind string }
-type sectionVocab struct{ Headings, Contains []sectionEntry }
+type sectionVocab struct{ Headings []sectionEntry }
 
 var sections = mustLoadSections()
 

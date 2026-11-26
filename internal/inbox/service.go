@@ -3,6 +3,7 @@ package inbox
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
+	"github.com/sifty-works/sifty-server/internal/facts"
 	"github.com/sifty-works/sifty-server/internal/fit"
 	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/places"
@@ -82,12 +84,12 @@ type Band struct {
 	Groups           []RequirementGroup `json:"groups"`
 }
 
-func reqText(state string, reqRead bool, reqOK, reqNo, reqMaybe int, inReadingSet bool) string {
+func reqText(state string, reqRead bool, reqOK, reqNo, reqMaybe int, inAnalysisSet bool) string {
 	if state == fit.NoText {
 		return "Full job description is unavailable"
 	}
 	if !reqRead {
-		if inReadingSet {
+		if inAnalysisSet {
 			return "Analysing requirements…"
 		}
 		return "Not analysed yet"
@@ -102,12 +104,12 @@ func reqText(state string, reqRead bool, reqOK, reqNo, reqMaybe int, inReadingSe
 	return fmt.Sprintf("✓ %d · ✕ %d · ? %d", reqOK, reqNo, reqMaybe)
 }
 
-func queryReadingSet(ctx context.Context, database *db.DB) (map[int64]bool, []int64, error) {
+func queryAnalysisSet(ctx context.Context, database *db.DB) (map[int64]bool, []int64, error) {
 	rows, err := database.QueryContext(ctx,
-		`SELECT id, kind, subject FROM job WHERE kind IN ('read_vacancy','shortlist_check') AND state IN ('queued','running')
+		`SELECT id, kind, subject FROM job WHERE kind IN ('analyze_vacancy','shortlist_check') AND state IN ('queued','running')
 		 ORDER BY priority DESC, created ASC, id ASC`)
 	if err != nil {
-		return nil, nil, fmt.Errorf("inbox: reading set: %w", err)
+		return nil, nil, fmt.Errorf("inbox: analysis set: %w", err)
 	}
 	defer rows.Close()
 	out := map[int64]bool{}
@@ -116,18 +118,21 @@ func queryReadingSet(ctx context.Context, database *db.DB) (map[int64]bool, []in
 		var id int64
 		var kind, subject string
 		if err := rows.Scan(&id, &kind, &subject); err != nil {
-			return nil, nil, fmt.Errorf("inbox: reading set: %w", err)
+			return nil, nil, fmt.Errorf("inbox: analysis set: %w", err)
 		}
-		order = append(order, id)
+		if kind == "shortlist_check" {
+			order = append(order, id)
+			continue
+		}
 		part, _, _ := strings.Cut(subject, "/")
-		if vacancyID, err := strconv.ParseInt(part, 10, 64); err == nil && kind == "read_vacancy" {
+		if vacancyID, err := strconv.ParseInt(part, 10, 64); err == nil {
 			out[vacancyID] = true
 		}
 	}
 	return out, order, rows.Close()
 }
 
-func fitMark(s fit.Stored, inputs int64, vacancyID int64, readingSet map[int64]bool) FitMark {
+func fitMark(s fit.Stored, inputs int64, vacancyID int64, analysisSet map[int64]bool) FitMark {
 	m := FitMark{Bucket: "Not scored", Text: fit.Texts[s.State.String], Dimmed: s.State.Valid && !s.Current(inputs)}
 	if s.State.String == fit.Scored {
 		n := int(s.Score.Int64)
@@ -136,7 +141,7 @@ func fitMark(s fit.Stored, inputs int64, vacancyID int64, readingSet map[int64]b
 	}
 	m.RequirementsText = reqText(s.State.String, s.ReqOK.Valid,
 		int(s.ReqOK.Int64), int(s.ReqNo.Int64), int(s.ReqMaybe.Int64),
-		readingSet[vacancyID])
+		analysisSet[vacancyID])
 	return m
 }
 
@@ -153,7 +158,7 @@ type Counts struct {
 	Archive   int `json:"archive"`
 }
 
-func toRow(rr repoRow, now time.Time, inputs int64, readingSet map[int64]bool) Row {
+func toRow(rr repoRow, now time.Time, inputs int64, analysisSet map[int64]bool) Row {
 	nowStr := now.UTC().Format(time.RFC3339)
 	loc, full := "Location unstated", ""
 	if rr.location != "" {
@@ -171,7 +176,7 @@ func toRow(rr repoRow, now time.Time, inputs int64, readingSet map[int64]bool) R
 		Reason:       rr.reason,
 		Applied:      appliedText(rr.appliedAt, rr.appliedName, rr.stage, now),
 		Expired:      rr.expiresAt != "" && rr.expiresAt <= nowStr,
-		Fit:          fitMark(rr.fit, inputs, rr.id, readingSet),
+		Fit:          fitMark(rr.fit, inputs, rr.id, analysisSet),
 	}
 }
 
@@ -219,7 +224,7 @@ func rowAndCounts(ctx context.Context, database *db.DB, now func() time.Time, pr
 	if err != nil {
 		return Row{}, Counts{}, err
 	}
-	rs, _, err := queryReadingSet(ctx, database)
+	rs, _, err := queryAnalysisSet(ctx, database)
 	if err != nil {
 		return Row{}, Counts{}, err
 	}
@@ -248,7 +253,7 @@ func list(ctx context.Context, database *db.DB, now func() time.Time, profileID 
 	if err != nil {
 		return nil, Counts{}, nil, 0, 0, err
 	}
-	rs, _, err := queryReadingSet(ctx, database)
+	rs, _, err := queryAnalysisSet(ctx, database)
 	if err != nil {
 		return nil, Counts{}, nil, 0, 0, err
 	}
@@ -460,10 +465,16 @@ type VacancySource struct {
 	URL  string `json:"url,omitempty"`
 }
 
+type OfferTile struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
 type OfferView struct {
-	Tiles []listing.OfferTile `json:"tiles"`
-	Items []string            `json:"items"`
-	Empty string              `json:"empty,omitempty"`
+	Tiles []OfferTile `json:"tiles"`
+	Items []string    `json:"items"`
+	Empty string      `json:"empty,omitempty"`
 }
 
 type VacancyView struct {
@@ -478,19 +489,34 @@ type VacancyView struct {
 	Check    *CheckView      `json:"check"`
 }
 
-func offerView(body string, tiles []fit.Tile) OfferView {
-	o := listing.ReadOffer(body)
-	v := OfferView{Tiles: []listing.OfferTile{}, Items: []string{}}
-	if !o.Found {
+func offerView(fs []facts.Fact, tiles []fit.Tile) OfferView {
+	v := OfferView{Tiles: []OfferTile{}, Items: []string{}}
+	found, offered := false, 0
+	var perks []OfferTile
+	for _, f := range fs {
+		var p OfferTile
+		if f.Kind == facts.Offer && json.Unmarshal([]byte(f.Value), &p) == nil {
+			found = true
+			perks = append(perks, p)
+		}
+	}
+	if !found {
 		v.Empty = "No Compensation or Benefits section recognised in this listing."
 		return v
 	}
 	if t, ok := fit.TileFor(tiles, "money"); ok && t.Value != "" && t.Value != "Not stated" {
-		v.Tiles = append(v.Tiles, listing.OfferTile{Key: "salary", Label: "Base salary", Value: t.Value})
+		v.Tiles = append(v.Tiles, OfferTile{Key: "salary", Label: "Base salary", Value: t.Value})
 	}
-	v.Tiles = append(v.Tiles, o.Tiles...)
-	v.Items = append(v.Items, o.Items...)
-	if len(o.Tiles) == 0 && len(o.Items) == 0 {
+	for _, p := range perks {
+		switch {
+		case p.Key == "section":
+		case p.Key != "":
+			v.Tiles, offered = append(v.Tiles, OfferTile{Key: p.Key, Label: p.Label, Value: p.Value}), offered+1
+		default:
+			v.Items, offered = append(v.Items, p.Value), offered+1
+		}
+	}
+	if offered == 0 {
 		v.Empty = "Section found but no specific items matched."
 	}
 	return v
@@ -641,11 +667,15 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enq
 	if err != nil {
 		return VacancyView{}, err
 	}
+	vf, err := facts.Load(ctx, database, vacancyID)
+	if err != nil {
+		return VacancyView{}, err
+	}
 	cs, err := loadCheck(ctx, database, enqueue, profileID, vacancyID, stage, false)
 	if err != nil {
 		return VacancyView{}, err
 	}
-	rs, queue, err := queryReadingSet(ctx, database)
+	rs, queue, err := queryAnalysisSet(ctx, database)
 	if err != nil {
 		return VacancyView{}, err
 	}
@@ -684,7 +714,7 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enq
 		Actions:  stageActions(stage, vd.url, vd.applyURL, apiRow.Company),
 		Listing:  lv,
 		Band:     band,
-		Offer:    offerView(html, f.Tiles),
+		Offer:    offerView(vf[vacancyID].Facts, f.Tiles),
 		Check:    cs.view(f.Requirements, queue, t),
 	}, nil
 }

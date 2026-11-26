@@ -54,7 +54,3 @@ headings:
   - {text: "who we are", kind: company}
   - {text: "the team", kind: company}
   - {text: "our team", kind: company}
-contains:
-  - {text: "benefits", kind: offer}
-  - {text: "compensation", kind: offer}
-  - {text: "salary", kind: offer}

@@ -760,15 +760,12 @@ type VacancyText struct {
 	Title, Company, Location, TagsJSON, FieldsJSON string
 	TextState                                      string
 	Body                                           []byte
-	ReadingRecord, ReaderVersion, ReadingCreated   string
 }
 
 func (c *Catalog) VacancyTexts(ctx context.Context, after int64, limit int) ([]VacancyText, error) {
 	rows, err := c.db.QueryContext(ctx,
-		`SELECT v.id, v.version, v.url, v.apply_url, v.title, v.company, v.location, v.tags, v.source_fields, v.text_state, v.body,
-		        COALESCE(r.record, ''), COALESCE(r.reader_version, ''), COALESCE(r.created, '')
+		`SELECT v.id, v.version, v.url, v.apply_url, v.title, v.company, v.location, v.tags, v.source_fields, v.text_state, v.body
 		 FROM vacancy v
-		 LEFT JOIN vacancy_reading r ON r.vacancy_id=v.id AND r.version=v.version
 		 WHERE v.id>? ORDER BY v.id LIMIT ?`, after, limit)
 	if err != nil {
 		return nil, fmt.Errorf("catalog: vacancy texts: %w", err)
@@ -778,12 +775,16 @@ func (c *Catalog) VacancyTexts(ctx context.Context, after int64, limit int) ([]V
 	for rows.Next() {
 		var r VacancyText
 		if err := rows.Scan(&r.ID, &r.Version, &r.URL, &r.ApplyURL, &r.Title, &r.Company, &r.Location, &r.TagsJSON, &r.FieldsJSON,
-			&r.TextState, &r.Body, &r.ReadingRecord, &r.ReaderVersion, &r.ReadingCreated); err != nil {
+			&r.TextState, &r.Body); err != nil {
 			return nil, fmt.Errorf("catalog: vacancy texts: scan: %w", err)
 		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+func IsFKError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "FOREIGN KEY constraint failed")
 }
 
 func pickEarlier(a, b string) string {

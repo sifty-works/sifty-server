@@ -7,10 +7,8 @@ import (
 
 	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/candidate"
-	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/fit"
-	"github.com/sifty-works/sifty-server/internal/skills"
 )
 
 type skillsResult struct {
@@ -19,7 +17,7 @@ type skillsResult struct {
 }
 
 func applySkillsDecision(ctx context.Context, database *db.DB, vacancyID int64, reqIndex int, have bool, chosenSkill string, r fit.Rules) (skillsResult, error) {
-	_, vr, _, ok, err := fit.LoadVacancy(ctx, catalog.New(database, nil), vacancyID)
+	vr, _, _, ok, err := fit.LoadVacancy(ctx, database, vacancyID)
 	if err != nil {
 		return skillsResult{}, err
 	}
@@ -33,7 +31,7 @@ func applySkillsDecision(ctx context.Context, database *db.DB, vacancyID int64, 
 	if err != nil {
 		return skillsResult{}, err
 	}
-	ans := skills.Answer(vr.Requirements[reqIndex], have, chosenSkill, me)
+	ans := fit.Answer(vr.Requirements[reqIndex].Text, have, chosenSkill, me)
 	changed := len(ans.AddedSkills)+len(ans.MovedSkills)+len(ans.AddedConfirmed) > 0
 	if changed {
 		if err := candidate.SaveMe(ctx, database, ans.Me); err != nil {

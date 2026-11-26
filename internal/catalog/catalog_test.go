@@ -10,12 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"encoding/json"
-
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/listing"
-	"github.com/sifty-works/sifty-server/internal/reading"
 )
 
 func openTestDB(t *testing.T) *db.DB {
@@ -756,43 +753,5 @@ func TestUpsert_FTSPreservedOnUnchangedUpsert(t *testing.T) {
 	var n int
 	if d.QueryRow(`SELECT count(*) FROM vacancy_fts WHERE rowid=?`, id).Scan(&n); n != 1 {
 		t.Errorf("FTS row count after unchanged upsert: got %d, want 1", n)
-	}
-}
-
-func TestSaveReading_replaces_earlier_reading(t *testing.T) {
-	d := openTestDB(t)
-	cat := catalog.New(d, fixedNow())
-	ctx := context.Background()
-
-	id, _, err := cat.Upsert(ctx, posting("https://example.com/jobs/reader-1", "Platform Engineer", "Stackworks"), "src1")
-	if err != nil {
-		t.Fatalf("upsert: %v", err)
-	}
-
-	rec1 := reading.Record{Requirements: []reading.Requirement{{Text: "Go", Kind: "skill", Level: "required"}}}
-	if err := catalog.SaveReading(ctx, d, id, 1, "reading/1+aaaaaaaa", rec1); err != nil {
-		t.Fatalf("first save: %v", err)
-	}
-	var ver1 string
-	d.QueryRow(`SELECT reader_version FROM vacancy_reading WHERE vacancy_id=?`, id).Scan(&ver1)
-	if ver1 != "reading/1+aaaaaaaa" {
-		t.Errorf("reader_version = %q, want reading/1+aaaaaaaa", ver1)
-	}
-
-	rec2 := reading.Record{Requirements: []reading.Requirement{{Text: "Python", Kind: "skill", Level: "required"}}}
-	if err := catalog.SaveReading(ctx, d, id, 1, "reading/1+bbbbbbbb", rec2); err != nil {
-		t.Fatalf("second save: %v", err)
-	}
-	var ver2, recJSON string
-	d.QueryRow(`SELECT reader_version, record FROM vacancy_reading WHERE vacancy_id=?`, id).Scan(&ver2, &recJSON)
-	if ver2 != "reading/1+bbbbbbbb" {
-		t.Errorf("reader_version after replace = %q, want reading/1+bbbbbbbb", ver2)
-	}
-	var stored reading.Record
-	if err := json.Unmarshal([]byte(recJSON), &stored); err != nil {
-		t.Fatalf("unmarshal stored record: %v", err)
-	}
-	if len(stored.Requirements) != 1 || stored.Requirements[0].Text != "Python" {
-		t.Errorf("stored requirements = %v, want Python", stored.Requirements)
 	}
 }

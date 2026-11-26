@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -15,8 +16,13 @@ import (
 	"github.com/sifty-works/sifty-server/internal/server"
 )
 
-func enqueueRecomputeFit(r *runner.Runner) func() {
-	return func() { r.Enqueue(runner.Spec{Kind: "recompute_fit"}) }
+func enqueueRecomputeFit(database *db.DB, r *runner.Runner, log *slog.Logger) func() {
+	return func() {
+		if err := queueAnalysis(context.Background(), database, r); err != nil {
+			log.Warn("analysis not queued", "err", err)
+		}
+		r.Enqueue(runner.Spec{Kind: "recompute_fit"})
+	}
 }
 
 func registerAllRoutes(

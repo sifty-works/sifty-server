@@ -14,14 +14,14 @@ mechanism: internal/apperr internal/config internal/db internal/facts internal/f
 sql: internal/db internal/models internal/runner
 
 module collection: internal/catalog internal/collect internal/listing internal/source
-module analysis: internal/analysis internal/places internal/reading internal/skills
+module analysis: internal/analysis internal/places internal/skills
 module fit: internal/fit
 module lists: internal/inbox
 module profiles: internal/candidate
 module upkeep:
 module application: internal/shortlistcheck
 
-worker: internal/places internal/reading internal/skills internal/source
+worker: internal/places internal/skills internal/source
 
 wiring: cmd/sifty
 outside: api cmd/uncomment web
@@ -30,12 +30,10 @@ never internal/runner -> internal/models
 
 internal/candidate -> internal/listing  # until: profiles
 internal/candidate -> internal/places  # until: profiles
-internal/catalog -> internal/reading  # until: collection
 internal/fit -> internal/candidate  # until: fit-criteria
 internal/fit -> internal/catalog  # until: fit-criteria
 internal/fit -> internal/listing  # until: fit-criteria
 internal/fit -> internal/places  # until: fit-criteria
-internal/fit -> internal/reading  # until: fit-criteria
 internal/fit -> internal/skills  # until: fit-criteria
 internal/inbox -> internal/candidate  # until: lists
 internal/inbox -> internal/catalog  # until: lists
@@ -43,21 +41,14 @@ internal/inbox -> internal/fit  # until: lists
 internal/inbox -> internal/listing  # until: lists
 internal/inbox -> internal/places  # until: lists
 internal/inbox -> internal/shortlistcheck  # until: lists
-internal/inbox -> internal/skills  # until: lists
 internal/shortlistcheck -> internal/candidate  # until: application
 internal/shortlistcheck -> internal/fit  # until: application
-internal/shortlistcheck -> internal/reading  # until: application
-internal/skills -> internal/candidate  # until: analysis-workers
-internal/skills -> internal/reading  # until: analysis-workers
 
 cmd/sifty -> database/sql  # until: application
-cmd/sifty/queue_readings.go -> sql  # until: analysis-workers
 cmd/sifty/serve_cmd.go -> sql  # until: upkeep
 internal/catalog -> database/sql  # until: collection
 internal/catalog/catalog.go -> sql  # until: collection
 internal/catalog/exclusion.go -> sql  # until: collection
-internal/catalog/queue_readings.go -> sql  # until: collection
-internal/catalog/reading.go -> sql  # until: collection
 internal/catalog/retention.go -> sql  # until: upkeep
 internal/collect/source_run.go -> sql  # until: collection
 internal/fetch/blocks.go -> sql  # until: stores

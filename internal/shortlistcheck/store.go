@@ -11,6 +11,7 @@ import (
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/db"
+	"github.com/sifty-works/sifty-server/internal/facts"
 )
 
 type Stored struct {
@@ -21,11 +22,10 @@ type Stored struct {
 
 func Digest(ctx context.Context, database *db.DB, profileID, vacancyID int64) (string, error) {
 	var version int64
-	var readerVersion, created string
+	var factsKey string
 	err := database.QueryRowContext(ctx,
-		`SELECT v.version, COALESCE(r.reader_version, ''), COALESCE(r.created, '')
-		 FROM vacancy v LEFT JOIN vacancy_reading r ON r.vacancy_id=v.id AND r.version=v.version WHERE v.id=?`,
-		vacancyID).Scan(&version, &readerVersion, &created)
+		`SELECT v.version, `+facts.KeySQL+` FROM vacancy v WHERE v.id=?`,
+		vacancyID).Scan(&version, &factsKey)
 	if err != nil {
 		return "", fmt.Errorf("shortlistcheck: digest: vacancy: %w", err)
 	}
@@ -43,7 +43,7 @@ func Digest(ctx context.Context, database *db.DB, profileID, vacancyID int64) (s
 		return "", err
 	}
 	h := sha256.New()
-	fmt.Fprintf(h, "%d\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s", version, readerVersion, created, me, profile, signature, checkerVersion)
+	fmt.Fprintf(h, "%d\x00%s\x00%s\x00%s\x00%s\x00%s", version, factsKey, me, profile, signature, checkerVersion)
 	return hex.EncodeToString(h.Sum(nil))[:16], nil
 }
 

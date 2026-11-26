@@ -16,11 +16,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sifty-works/sifty-server/internal/analysis"
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
+	"github.com/sifty-works/sifty-server/internal/facts"
 	"github.com/sifty-works/sifty-server/internal/models"
-	"github.com/sifty-works/sifty-server/internal/reading"
 	"github.com/sifty-works/sifty-server/internal/runner"
 )
 
@@ -37,17 +38,19 @@ type checkOpts struct {
 	idle bool
 }
 
-func seedReading(t *testing.T, d *db.DB, vacancy int64, created string, texts ...string) {
+func seedFacts(t *testing.T, d *db.DB, vacancy int64, marker string, texts ...string) {
 	t.Helper()
-	rec := reading.Record{}
-	for _, text := range texts {
-		rec.Requirements = append(rec.Requirements, reading.Requirement{Text: text, Kind: "language", Level: "required"})
-	}
-	rec.Requirements = append(rec.Requirements, reading.Requirement{Text: "Go", Kind: "skill", Level: "required"})
-	b, _ := json.Marshal(rec)
-	if _, err := d.Exec(`INSERT OR REPLACE INTO vacancy_reading (vacancy_id, version, reader_version, record, created) VALUES (?, 1, ?, ?, ?)`,
-		vacancy, reading.ReaderVersion(), string(b), created); err != nil {
-		t.Fatalf("seed reading: %v", err)
+	for _, w := range analysis.Workers {
+		var found []facts.Fact
+		if w.Name() == "requirement_lines" {
+			for _, text := range append(texts, "Go") {
+				found = append(found, facts.Fact{Kind: facts.Requirement, Value: text, Flag: facts.Required, WorkerVersion: w.Version(), Source: facts.Source{Way: facts.Vocabulary}})
+			}
+		}
+		found = append(found, facts.Fact{Kind: facts.Analysed, Value: marker, WorkerVersion: w.Version(), Source: facts.Source{Way: facts.Vocabulary}})
+		if err := facts.Save(context.Background(), d, vacancy, 1, w.Name(), found); err != nil {
+			t.Fatalf("seed facts: %v", err)
+		}
 	}
 }
 
@@ -65,7 +68,7 @@ func newCheckFix(t *testing.T, o checkOpts) checkFix {
 		go r.Start(ctx)
 	}
 	vacancy := insertFullVacancy(t, d, "https://jobs.example.com/check-1", "Backend Engineer", "Stackworks")
-	seedReading(t, d, vacancy, "2026-01-01T00:00:00Z", "Fluent German")
+	seedFacts(t, d, vacancy, "2026-01-01T00:00:00Z", "Fluent German")
 	f := checkFix{d: d, r: r, fm: fm, base: base, vacancy: vacancy, clock: clk}
 	f.send(t, http.MethodPatch, "/api/me", map[string]any{
 		"skills":       []map[string]any{{"name": "Go", "level": "Proficient"}},
@@ -277,20 +280,18 @@ func TestOpeningTwiceWhileTheCheckIsWaitingQueuesNothingMore(t *testing.T) {
 	}
 }
 
-func TestReadingTheSameTextAgainWithTheSameReaderMarksTheCheckOutdated(t *testing.T) {
+func TestAnalysingTheTextAgainWithChangedFactsMarksTheCheckOutdated(t *testing.T) {
 	f := newCheckFix(t, checkOpts{idle: true})
 	f.fm.AddReply(germanReply())
 	f.move(t, "inbox", "shortlist")
 	runCheckJobs(t, f)
+	seedFacts(t, f.d, f.vacancy, "2026-01-01T00:00:00Z", "Fluent German")
 	if c := f.check(t); c["outdated"] != false {
-		t.Fatalf("check outdated before the text was read again: %v", c)
+		t.Fatalf("check outdated although the facts did not change: %v", c)
 	}
-	if err := catalog.SaveReading(context.Background(), f.d, f.vacancy, 1, reading.ReaderVersion(), reading.Record{Requirements: []reading.Requirement{
-		{Text: "Fluent German", Kind: "language", Level: "required"}, {Text: "Go", Kind: "skill", Level: "required"}}}); err != nil {
-		t.Fatalf("save reading: %v", err)
-	}
+	seedFacts(t, f.d, f.vacancy, "2026-03-03T00:00:00Z", "Fluent German")
 	if c := f.check(t); c["outdated"] != true {
-		t.Errorf("check not outdated after the same text was read again: %v", c)
+		t.Errorf("check not outdated after the facts changed: %v", c)
 	}
 }
 
@@ -322,7 +323,7 @@ func TestStoredAnswerWhoseRequirementTextMatchesNoCurrentLineIsNotShown(t *testi
 	if len(f.answers(t)) != 1 {
 		t.Fatalf("answer not shown before the requirements changed")
 	}
-	seedReading(t, f.d, f.vacancy, "2026-02-02T00:00:00Z", "German fluency")
+	seedFacts(t, f.d, f.vacancy, "2026-02-02T00:00:00Z", "German fluency")
 	if a := f.answers(t); len(a) != 0 {
 		t.Errorf("answer for a requirement text that no longer exists is shown: %v", a)
 	}
@@ -411,7 +412,7 @@ work: {reading: paidbox, shortlist_check: paidbox, preparation: paidbox}
 		t.Fatalf("open seed db: %v", err)
 	}
 	vid := insertFullVacancy(t, seed, "https://jobs.example.com/paid-check", "Backend Engineer", "Stackworks")
-	seedReading(t, seed, vid, "2026-01-01T00:00:00Z", "Fluent German")
+	seedFacts(t, seed, vid, "2026-01-01T00:00:00Z", "Fluent German")
 	seed.Close()
 
 	port, cancel := startServer(t, dir, false)

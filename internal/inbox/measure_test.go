@@ -114,7 +114,7 @@ func buildFixtureDB(t *testing.T) *db.DB {
 	idRows.Close()
 	for _, id := range vacIDs {
 		database.Exec(`INSERT INTO job (kind, subject, state, priority, not_before, created, updated)
-			VALUES ('read_vacancy', ?, 'queued', 0, '', '2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z')`,
+			VALUES ('analyze_vacancy', ?, 'queued', 0, '', '2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z')`,
 			fmt.Sprintf("%d/1", id))
 	}
 

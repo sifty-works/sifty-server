@@ -3,6 +3,7 @@ package analysis
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"strconv"
 	"strings"
 
@@ -38,7 +39,7 @@ type Worker interface {
 	Extract(ctx context.Context, doc *Doc) ([]facts.Fact, error)
 }
 
-var Workers = []Worker{siteFields{}, conditions{}, requirements{}}
+var Workers = []Worker{siteFields{}, conditions{}, requirements{}, offer{}}
 
 type Loader func(ctx context.Context, id int64) (doc *Doc, version int64, ok bool, err error)
 
@@ -96,12 +97,20 @@ func Analyse(ctx context.Context, database *db.DB, load Loader, id, version int6
 				mine = append(mine, f)
 			}
 		}
-		marker := facts.Fact{Kind: facts.Analysed, Source: facts.Source{Way: facts.Vocabulary, Origin: doc.Origin}, Worker: w.Name(), WorkerVersion: w.Version()}
+		marker := facts.Fact{Kind: facts.Analysed, Value: digest(mine), Source: facts.Source{Way: facts.Vocabulary, Origin: doc.Origin}, Worker: w.Name(), WorkerVersion: w.Version()}
 		if err := facts.Save(ctx, database, id, version, w.Name(), append(mine, marker)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func digest(fs []facts.Fact) string {
+	h := fnv.New64a()
+	for _, f := range fs {
+		fmt.Fprintf(h, "%s\x00%s\x00%s\x00%d\x00%d\x00%s\x00%s\x01", f.Kind, f.Value, f.Flag, f.Start, f.End, f.Source.Way, f.Source.Origin)
+	}
+	return strconv.FormatUint(h.Sum64(), 36)
 }
 
 func effective(all []facts.Fact) []facts.Fact {

@@ -22,10 +22,10 @@ func bandReqText(body map[string]any) string {
 	return v
 }
 
-func queueReading(t *testing.T, d *db.DB, id int64) {
+func queueAnalysis(t *testing.T, d *db.DB, id int64) {
 	t.Helper()
 	_, err := d.Exec(`INSERT INTO job (kind,subject,state,priority,not_before,created,updated)
-		VALUES ('read_vacancy',?,'queued',0,'','2026-11-01T00:00:00Z','2026-11-01T00:00:00Z')`,
+		VALUES ('analyze_vacancy',?,'queued',0,'','2026-11-01T00:00:00Z','2026-11-01T00:00:00Z')`,
 		fmt.Sprintf("%d/1", id))
 	if err != nil {
 		t.Fatalf("queueReading: %v", err)
@@ -41,7 +41,7 @@ func TestRequirementsCounter_RowText(t *testing.T) {
 		{name: "without a full job description", fitRow: "0,'no_text',NULL,NULL,NULL,NULL",
 			want: "Full job description is unavailable"},
 		{name: "before any analysis", want: "Not analysed yet"},
-		{name: "while the reading is queued", queued: true, want: "Analysing requirements…"},
+		{name: "while the analysis is queued", queued: true, want: "Analysing requirements…"},
 		{name: "with no requirements stated", fitRow: "0,'scored',75,0,0,0", want: "No requirements stated"},
 		{name: "with every requirement unchecked", fitRow: "0,'scored',75,0,0,4", want: "Not checked yet"},
 		{name: "with checked requirements", fitRow: "0,'scored',75,3,1,2", want: "✓ 3 · ✕ 1 · ? 2"},
@@ -56,7 +56,7 @@ func TestRequirementsCounter_RowText(t *testing.T) {
 					VALUES (1,%d,1,%d,%s)`, id, p.Inputs, tc.fitRow))
 			}
 			if tc.queued {
-				queueReading(t, d, id)
+				queueAnalysis(t, d, id)
 			}
 			rows := getRows(apiGet(t, newTestServer(t, d), "/api/vacancies"))
 			if len(rows) != 1 {
@@ -76,13 +76,13 @@ func TestRequirementsCounter_BandText(t *testing.T) {
 		want   string
 	}{
 		{name: "before any analysis", want: "Not analysed yet"},
-		{name: "while the reading is queued", queued: true, want: "Analysing requirements…"},
+		{name: "while the analysis is queued", queued: true, want: "Analysing requirements…"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := openTestDB(t)
 			id := add(t, newCat(d), post(fmt.Sprintf("https://example.com/jobs/cb%d", i), "Role", "Co"))
 			if tc.queued {
-				queueReading(t, d, id)
+				queueAnalysis(t, d, id)
 			}
 			body, _ := apiGetRaw(t, newTestServer(t, d), fmt.Sprintf("/api/vacancies/%d?profile=1", id))
 			if got := bandReqText(body); got != tc.want {

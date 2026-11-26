@@ -11,6 +11,7 @@ const (
 	Hours       Kind = "hours"
 	Language    Kind = "language"
 	Requirement Kind = "requirement"
+	Offer       Kind = "offer"
 	Analysed    Kind = "analysed"
 )
 

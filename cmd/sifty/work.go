@@ -31,7 +31,6 @@ var jobKinds = map[string]jobKind{
 	"recompute_fit":    {label: "Recomputing Fits you"},
 	"retention":        {label: "Text retention"},
 	"analyze_vacancy":  {label: "Analyzing vacancy", subject: analysisSubject},
-	"read_vacancy":     {label: "Reading vacancy text", work: "reading", subject: readSubject},
 	"shortlist_check":  {label: "Shortlist check", work: "shortlist_check", subject: shortlistSubject},
 	"analyze_document": {label: "Document analysis", work: "reading", subject: documentSubject},
 }
@@ -42,14 +41,6 @@ func documentSubject(ctx context.Context, database *db.DB, subject string) (stri
 		return "", nil
 	}
 	return candidate.DocumentName(ctx, database, id)
-}
-
-func readSubject(ctx context.Context, database *db.DB, subject string) (string, error) {
-	id, _, err := parseReadVacancySubject(subject)
-	if err != nil {
-		return "", nil
-	}
-	return vacancyName(ctx, database, id)
 }
 
 func shortlistSubject(ctx context.Context, database *db.DB, subject string) (string, error) {

@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Vacancies are analysed by code instead of a model: money, work mode, engagement, place, time zone, hours, required languages and the requirement lines (flagged required or preferred by their section) are found in the text and the site's fields, and Fits you, the requirements counter and the Shortlist check use them. No model call is made to read a vacancy; "Reading vacancy text" leaves Settings › Monitor and "Analyzing vacancy" takes its place. Requirement lines no longer list alternatives. Every Shortlist check is marked out of date once and runs again when its vacancy is opened.
+
 ## 0.3.0
 
 - Web client 0.28.0: a one-line status bar along the bottom of every page shows what runs, with the provider and model of a model job, what waits and why; the collection progress and a failed run's message leave the Inbox header.

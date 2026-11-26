@@ -3,6 +3,7 @@ package facts
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/sifty-works/sifty-server/internal/db"
 )
@@ -30,21 +31,47 @@ func Save(ctx context.Context, database *db.DB, vacancy, version int64, worker s
 	return nil
 }
 
-func Load(ctx context.Context, database *db.DB, vacancy, version int64) ([]Fact, error) {
+const KeySQL = `(SELECT COALESCE(group_concat(a.value), '') FROM fact a WHERE a.vacancy=v.id AND a.version=v.version AND a.kind='analysed')`
+
+type Set struct {
+	Facts    []Fact
+	Analysed bool
+	Key      string
+}
+
+func Load(ctx context.Context, database *db.DB, vacancies ...int64) (map[int64]Set, error) {
+	out := map[int64]Set{}
+	if len(vacancies) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(vacancies))
+	for i, id := range vacancies {
+		args[i] = id
+	}
 	rows, err := database.QueryContext(ctx,
-		`SELECT worker, kind, value, flag, quote_start, quote_end, way, origin, worker_version
-		 FROM fact WHERE vacancy=? AND version=? AND kind != ? ORDER BY id`, vacancy, version, Analysed)
+		`SELECT f.vacancy, f.version, f.worker, f.kind, f.value, f.flag, f.quote_start, f.quote_end, f.way, f.origin, f.worker_version
+		 FROM fact f JOIN vacancy v ON v.id=f.vacancy AND v.version=f.version
+		 WHERE f.vacancy IN (`+strings.TrimSuffix(strings.Repeat("?,", len(args)), ",")+`) ORDER BY f.vacancy, f.id`, args...)
 	if err != nil {
-		return nil, fmt.Errorf("facts: load %d: %w", vacancy, err)
+		return nil, fmt.Errorf("facts: load: %w", err)
 	}
 	defer rows.Close()
-	var out []Fact
 	for rows.Next() {
-		f := Fact{Vacancy: vacancy, Version: version}
-		if err := rows.Scan(&f.Worker, &f.Kind, &f.Value, &f.Flag, &f.Start, &f.End, &f.Source.Way, &f.Source.Origin, &f.WorkerVersion); err != nil {
-			return nil, fmt.Errorf("facts: load %d: scan: %w", vacancy, err)
+		var f Fact
+		if err := rows.Scan(&f.Vacancy, &f.Version, &f.Worker, &f.Kind, &f.Value, &f.Flag, &f.Start, &f.End, &f.Source.Way, &f.Source.Origin, &f.WorkerVersion); err != nil {
+			return nil, fmt.Errorf("facts: load: scan: %w", err)
 		}
-		out = append(out, f)
+		set := out[f.Vacancy]
+		if f.Kind == Analysed {
+			set.Analysed = true
+			if set.Key != "" {
+				set.Key += ","
+			}
+			set.Key += f.Value
+		} else {
+			set.Facts = append(set.Facts, f)
+		}
+		out[f.Vacancy] = set
 	}
 	return out, rows.Err()
 }

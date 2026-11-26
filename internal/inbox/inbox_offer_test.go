@@ -1,10 +1,28 @@
 package inbox_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/sifty-works/sifty-server/internal/db"
+	"github.com/sifty-works/sifty-server/internal/facts"
 )
+
+func saveOffer(t *testing.T, d *db.DB, id int64, money string, perks ...string) {
+	t.Helper()
+	found := []facts.Fact{{Kind: facts.Analysed, Value: "test", Source: facts.Source{Way: facts.Vocabulary}}}
+	if money != "" {
+		found = append(found, facts.Fact{Kind: facts.Money, Value: money, Source: facts.Source{Way: facts.SiteField}})
+	}
+	for _, p := range perks {
+		found = append(found, facts.Fact{Kind: facts.Offer, Value: p, Source: facts.Source{Way: facts.Vocabulary}})
+	}
+	if err := facts.Save(context.Background(), d, id, 1, "offer", found); err != nil {
+		t.Fatalf("save facts: %v", err)
+	}
+}
 
 func offerOf(body map[string]any) map[string]any {
 	o, _ := body["offer"].(map[string]any)
@@ -40,10 +58,12 @@ func bandTileValue(body map[string]any, name string) string {
 func TestVacancyOffer_SalaryTileAndItems(t *testing.T) {
 	d := openTestDB(t)
 	setProfileData(t, d, nil, []string{"description"}, nil)
-	p := postWithText("https://example.com/jobs/offer-1", "Backend Engineer", "Acme",
-		`<h3>Benefits</h3><ul><li>Equity</li><li>30 days of paid time off</li><li>Free lunch on Fridays</li></ul>`)
-	p.Fields = map[string]string{"salary": "EUR 90,000 per year"}
-	id := add(t, newCat(d), p)
+	id := add(t, newCat(d), postWithText("https://example.com/jobs/offer-1", "Backend Engineer", "Acme", "job text"))
+	saveOffer(t, d, id, `{"min":90000,"max":90000,"currency":"EUR","period":"year"}`,
+		`{"key":"section"}`,
+		`{"key":"equity","label":"Equity","value":"Amount not stated"}`,
+		`{"key":"timeOff","label":"Time off","value":"30 days of paid time off"}`,
+		`{"value":"Free lunch on Fridays"}`)
 	body, _ := apiGetRaw(t, newServer(t, d, serverOpts{rules: defaultRules}),
 		fmt.Sprintf("/api/vacancies/%d?profile=1", id))
 
@@ -63,18 +83,20 @@ func TestVacancyOffer_SalaryTileAndItems(t *testing.T) {
 
 func TestVacancyOffer_EmptyStates(t *testing.T) {
 	for i, tc := range []struct {
-		name, text, want string
+		name, want string
+		perks      []string
 	}{
-		{"a vacancy whose text was never fetched", "",
-			"No Compensation or Benefits section recognised in this listing."},
-		{"a section holding no item", `<h3>Benefits</h3><h3>About us</h3><p>We are a small team.</p>`,
-			"Section found but no specific items matched."},
+		{"a vacancy whose text was never fetched",
+			"No Compensation or Benefits section recognised in this listing.", nil},
+		{"a section holding no item",
+			"Section found but no specific items matched.", []string{`{"key":"section"}`}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := openTestDB(t)
 			setProfileData(t, d, nil, []string{"description"}, nil)
 			id := add(t, newCat(d), postWithText(
-				fmt.Sprintf("https://example.com/jobs/offer-e%d", i), "Engineer", "Acme", tc.text))
+				fmt.Sprintf("https://example.com/jobs/offer-e%d", i), "Engineer", "Acme", "job text"))
+			saveOffer(t, d, id, "", tc.perks...)
 			body, _ := apiGetRaw(t, newServer(t, d, serverOpts{rules: defaultRules}),
 				fmt.Sprintf("/api/vacancies/%d?profile=1", id))
 			offer := offerOf(body)

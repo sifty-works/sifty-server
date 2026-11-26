@@ -12,7 +12,8 @@ import (
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/db"
-	"github.com/sifty-works/sifty-server/internal/reading"
+	"github.com/sifty-works/sifty-server/internal/facts"
+	"github.com/sifty-works/sifty-server/internal/fit"
 )
 
 func newSkillsServer(t *testing.T, d *db.DB, changed func()) *httptest.Server {
@@ -20,13 +21,16 @@ func newSkillsServer(t *testing.T, d *db.DB, changed func()) *httptest.Server {
 	return newServer(t, d, serverOpts{rules: defaultRules, changed: changed})
 }
 
-func addVacancyWithReading(t *testing.T, d *db.DB, url, title string, reqs []reading.Requirement) int64 {
+func addVacancyWithRequirements(t *testing.T, d *db.DB, url, title string, reqs []fit.Requirement) int64 {
 	t.Helper()
 	id := add(t, newCat(d), postWithText(url, title, "Acme", "job text"))
-	b, _ := json.Marshal(reading.Record{Requirements: reqs})
-	d.Exec(`UPDATE vacancy SET version=1 WHERE id=?`, id)
-	d.Exec(`INSERT INTO vacancy_reading (vacancy_id, version, reader_version, record, created)
-		VALUES (?,1,'test',?,datetime('now'))`, id, string(b))
+	found := []facts.Fact{{Kind: facts.Analysed, Value: "test", Source: facts.Source{Way: facts.Vocabulary}}}
+	for _, r := range reqs {
+		found = append(found, facts.Fact{Kind: facts.Requirement, Value: r.Text, Flag: facts.Flag(r.Level), Source: facts.Source{Way: facts.Vocabulary}})
+	}
+	if err := facts.Save(context.Background(), d, id, 1, "requirement_lines", found); err != nil {
+		t.Fatalf("save facts: %v", err)
+	}
 	return id
 }
 
@@ -90,8 +94,8 @@ func reqCounter(resp map[string]any) string {
 
 func TestSkillsDecision_addsSkillAndReturnsNotice(t *testing.T) {
 	d := openTestDB(t)
-	id := addVacancyWithReading(t, d, "https://example.com/jobs/sk1", "Role",
-		[]reading.Requirement{{Text: "Golang expertise", Kind: "skill", Level: "required"}})
+	id := addVacancyWithRequirements(t, d, "https://example.com/jobs/sk1", "Role",
+		[]fit.Requirement{{Text: "Golang expertise", Level: "required"}})
 	ts := newSkillsServer(t, d, nil)
 
 	resp, status := postSkills(t, ts, id, 0, true, "")
@@ -106,8 +110,8 @@ func TestSkillsDecision_addsSkillAndReturnsNotice(t *testing.T) {
 
 func TestSkillsDecision_everyNamedSkillStaysAvailable(t *testing.T) {
 	d := openTestDB(t)
-	id := addVacancyWithReading(t, d, "https://example.com/jobs/sk9", "Platform",
-		[]reading.Requirement{{Text: "Docker and Kubernetes in production", Kind: "skill", Level: "required"}})
+	id := addVacancyWithRequirements(t, d, "https://example.com/jobs/sk9", "Platform",
+		[]fit.Requirement{{Text: "Docker and Kubernetes in production", Level: "required"}})
 	ts := newSkillsServer(t, d, nil)
 
 	first, _ := postSkills(t, ts, id, 0, true, "Docker")
@@ -122,8 +126,8 @@ func TestSkillsDecision_everyNamedSkillStaysAvailable(t *testing.T) {
 
 func TestSkillsDecision_secondAddDoesNotDuplicate(t *testing.T) {
 	d := openTestDB(t)
-	id := addVacancyWithReading(t, d, "https://example.com/jobs/sk5", "DevOps",
-		[]reading.Requirement{{Text: "Docker", Kind: "skill", Level: "required"}})
+	id := addVacancyWithRequirements(t, d, "https://example.com/jobs/sk5", "DevOps",
+		[]fit.Requirement{{Text: "Docker", Level: "required"}})
 	ts := newSkillsServer(t, d, nil)
 
 	postSkills(t, ts, id, 0, true, "")
@@ -139,23 +143,23 @@ func TestSkillsDecision_secondAddDoesNotDuplicate(t *testing.T) {
 func TestSkillsDecision_verdictAndCounterInResponse(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
-		req         reading.Requirement
+		req         fit.Requirement
 		chosen      string
 		wantVerdict string
 		wantCounter string
 	}{
 		{name: "single-skill plus gives verdict checked and counter",
-			req:         reading.Requirement{Text: "Go", Kind: "skill", Level: "required"},
+			req:         fit.Requirement{Text: "Go", Level: "required"},
 			wantVerdict: "✓", wantCounter: "✓ 1 · ✕ 0 · ? 0"},
 		{name: "chosen skill of compound requirement leaves verdict unchecked",
-			req:         reading.Requirement{Text: "Docker and Kubernetes in production", Kind: "skill", Level: "required"},
+			req:         fit.Requirement{Text: "Docker and Kubernetes in production", Level: "required"},
 			chosen:      "Docker",
 			wantVerdict: "?", wantCounter: "Not checked yet"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := openTestDB(t)
-			id := addVacancyWithReading(t, d, "https://example.com/jobs/vc"+tc.name, "Role",
-				[]reading.Requirement{tc.req})
+			id := addVacancyWithRequirements(t, d, "https://example.com/jobs/vc"+tc.name, "Role",
+				[]fit.Requirement{tc.req})
 			ts := newSkillsServer(t, d, nil)
 			resp, _ := postSkills(t, ts, id, 0, true, tc.chosen)
 			if got := reqVerdict(resp, 0); got != tc.wantVerdict {
@@ -170,8 +174,8 @@ func TestSkillsDecision_verdictAndCounterInResponse(t *testing.T) {
 
 func TestSkillsDecision_unknownRequirementConfirmationIsSaved(t *testing.T) {
 	d := openTestDB(t)
-	id := addVacancyWithReading(t, d, "https://example.com/jobs/sk10", "Role",
-		[]reading.Requirement{{Text: "Strong communication skills", Kind: "skill", Level: "required"}})
+	id := addVacancyWithRequirements(t, d, "https://example.com/jobs/sk10", "Role",
+		[]fit.Requirement{{Text: "Strong communication skills", Level: "required"}})
 	ts := newSkillsServer(t, d, nil)
 
 	postSkills(t, ts, id, 0, true, "")
@@ -193,7 +197,7 @@ func TestSkillsDecision_unknownRequirementConfirmationIsSaved(t *testing.T) {
 
 func TestSkillsDecision_invalidInputRefused(t *testing.T) {
 	d := openTestDB(t)
-	id := addVacancyWithReading(t, d, "https://example.com/jobs/sk6", "X", nil)
+	id := addVacancyWithRequirements(t, d, "https://example.com/jobs/sk6", "X", nil)
 	ts := newSkillsServer(t, d, nil)
 	if _, s := postSkills(t, ts, id, 5, true, ""); s != http.StatusUnprocessableEntity {
 		t.Errorf("bad index: got %d, want 422", s)
@@ -205,8 +209,8 @@ func TestSkillsDecision_invalidInputRefused(t *testing.T) {
 
 func TestSkillsDecision_recomputeFitQueued(t *testing.T) {
 	d := openTestDB(t)
-	id := addVacancyWithReading(t, d, "https://example.com/jobs/sk7", "Infra",
-		[]reading.Requirement{{Text: "Kubernetes", Kind: "skill", Level: "required"}})
+	id := addVacancyWithRequirements(t, d, "https://example.com/jobs/sk7", "Infra",
+		[]fit.Requirement{{Text: "Kubernetes", Level: "required"}})
 	queued := 0
 	ts := newSkillsServer(t, d, func() { queued++ })
 
@@ -218,9 +222,9 @@ func TestSkillsDecision_recomputeFitQueued(t *testing.T) {
 
 func TestSkillsDecision_requirementGroupsInBand(t *testing.T) {
 	d := openTestDB(t)
-	id := addVacancyWithReading(t, d, "https://example.com/jobs/sk8", "Backend", []reading.Requirement{
-		{Text: "Go", Kind: "skill", Level: "required"},
-		{Text: "Docker", Kind: "skill", Level: "preferred"},
+	id := addVacancyWithRequirements(t, d, "https://example.com/jobs/sk8", "Backend", []fit.Requirement{
+		{Text: "Go", Level: "required"},
+		{Text: "Docker", Level: "preferred"},
 	})
 	ts := newSkillsServer(t, d, nil)
 
@@ -279,8 +283,8 @@ func TestSkillsDecision_skillTakenFromOppositeListIsReportedAsMoved(t *testing.T
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := openTestDB(t)
-			id := addVacancyWithReading(t, d, "https://example.com/jobs/mv-"+tc.name, "Role",
-				[]reading.Requirement{{Text: tc.text, Kind: "skill", Level: "required"}})
+			id := addVacancyWithRequirements(t, d, "https://example.com/jobs/mv-"+tc.name, "Role",
+				[]fit.Requirement{{Text: tc.text, Level: "required"}})
 			seedMe(t, d, tc.skills, tc.absent)
 			queued := 0
 			ts := newSkillsServer(t, d, func() { queued++ })
@@ -303,8 +307,8 @@ func TestSkillsDecision_skillTakenFromOppositeListIsReportedAsMoved(t *testing.T
 
 func TestSkillsDecision_minusOnRequirementReportsEverySkillTakenFromSkills(t *testing.T) {
 	d := openTestDB(t)
-	id := addVacancyWithReading(t, d, "https://example.com/jobs/both", "Platform",
-		[]reading.Requirement{{Text: "Docker and Kubernetes in production", Kind: "skill", Level: "required"}})
+	id := addVacancyWithRequirements(t, d, "https://example.com/jobs/both", "Platform",
+		[]fit.Requirement{{Text: "Docker and Kubernetes in production", Level: "required"}})
 	ts := newSkillsServer(t, d, nil)
 	postSkills(t, ts, id, 0, true, "Docker")
 	postSkills(t, ts, id, 0, true, "Kubernetes")
