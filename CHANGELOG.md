@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.3.0
+
 - Web client 0.28.0: a one-line status bar along the bottom of every page shows what runs, with the provider and model of a model job, what waits and why; the collection progress and a failed run's message leave the Inbox header.
 - Settings › Monitor › Background work, through `GET /api/work`, names the provider and model that serve a running job that uses a model; waiting counts are computed by one grouped query instead of reading every queued job.
 ## 0.2.0
