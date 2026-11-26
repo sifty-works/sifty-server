@@ -603,34 +603,24 @@ func TestAnalyzeResumesFromCheckpoint(t *testing.T) {
 	cases := []struct {
 		name       string
 		addChunk2  func(*models.FakeModel)
-		makeRunner func(*db.DB) (*runner.Runner, func())
-		waitState  string
+		retryAfter bool
+		extraCalls int
 	}{
 		{
 			name: "WaitError at chunk two",
 			addChunk2: func(fm *models.FakeModel) {
 				fm.AddError(models.WaitError{RetryAfter: time.Now().Add(-time.Second)})
 			},
-			makeRunner: func(d *db.DB) (*runner.Runner, func()) {
-				return runner.New(d, nil, time.Now, slog.Default()), func() {}
-			},
+			extraCalls: 1,
 		},
 		{
 			name: "invalid JSON at chunk two",
 			addChunk2: func(fm *models.FakeModel) {
 				fm.AddReply(models.Response{Text: "not valid json"})
+				fm.AddReply(models.Response{Text: "still not valid json"})
 			},
-			makeRunner: func(d *db.DB) (*runner.Runner, func()) {
-				var advance atomic.Bool
-				r := runner.New(d, nil, func() time.Time {
-					if advance.Load() {
-						return time.Now().Add(10 * time.Minute)
-					}
-					return time.Now()
-				}, slog.Default())
-				return r, func() { advance.Store(true) }
-			},
-			waitState: "error",
+			retryAfter: true,
+			extraCalls: 2,
 		},
 	}
 
@@ -652,7 +642,7 @@ func TestAnalyzeResumesFromCheckpoint(t *testing.T) {
 				}
 			}
 
-			r, trigger := tc.makeRunner(d)
+			r := runner.New(d, nil, time.Now, slog.Default())
 			registerKindsWith(t, r, d, fm)
 			base := newRouteServer(t, d, r)
 
@@ -665,16 +655,20 @@ func TestAnalyzeResumesFromCheckpoint(t *testing.T) {
 			defer cancel()
 			go r.Start(ctx)
 
-			if tc.waitState != "" {
-				waitForDocState(t, base, docID, tc.waitState, 5*time.Second)
+			if tc.retryAfter {
+				waitForDocState(t, base, docID, "error", 5*time.Second)
+				waitFor(t, 5*time.Second, func() bool {
+					j, ok := r.Last("analyze_document")
+					return ok && j.State == "failed"
+				})
+				apiSend(t, http.MethodPost, base, fmt.Sprintf("/api/documents/%.0f/analyze", docID), nil)
 			}
-			trigger()
 			waitForDocState(t, base, docID, "analysed", 10*time.Second)
 
 			calls := fm.Calls()
-			if len(calls) != len(chunks)+1 {
-				t.Errorf("model calls = %d, want %d (one per chunk plus one interrupted at chunk 2)",
-					len(calls), len(chunks)+1)
+			if len(calls) != len(chunks)+tc.extraCalls {
+				t.Errorf("model calls = %d, want %d (one per chunk plus %d for the failed attempt at chunk 2)",
+					len(calls), len(chunks)+tc.extraCalls, tc.extraCalls)
 			}
 
 			listOut, _ := apiGet(t, base, "/api/proposals")

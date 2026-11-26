@@ -61,13 +61,6 @@ func runShortlistCheck(
 	var checker shortlistcheck.ShortlistChecker = shortlistcheck.Checker{Model: model(vacancyID), Text: v.Text}
 	check, err := checker.Check(ctx, prof.View, candidate.EvidenceText(me, pd, docs), merged)
 	if err != nil {
-		var we models.WaitError
-		switch {
-		case errors.As(err, &we):
-			return runner.WaitUntil(we.RetryAfter)
-		case errors.Is(err, models.ErrBulkOnPaid), errors.Is(err, models.ErrNoProvider), errors.Is(err, models.ErrOffline), errors.Is(err, models.ErrPromptTooLong):
-			return runner.Permanent(err)
-		}
 		return fmt.Errorf("shortlist check: %w", err)
 	}
 	if err := shortlistcheck.Save(ctx, database, profileID, vacancyID, digest, check, now()); err != nil && !catalog.IsFKError(err) {

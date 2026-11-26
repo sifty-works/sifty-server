@@ -103,7 +103,7 @@ work: {reading: paidbox, shortlist_check: paidbox, preparation: paidbox}
 	if err != nil {
 		t.Fatalf("not_before %q: %v", notBefore, err)
 	}
-	if wait := time.Until(at); wait < paidBulkDelay-time.Minute {
-		t.Errorf("reading waits %v before it tries again, want about %v: the job was put off by an ordinary error, not by the refusal of paid bulk work", wait, paidBulkDelay)
+	if wait := time.Until(at); wait < 9*time.Minute {
+		t.Errorf("reading waits %v before it tries again, want about 10m: the job was put off by an ordinary error, not by the refusal of paid bulk work", wait)
 	}
 }

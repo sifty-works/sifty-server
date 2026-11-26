@@ -54,5 +54,5 @@ func New(
 }
 
 func (c *Collector) Register() {
-	c.runner.Register(runner.Kind{Name: "collect", Run: c.run, Resume: false})
+	c.runner.Register(runner.Kind{Name: "collect", Run: c.run, Resume: false, Then: []string{"recompute_fit"}})
 }

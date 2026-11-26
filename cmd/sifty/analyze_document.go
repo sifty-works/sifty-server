@@ -84,22 +84,16 @@ func runAnalyzeDocument(
 		facts, err := candidate.ProposeFromChunk(callCtx, model, chunk)
 		cancel()
 		if err != nil {
-			var we models.WaitError
-			if errors.As(err, &we) {
-				return runner.WaitUntil(we.RetryAfter)
+			if j.Waits(err) {
+				return err
 			}
-			if errors.Is(err, models.ErrBulkOnPaid) {
-				return runner.WaitUntil(time.Now().Add(paidBulkDelay))
-			}
-			reason, known := failureSentence(j.Kind, err)
-			if !known {
-				reason = "The analysis could not be completed. Try again."
+			reason := "The analysis could not be completed. Try again."
+			var explained runner.Explained
+			if errors.As(err, &explained) {
+				reason = explained.Sentence()
 			}
 			if uerr := candidate.UpdateDocumentError(ctx, database, docID, reason); uerr != nil {
 				return uerr
-			}
-			if known && !errors.Is(err, models.ErrProviderUnavailable) {
-				return runner.Permanent(err)
 			}
 			if serr := saveAnalyzeCheckpoint(ctx, j, cp); serr != nil {
 				return serr

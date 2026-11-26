@@ -3,10 +3,8 @@ package shortlistcheck
 import (
 	"context"
 	"crypto/sha256"
-	_ "embed"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -16,15 +14,12 @@ import (
 	"github.com/sifty-works/sifty-server/internal/text"
 )
 
-//go:embed prompt.md
-var promptBytes []byte
-
-//go:embed schema.json
-var schemaBytes []byte
+var task = models.NamedTask("shortlist_check")
 
 var checkerVersion = func() string {
 	h := sha256.New()
-	h.Write(append(promptBytes, schemaBytes...))
+	h.Write([]byte(task.Prompt))
+	h.Write(task.Schema)
 	return "shortlistcheck/1+" + hex.EncodeToString(h.Sum(nil))[:8]
 }()
 
@@ -67,30 +62,35 @@ func (c Checker) Check(ctx context.Context, f ProfileFacts, evidence string, v r
 	if len(open) == 0 {
 		return Check{Answers: []Answer{}}, nil
 	}
-	req := models.Request{Prompt: buildPrompt(v, open, c.Text, evidence), Schema: json.RawMessage(schemaBytes), Think: "off"}
-	answers := []Answer{}
-	for attempt := range 2 {
-		resp, err := c.Model.Complete(ctx, req)
-		if err != nil {
-			return Check{}, err
-		}
-		var out Check
-		if err := json.Unmarshal([]byte(resp.Text), &out); err != nil {
-			return Check{}, fmt.Errorf("shortlistcheck: parse: %w", err)
-		}
-		answers = validate(out.Answers, open, evidence)
-		if len(answers) > 0 || attempt == 1 {
-			break
-		}
+	prompt := buildPrompt(v, open, c.Text, evidence)
+	answers, err := c.ask(ctx, prompt, open, evidence)
+	if err != nil {
+		return Check{}, err
 	}
 	return Check{Answers: answers}, nil
 }
 
+func (c Checker) ask(ctx context.Context, prompt string, open []fit.RequirementLine, evidence string) ([]Answer, error) {
+	var out Check
+	used, err := task.Ask(ctx, c.Model, prompt, models.Asks, &out)
+	if err != nil {
+		return nil, err
+	}
+	answers := validate(out.Answers, open, evidence)
+	if len(answers) == 0 && used < models.Asks {
+		if _, err := task.Ask(ctx, c.Model, prompt, models.Asks-used, &out); err != nil {
+			return nil, err
+		}
+		answers = validate(out.Answers, open, evidence)
+	}
+	return answers, nil
+}
+
 func buildPrompt(v reading.VacancyReading, open []fit.RequirementLine, text, evidence string) string {
 	var sb strings.Builder
-	sb.Write(promptBytes)
+	sb.WriteString(task.Prompt)
 	sb.WriteString("\nSCHEMA\n")
-	sb.Write(schemaBytes)
+	sb.Write(task.Schema)
 	sb.WriteString("\nREQUIREMENTS TO DECIDE\n")
 	for _, line := range open {
 		sb.WriteString("- " + line.Text + "\n")

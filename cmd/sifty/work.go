@@ -9,7 +9,6 @@ import (
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
-	"github.com/sifty-works/sifty-server/internal/collect"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
@@ -24,8 +23,6 @@ const (
 type jobKind struct {
 	label   string
 	work    string
-	noun    string
-	item    string
 	subject func(ctx context.Context, database *db.DB, subject string) (string, error)
 }
 
@@ -33,9 +30,9 @@ var jobKinds = map[string]jobKind{
 	"collect":          {label: "Collection"},
 	"recompute_fit":    {label: "Recomputing Fits you"},
 	"retention":        {label: "Text retention"},
-	"read_vacancy":     {label: "Reading vacancy text", work: "reading", noun: "reading", item: "vacancy text", subject: readSubject},
-	"shortlist_check":  {label: "Shortlist check", work: "shortlist_check", noun: "the Shortlist check", item: "vacancy text", subject: shortlistSubject},
-	"analyze_document": {label: "Document analysis", work: "reading", noun: "reading", item: "document", subject: documentSubject},
+	"read_vacancy":     {label: "Reading vacancy text", work: "reading", subject: readSubject},
+	"shortlist_check":  {label: "Shortlist check", work: "shortlist_check", subject: shortlistSubject},
+	"analyze_document": {label: "Document analysis", work: "reading", subject: documentSubject},
 }
 
 func documentSubject(ctx context.Context, database *db.DB, subject string) (string, error) {
@@ -68,27 +65,6 @@ func vacancyName(ctx context.Context, database *db.DB, id int64) (string, error)
 		return title, err
 	}
 	return title + " at " + company, nil
-}
-
-func failureSentence(kind string, err error) (string, bool) {
-	k := jobKinds[kind]
-	switch {
-	case errors.Is(err, models.ErrNoProvider):
-		return "No model is chosen for " + k.noun + ". Open Settings.", true
-	case errors.Is(err, models.ErrOffline):
-		return "Model calls are unavailable in offline mode. Open Settings.", true
-	case errors.Is(err, models.ErrPromptTooLong):
-		return "The " + k.item + " is too long for the chosen model. Choose a model with a longer context in Settings.", true
-	case errors.Is(err, models.ErrBulkOnPaid):
-		return "The provider is paid, so this work is refused. Allow paid bulk work in Settings.", true
-	case errors.Is(err, models.ErrProviderUnavailable):
-		return "The provider did not answer. Check it in Settings.", true
-	case errors.Is(err, models.ErrUnusableAnswers):
-		return "The provider kept giving answers that could not be used. Check it in Settings.", true
-	case errors.Is(err, collect.ErrEverySourceFailed):
-		return "Every source failed", true
-	}
-	return "", false
 }
 
 func waitText(until time.Time) string {
@@ -251,7 +227,11 @@ func waitReason(ctx context.Context, gate *models.Gate, work string, earliest, n
 		}
 		provider := cfg.WorkProviderFor(work)
 		if h, held := gate.Held(provider); held {
-			why, _ := failureSentence("", h.Why)
+			var why string
+			var explained runner.Explained
+			if errors.As(h.Why, &explained) {
+				why = explained.Sentence()
+			}
 			return &workReason{Code: "held", Text: why + " Trying again at " + waitText(h.Until) + ".", Provider: provider, Until: h.Until.UTC().Format(time.RFC3339)}, nil
 		}
 		if pc, ok := cfg.Providers[provider]; ok && pc.Cost == "paid" && !cfg.AllowPaidBulk {

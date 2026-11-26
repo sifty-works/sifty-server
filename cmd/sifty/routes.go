@@ -7,7 +7,6 @@ import (
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/collect"
-	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/fit"
 	"github.com/sifty-works/sifty-server/internal/inbox"
@@ -15,19 +14,6 @@ import (
 	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/server"
 )
-
-func modelReady(store *config.Store, offline bool) func(kind string) error {
-	return func(kind string) error {
-		if offline {
-			return models.ErrOffline
-		}
-		cfg := store.Get()
-		if cfg.WorkProviderFor(kind) == "" {
-			return models.ErrNoProvider
-		}
-		return nil
-	}
-}
 
 func enqueueRecomputeFit(r *runner.Runner) func() {
 	return func() { r.Enqueue(runner.Spec{Kind: "recompute_fit"}) }

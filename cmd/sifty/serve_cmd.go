@@ -208,7 +208,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			}
 			return m
 		}
-		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r, modelReady(store, offline), filepath.Join(dataDir, logDir, logFileName), keys)
+		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r, gate.Ready, filepath.Join(dataDir, logDir, logFileName), keys)
 	})
 
 	srv := &http.Server{
@@ -358,7 +358,6 @@ func fitRules(store *config.Store) func() fit.Rules {
 }
 
 func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, gate modelSource, cat *catalog.Catalog, logger *slog.Logger, offline bool, now func() time.Time) {
-	r.SetExplain(failureSentence)
 	r.Register(runner.Kind{
 		Name:   "recompute_fit",
 		Resume: true,
@@ -368,21 +367,22 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 				return err
 			}
 			defer rel()
-			if err := fit.Recompute(runCtx, database, fitRules(store), j.Progress); err != nil {
-				return err
-			}
-			return queueReadings(runCtx, database, r.Enqueue, store, offline, reading.ReaderVersion())
+			return fit.Recompute(runCtx, database, fitRules(store), j.Progress)
+		},
+		Follow: func(runCtx context.Context, enqueue func(runner.Spec) (int64, error)) error {
+			return queueReadings(runCtx, database, enqueue, store, offline, reading.ReaderVersion())
 		},
 	})
 
 	r.Register(runner.Kind{
-		Name:   "read_vacancy",
-		Resume: true,
-		Serial: true,
+		Name:    "read_vacancy",
+		Resume:  true,
+		Serial:  true,
+		Patient: true,
+		Then:    []string{"recompute_fit"},
 		Run: func(runCtx context.Context, j *runner.Job) error {
 			return runReadVacancy(runCtx, j, database,
-				func(vid int64) models.Model { return gate.For("reading", "background", vid) },
-				r.Enqueue)
+				func(vid int64) models.Model { return gate.For(models.NamedTask("reading").Work, "background", vid) })
 		},
 	})
 
@@ -391,15 +391,18 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 		Resume: true,
 		Run: func(runCtx context.Context, j *runner.Job) error {
 			return runShortlistCheck(runCtx, j, database,
-				func(vid int64) models.Model { return gate.For("shortlist_check", "background", vid) }, now)
+				func(vid int64) models.Model {
+					return gate.For(models.NamedTask("shortlist_check").Work, "background", vid)
+				}, now)
 		},
 	})
 
 	r.Register(runner.Kind{
-		Name:   "analyze_document",
-		Resume: false,
+		Name:    "analyze_document",
+		Resume:  false,
+		Patient: true,
 		Run: func(runCtx context.Context, j *runner.Job) error {
-			return runAnalyzeDocument(runCtx, j, database, gate.For("reading", "background"))
+			return runAnalyzeDocument(runCtx, j, database, gate.For(models.NamedTask("document_proposals").Work, "background"))
 		},
 	})
 

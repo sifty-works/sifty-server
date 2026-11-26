@@ -40,16 +40,20 @@ type Spec struct {
 }
 
 type Kind struct {
-	Name   string
-	Run    func(ctx context.Context, j *Job) error
-	Resume bool
-	Serial bool
-	Then   []string
+	Name    string
+	Run     func(ctx context.Context, j *Job) error
+	Resume  bool
+	Serial  bool
+	Patient bool
+	Then    []string
+	Follow  func(ctx context.Context, enqueue func(Spec) (int64, error)) error
 }
 
 type waitError struct{ t time.Time }
 
 func (w waitError) Error() string { return "try again after " + w.t.UTC().Format(time.RFC3339) }
+
+func (w waitError) RetryAt() time.Time { return w.t }
 
 func WaitUntil(t time.Time) error { return waitError{t: t} }
 
@@ -91,7 +95,7 @@ func (j *Job) SaveParams(ctx context.Context, params json.RawMessage) error {
 func (r *Runner) AdoptInterrupted(kind, subject string) (int64, bool, error) {
 	var id int64
 	err := r.db.QueryRow(
-		`SELECT id FROM job WHERE kind=? AND subject=? AND state IN ('interrupted','cancelled') ORDER BY id DESC LIMIT 1`,
+		`SELECT id FROM job WHERE kind=? AND subject=? AND (state IN ('interrupted','cancelled') OR (state='failed' AND params IS NOT NULL)) ORDER BY id DESC LIMIT 1`,
 		kind, subject,
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -102,7 +106,7 @@ func (r *Runner) AdoptInterrupted(kind, subject string) (int64, bool, error) {
 	}
 	now := r.now().UTC().Format(time.RFC3339)
 	res, err := r.db.Exec(
-		`UPDATE job SET state='queued', not_before=?, updated=? WHERE id=? AND state IN ('interrupted','cancelled')`,
+		`UPDATE job SET state='queued', attempts=CASE WHEN state='failed' THEN 0 ELSE attempts END, not_before=?, updated=? WHERE id=? AND state IN ('interrupted','cancelled','failed')`,
 		now, now, id,
 	)
 	if err != nil {
@@ -172,8 +176,6 @@ type Runner struct {
 	kinds map[string]Kind
 	lanes map[string]*lane
 
-	explain func(kind string, err error) (string, bool)
-
 	mu     sync.Mutex
 	active map[int64]*jobState
 
@@ -200,14 +202,38 @@ func (r *Runner) Register(k Kind) {
 	r.kinds[k.Name] = k
 }
 
-func (r *Runner) SetExplain(f func(kind string, err error) (string, bool)) {
-	r.explain = f
+func (k Kind) judge(err error) (at time.Time, final bool) {
+	if isPermanent(err) {
+		return time.Time{}, true
+	}
+	var t Terminal
+	if errors.As(err, &t) {
+		final = t.Final()
+	}
+	var d Delayed
+	if errors.As(err, &d) {
+		at = d.RetryAt()
+	}
+	if final && !at.IsZero() && k.Patient {
+		final = false
+	}
+	return at, final
 }
 
-func (r *Runner) sentence(j *Job, err error) string {
-	if r.explain != nil {
-		if text, ok := r.explain(j.Kind, err); ok {
-			return text
+func (j *Job) Waits(err error) bool {
+	var k Kind
+	if j.r != nil {
+		k = j.r.kinds[j.Kind]
+	}
+	at, final := k.judge(err)
+	return !final && !at.IsZero()
+}
+
+func sentence(j *Job, err error) string {
+	var e Explained
+	if errors.As(err, &e) {
+		if s := e.Sentence(); s != "" {
+			return s
 		}
 	}
 	return genericSentence(j.ID)
@@ -514,11 +540,21 @@ func (r *Runner) runJob(ctx context.Context, j *Job, kind Kind) {
 			}
 		}()
 		runErr = kind.Run(ctx, j)
+		if runErr == nil && ctx.Err() == nil && kind.Follow != nil {
+			runErr = kind.Follow(ctx, r.Enqueue)
+		}
+		if runErr == nil && ctx.Err() == nil {
+			for _, name := range kind.Then {
+				if _, err := r.Enqueue(Spec{Kind: name}); err != nil {
+					r.log.Error("runner: follow-up not queued", "id", j.ID, "kind", name, "error", err)
+				}
+			}
+		}
 	}()
-	r.finishJob(ctx, j, runErr)
+	r.finishJob(ctx, j, kind, runErr)
 }
 
-func (r *Runner) finishJob(ctx context.Context, j *Job, runErr error) {
+func (r *Runner) finishJob(ctx context.Context, j *Job, kind Kind, runErr error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.active, j.ID)
@@ -538,46 +574,42 @@ func (r *Runner) finishJob(ctx context.Context, j *Job, runErr error) {
 		j.State = stateDone
 		finalProg, _ := json.Marshal(progressJSON{Done: j.Done, Total: j.Total, Current: j.Current})
 		_, dbErr = r.db.Exec(`UPDATE job SET state='done', progress=?, updated=? WHERE id=?`, string(finalProg), ts, j.ID)
-	} else if isPermanent(runErr) {
+	} else if at, final := kind.judge(runErr); final {
 		r.logFailure(j, runErr)
 		j.State = stateFailed
-		j.Error = r.sentence(j, runErr)
+		j.Error = sentence(j, runErr)
 		_, dbErr = r.db.Exec(
 			`UPDATE job SET state='failed', error=?, updated=? WHERE id=?`, j.Error, ts, j.ID)
+	} else if !at.IsZero() {
+		nbStr := at.UTC().Format(time.RFC3339)
+		j.State = stateQueued
+		j.NotBefore = at
+		j.Error = waitingSentence
+		j.Attempts--
+		_, dbErr = r.db.Exec(
+			`UPDATE job SET state='queued', attempts=?, error=?, not_before=?, updated=? WHERE id=?`,
+			j.Attempts, j.Error, nbStr, ts, j.ID)
+		if dbErr == nil {
+			_, dbErr = r.db.Exec(
+				`UPDATE job SET not_before=?, updated=? WHERE kind=? AND state='queued' AND id!=?`,
+				nbStr, ts, j.Kind, j.ID)
+		}
 	} else {
-		var we waitError
-		if errors.As(runErr, &we) {
-			nb := we.t
-			nbStr := nb.UTC().Format(time.RFC3339)
+		r.logFailure(j, runErr)
+		if j.Attempts >= 3 {
+			j.State = stateFailed
+			j.Error = sentence(j, runErr)
+			_, dbErr = r.db.Exec(
+				`UPDATE job SET state='failed', error=?, updated=? WHERE id=?`, j.Error, ts, j.ID)
+		} else {
+			delay := retryDelays[j.Attempts-1]
+			nb := now.Add(delay)
 			j.State = stateQueued
 			j.NotBefore = nb
-			j.Error = waitingSentence
-			j.Attempts--
+			j.Error = fmt.Sprintf("Attempt %d of 3 failed; trying again later. The log has the details under job #%d", j.Attempts, j.ID)
 			_, dbErr = r.db.Exec(
-				`UPDATE job SET state='queued', attempts=?, error=?, not_before=?, updated=? WHERE id=?`,
-				j.Attempts, j.Error, nbStr, ts, j.ID)
-			if dbErr == nil {
-				_, dbErr = r.db.Exec(
-					`UPDATE job SET not_before=?, updated=? WHERE kind=? AND state='queued' AND id!=?`,
-					nbStr, ts, j.Kind, j.ID)
-			}
-		} else {
-			r.logFailure(j, runErr)
-			if j.Attempts >= 3 {
-				j.State = stateFailed
-				j.Error = r.sentence(j, runErr)
-				_, dbErr = r.db.Exec(
-					`UPDATE job SET state='failed', error=?, updated=? WHERE id=?`, j.Error, ts, j.ID)
-			} else {
-				delay := retryDelays[j.Attempts-1]
-				nb := now.Add(delay)
-				j.State = stateQueued
-				j.NotBefore = nb
-				j.Error = fmt.Sprintf("Attempt %d of 3 failed; trying again later. The log has the details under job #%d", j.Attempts, j.ID)
-				_, dbErr = r.db.Exec(
-					`UPDATE job SET state='queued', error=?, not_before=?, updated=? WHERE id=?`,
-					j.Error, nb.UTC().Format(time.RFC3339), ts, j.ID)
-			}
+				`UPDATE job SET state='queued', error=?, not_before=?, updated=? WHERE id=?`,
+				j.Error, nb.UTC().Format(time.RFC3339), ts, j.ID)
 		}
 	}
 	if dbErr != nil {

@@ -51,7 +51,7 @@ internal/skills -> internal/candidate  # until: analysis-workers
 internal/skills -> internal/reading  # until: analysis-workers
 
 cmd/sifty -> database/sql  # until: application
-cmd/sifty/queue_readings.go -> sql  # until: queue
+cmd/sifty/queue_readings.go -> sql  # until: analysis-workers
 cmd/sifty/serve_cmd.go -> sql  # until: upkeep
 internal/catalog -> database/sql  # until: collection
 internal/catalog/catalog.go -> sql  # until: collection

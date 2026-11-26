@@ -156,6 +156,8 @@ var WorkKinds = []string{"reading", "shortlist_check", "preparation"}
 
 var WorkLabels = map[string]string{"reading": "Reading", "shortlist_check": "Shortlist check", "preparation": "Preparation"}
 
+var WorkNouns = map[string]string{"reading": "reading", "shortlist_check": "the Shortlist check", "preparation": "preparation"}
+
 func (c *Config) WorkProviderFor(kind string) string {
 	return c.Work[kind]
 }

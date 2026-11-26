@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"sync"
 	"testing"
@@ -54,21 +55,10 @@ func emptyReadingReply() string {
 	return string(b)
 }
 
-func runReadVacancyDirect(t *testing.T, d *db.DB, vacancyID, version int64, m models.Model) ([]runner.Spec, error) {
+func runReadVacancyDirect(t *testing.T, d *db.DB, vacancyID, version int64, m models.Model) error {
 	t.Helper()
-	var specs []runner.Spec
 	j := &runner.Job{Subject: fmt.Sprintf("%d/%d", vacancyID, version)}
-	err := runReadVacancy(
-		context.Background(),
-		j,
-		d,
-		func(_ int64) models.Model { return m },
-		func(s runner.Spec) (int64, error) {
-			specs = append(specs, s)
-			return 0, nil
-		},
-	)
-	return specs, err
+	return runReadVacancy(context.Background(), j, d, func(_ int64) models.Model { return m })
 }
 
 type readVacancyFix struct {
@@ -89,25 +79,38 @@ func newReadVacancyFix(t *testing.T, url string) readVacancyFix {
 }
 
 func TestReadVacancy_reads_vacancy_and_saves_reading(t *testing.T) {
-	fix := newReadVacancyFix(t, "https://jobs.example.com/rv1")
-	fix.fm.AddReply(models.Response{Text: emptyReadingReply()})
+	d := openTestDB(t)
+	first := insertFullVacancy(t, d, "https://jobs.example.com/rv1", "Backend Engineer", "Stackworks")
+	second := insertFullVacancy(t, d, "https://jobs.example.com/rv1b", "Backend Engineer", "Northwind")
+	insertProfile(t, d, 1, "Backend Engineer")
+	fm := &models.FakeModel{}
+	fm.AddReply(models.Response{Text: emptyReadingReply()})
+	r := runner.New(d, nil, time.Now, slog.Default())
+	registerJobKinds(r, d, openStoreWithReading(t), fixedModel{fm}, catalog.New(d, time.Now), slog.New(slog.NewTextHandler(io.Discard, nil)), false, time.Now)
+	r.Enqueue(runner.Spec{Kind: "read_vacancy", Subject: fmt.Sprintf("%d/1", first)})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go r.Start(ctx)
 
-	specs, err := runReadVacancyDirect(t, fix.d, fix.id, 1, fix.fm)
-	if err != nil {
-		t.Fatalf("runReadVacancy: %v", err)
-	}
-
+	waitFor(t, 5*time.Second, func() bool {
+		var readerVer string
+		d.QueryRow(`SELECT reader_version FROM vacancy_reading WHERE vacancy_id=?`, first).Scan(&readerVer)
+		return readerVer != ""
+	})
 	var readerVer string
-	fix.d.QueryRow(`SELECT reader_version FROM vacancy_reading WHERE vacancy_id=?`, fix.id).Scan(&readerVer)
-	if readerVer == "" {
-		t.Error("reading was not saved to vacancy_reading")
-	}
+	d.QueryRow(`SELECT reader_version FROM vacancy_reading WHERE vacancy_id=?`, first).Scan(&readerVer)
 	if readerVer == "import-1" {
 		t.Error("reader_version should not be import-1")
 	}
-
-	if len(specs) != 1 || specs[0].Kind != "recompute_fit" {
-		t.Errorf("expected recompute_fit enqueued, got %v", specs)
+	waitFor(t, 5*time.Second, func() bool {
+		var n int
+		d.QueryRow(`SELECT count(*) FROM job WHERE kind='read_vacancy' AND subject=?`, fmt.Sprintf("%d/1", second)).Scan(&n)
+		return n > 0
+	})
+	var recomputed int
+	d.QueryRow(`SELECT count(*) FROM job WHERE kind='recompute_fit'`).Scan(&recomputed)
+	if recomputed == 0 {
+		t.Error("no recompute_fit job followed the reading")
 	}
 }
 
@@ -115,12 +118,8 @@ func TestReadVacancy_deleted_vacancy_ends_without_error(t *testing.T) {
 	fix := newReadVacancyFix(t, "https://jobs.example.com/rv2")
 	fix.d.Exec(`DELETE FROM vacancy WHERE id=?`, fix.id)
 
-	specs, err := runReadVacancyDirect(t, fix.d, fix.id, 1, fix.fm)
-	if err != nil {
+	if err := runReadVacancyDirect(t, fix.d, fix.id, 1, fix.fm); err != nil {
 		t.Fatalf("expected no error when vacancy deleted, got: %v", err)
-	}
-	if len(specs) != 0 {
-		t.Errorf("expected no specs enqueued, got %v", specs)
 	}
 	if len(fix.fm.Calls()) != 0 {
 		t.Errorf("model should not be called for deleted vacancy")
@@ -130,12 +129,11 @@ func TestReadVacancy_deleted_vacancy_ends_without_error(t *testing.T) {
 func TestReadVacancy_version_mismatch_ends_without_error(t *testing.T) {
 	fix := newReadVacancyFix(t, "https://jobs.example.com/rv3")
 
-	specs, err := runReadVacancyDirect(t, fix.d, fix.id, 99, fix.fm)
-	if err != nil {
+	if err := runReadVacancyDirect(t, fix.d, fix.id, 99, fix.fm); err != nil {
 		t.Fatalf("expected no error on version mismatch, got: %v", err)
 	}
-	if len(specs) != 0 {
-		t.Errorf("expected no specs enqueued, got %v", specs)
+	if len(fix.fm.Calls()) != 0 {
+		t.Errorf("model called for a version that moved on")
 	}
 }
 
@@ -321,7 +319,6 @@ func TestReadVacancy_vacancy_deleted_while_reading_saves_nothing(t *testing.T) {
 	fix := newReadVacancyFix(t, "https://jobs.example.com/rv10")
 	fix.fm.AddReply(models.Response{Text: emptyReadingReply()})
 
-	var specs []runner.Spec
 	j := &runner.Job{Subject: fmt.Sprintf("%d/1", fix.id)}
 	var capturedVacancyID int64
 	err := runReadVacancy(
@@ -333,16 +330,9 @@ func TestReadVacancy_vacancy_deleted_while_reading_saves_nothing(t *testing.T) {
 			fix.d.Exec(`DELETE FROM vacancy WHERE id=?`, fix.id)
 			return fix.fm
 		},
-		func(s runner.Spec) (int64, error) {
-			specs = append(specs, s)
-			return 0, nil
-		},
 	)
 	if err != nil {
 		t.Fatalf("expected no error when vacancy deleted before save, got: %v", err)
-	}
-	if len(specs) != 0 {
-		t.Errorf("expected no recompute_fit queued when vacancy deleted, got %v", specs)
 	}
 	if capturedVacancyID != fix.id {
 		t.Errorf("model fn received vacancyID=%d, want %d", capturedVacancyID, fix.id)
@@ -358,8 +348,7 @@ func TestReadVacancy_saves_reading_for_correct_version(t *testing.T) {
 	fix := newReadVacancyFix(t, "https://jobs.example.com/rv12")
 	fix.fm.AddReply(models.Response{Text: emptyReadingReply()})
 
-	_, err := runReadVacancyDirect(t, fix.d, fix.id, 1, fix.fm)
-	if err != nil {
+	if err := runReadVacancyDirect(t, fix.d, fix.id, 1, fix.fm); err != nil {
 		t.Fatalf("runReadVacancy: %v", err)
 	}
 
@@ -374,8 +363,7 @@ func TestReadVacancy_reading_has_correct_reader_version(t *testing.T) {
 	fix := newReadVacancyFix(t, "https://jobs.example.com/rv13")
 	fix.fm.AddReply(models.Response{Text: emptyReadingReply()})
 
-	_, err := runReadVacancyDirect(t, fix.d, fix.id, 1, fix.fm)
-	if err != nil {
+	if err := runReadVacancyDirect(t, fix.d, fix.id, 1, fix.fm); err != nil {
 		t.Fatalf("runReadVacancy: %v", err)
 	}
 

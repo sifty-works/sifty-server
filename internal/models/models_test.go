@@ -753,3 +753,38 @@ func TestBackgroundWaitsWhenTodaysCallsCannotBeCounted(t *testing.T) {
 		t.Fatal("the model was called although today's calls could not be counted")
 	}
 }
+
+func TestTaskAnswerUnreadableAskedOnce(t *testing.T) {
+	cases := []struct {
+		name      string
+		replies   []string
+		wantErr   bool
+		wantCalls int
+	}{
+		{"an unreadable answer is asked again and the readable one is used", []string{"not json", `{"answers":["a"]}`}, false, 2},
+		{"two unreadable answers are refused after exactly two calls", []string{"not json", "still not json", `{"answers":["late"]}`}, true, 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fm := &models.FakeModel{}
+			for _, text := range tc.replies {
+				fm.AddReply(models.Response{Text: text})
+			}
+			var out struct{ Answers []string }
+			_, err := models.NamedTask("shortlist_check").Ask(context.Background(), fm, "prompt", models.Asks, &out)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("error = %v, want error %v", err, tc.wantErr)
+			}
+			if n := len(fm.Calls()); n != tc.wantCalls {
+				t.Errorf("model calls = %d, want %d", n, tc.wantCalls)
+			}
+			var final interface{ Final() bool }
+			if tc.wantErr && (!errors.As(err, &final) || !final.Final()) {
+				t.Errorf("error %v is not final: the job would be retried and ask again", err)
+			}
+			if !tc.wantErr && (len(out.Answers) != 1 || out.Answers[0] != "a") {
+				t.Errorf("answers = %v, want [a]", out.Answers)
+			}
+		})
+	}
+}

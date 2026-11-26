@@ -47,7 +47,6 @@ func (c *Collector) Ticker(ctx context.Context) {
 }
 
 func (c *Collector) run(ctx context.Context, j *runner.Job) error {
-	defer c.runner.Enqueue(runner.Spec{Kind: "recompute_fit"})
 	cfg := c.store.Get()
 	var enabled []config.SourceConfig
 	for _, s := range cfg.Sources {
@@ -219,12 +218,20 @@ func (c *Collector) run(ctx context.Context, j *runner.Job) error {
 	wg.Wait()
 
 	if failedCount > 0 && failedCount == len(enabled) {
-		return runner.Permanent(ErrEverySourceFailed)
+		return ErrEverySourceFailed
 	}
 	return nil
 }
 
-var ErrEverySourceFailed = errors.New("every source failed")
+type everySourceFailed struct{}
+
+func (everySourceFailed) Error() string { return "every source failed" }
+
+func (everySourceFailed) Final() bool { return true }
+
+func (everySourceFailed) Sentence() string { return "Every source failed" }
+
+var ErrEverySourceFailed error = everySourceFailed{}
 
 func (c *Collector) listSource(ctx context.Context, s config.SourceConfig) ([]listing.Posting, error) {
 	u, _ := url.Parse(s.URL)

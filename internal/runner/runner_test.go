@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -642,5 +643,110 @@ func TestActiveByKindFiltersResults(t *testing.T) {
 	close(hold)
 	for deadline := time.Now().Add(5 * time.Second); len(r.Active()) > 0 && time.Now().Before(deadline); {
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+type refusal struct {
+	at       time.Time
+	final    bool
+	sentence string
+}
+
+func (r refusal) Error() string      { return "refused" }
+func (r refusal) RetryAt() time.Time { return r.at }
+func (r refusal) Final() bool        { return r.final }
+func (r refusal) Sentence() string   { return r.sentence }
+
+func waitJobWhere(t *testing.T, r *runner.Runner, kind string, ok func(runner.Job) bool) runner.Job {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		if j, found := r.Last(kind); found && ok(j) {
+			return j
+		}
+		select {
+		case <-deadline:
+			j, _ := r.Last(kind)
+			t.Fatalf("job %s never reached the expected state: %+v", kind, j)
+			return runner.Job{}
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+}
+
+func TestRefusalDecidesTheJobOutcome(t *testing.T) {
+	later := base.Add(time.Hour)
+	cases := []struct {
+		name         string
+		err          error
+		patient      bool
+		wantState    string
+		wantAttempts int
+		wantError    string
+	}{
+		{"a delayed refusal waits until its time", refusal{at: later}, false, "queued", 0, "Waiting to try again"},
+		{"a final refusal fails at once with its sentence", refusal{at: later, final: true, sentence: "Choose a provider."}, false, "failed", 1, "Choose a provider."},
+		{"any other error is retried", errors.New("boom"), false, "queued", 1, "Attempt 1 of 3 failed"},
+		{"a patient kind waits on a final refusal that has a time", refusal{at: later, final: true, sentence: "Choose a provider."}, true, "queued", 0, "Waiting to try again"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := openDB(t)
+			r := newRunner(d, nil, newClock(base))
+			r.Register(runner.Kind{Name: "asks", Patient: tc.patient, Run: func(context.Context, *runner.Job) error { return tc.err }})
+			r.Enqueue(runner.Spec{Kind: "asks", Subject: "1"})
+			defer startRunner(t, r)()
+
+			j := waitJobWhere(t, r, "asks", func(j runner.Job) bool { return j.State == tc.wantState && j.Error != "" })
+			if j.Attempts != tc.wantAttempts {
+				t.Errorf("attempts = %d, want %d", j.Attempts, tc.wantAttempts)
+			}
+			if !strings.HasPrefix(j.Error, tc.wantError) {
+				t.Errorf("error = %q, want it to start with %q", j.Error, tc.wantError)
+			}
+			if tc.wantState == "queued" && tc.wantAttempts == 0 && !j.NotBefore.Equal(later) {
+				t.Errorf("not_before = %v, want %v", j.NotBefore, later)
+			}
+		})
+	}
+}
+
+func TestFollowUpEnqueuedAfterSuccess(t *testing.T) {
+	cases := []struct {
+		name          string
+		run           error
+		follow        error
+		wantFollowUp  bool
+		wantFirstWait bool
+	}{
+		{"after a job that ends well", nil, nil, true, false},
+		{"not after a job that fails", runner.Permanent(errors.New("broken")), nil, false, false},
+		{"an error of the follow-up function fails the job visibly", nil, errors.New("unreadable profile"), false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := openDB(t)
+			r := newRunner(d, nil, newClock(base))
+			r.Register(runner.Kind{
+				Name: "first",
+				Then: []string{"second"},
+				Run:  func(context.Context, *runner.Job) error { return tc.run },
+				Follow: func(context.Context, func(runner.Spec) (int64, error)) error {
+					return tc.follow
+				},
+			})
+			r.Enqueue(runner.Spec{Kind: "first"})
+			defer startRunner(t, r)()
+
+			j := waitJobWhere(t, r, "first", func(j runner.Job) bool { return j.State != "queued" || j.Error != "" })
+			if tc.wantFirstWait && (j.State != "queued" || !strings.HasPrefix(j.Error, "Attempt 1 of 3 failed")) {
+				t.Errorf("first job = %s %q, want queued with the attempt sentence", j.State, j.Error)
+			}
+			_, queued := r.Last("second")
+			if queued != tc.wantFollowUp {
+				t.Errorf("follow-up queued = %v, want %v", queued, tc.wantFollowUp)
+			}
+		})
 	}
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/fit"
-	"github.com/sifty-works/sifty-server/internal/models"
+	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/shortlistcheck"
 )
 
@@ -45,7 +45,7 @@ type checkState struct {
 	jobID    int64
 	jobState string
 	jobError string
-	refused  error
+	refused  string
 }
 
 func loadCheck(ctx context.Context, database *db.DB, enqueue func(kind, subject string) (int64, error),
@@ -78,9 +78,10 @@ func loadCheck(ctx context.Context, database *db.DB, enqueue func(kind, subject 
 		return cs, nil
 	}
 	id, err := enqueue(shortlistcheck.Kind, subject)
+	var explained runner.Explained
 	switch {
-	case errors.Is(err, models.ErrNoProvider), errors.Is(err, models.ErrOffline):
-		cs.refused = err
+	case errors.As(err, &explained):
+		cs.refused = explained.Sentence()
 	case err != nil:
 		return cs, err
 	default:
@@ -120,10 +121,8 @@ func (cs checkState) view(lines []fit.RequirementLine, queue []int64, now time.T
 		v.Note = "Based on your data of " + v.Made
 	}
 	switch {
-	case cs.refused != nil && errors.Is(cs.refused, models.ErrOffline):
-		v.State = "Model calls are unavailable in offline mode. Open Settings."
-	case cs.refused != nil:
-		v.State = "No model is chosen for the Shortlist check. Open Settings."
+	case cs.refused != "":
+		v.State = cs.refused
 	case cs.jobState == "running":
 		v.State = "Checking…"
 	case cs.jobState == "queued":

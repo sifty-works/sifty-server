@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
@@ -16,14 +14,11 @@ import (
 	"github.com/sifty-works/sifty-server/internal/runner"
 )
 
-const paidBulkDelay = 10 * time.Minute
-
 func runReadVacancy(
 	ctx context.Context,
 	j *runner.Job,
 	database *db.DB,
 	model func(vacancyID int64) models.Model,
-	enqueue func(runner.Spec) (int64, error),
 ) error {
 	vacancyID, version, err := parseReadVacancySubject(j.Subject)
 	if err != nil {
@@ -40,16 +35,6 @@ func runReadVacancy(
 
 	rec, readerVer, err := reading.Read(ctx, model(vacancyID), input)
 	if err != nil {
-		var we models.WaitError
-		if errors.As(err, &we) {
-			return runner.WaitUntil(we.RetryAfter)
-		}
-		if errors.Is(err, models.ErrBulkOnPaid) {
-			return runner.WaitUntil(time.Now().Add(paidBulkDelay))
-		}
-		if errors.Is(err, models.ErrPromptTooLong) {
-			return runner.Permanent(err)
-		}
 		return err
 	}
 
@@ -59,8 +44,6 @@ func runReadVacancy(
 		}
 		return err
 	}
-
-	enqueue(runner.Spec{Kind: "recompute_fit"})
 	return nil
 }
 
