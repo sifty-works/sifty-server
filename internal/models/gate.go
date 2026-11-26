@@ -22,6 +22,7 @@ type Gate struct {
 	secrets map[string]string
 	logger  *slog.Logger
 	now     func() time.Time
+	tasks   map[string]Task
 
 	mu      sync.Mutex
 	entries map[string]*providerEntry
@@ -59,7 +60,11 @@ func NewGate(database *db.DB, store *config.Store, offline bool, secrets map[str
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return &Gate{db: database, store: store, offline: offline, secrets: secrets, logger: logger, now: time.Now, entries: map[string]*providerEntry{}}
+	tasks, err := loadTasks(taskFiles)
+	if err != nil {
+		panic(err)
+	}
+	return &Gate{db: database, store: store, offline: offline, secrets: secrets, logger: logger, now: time.Now, tasks: tasks, entries: map[string]*providerEntry{}}
 }
 
 func (g *Gate) For(kind, class string, vacancy ...int64) Model {

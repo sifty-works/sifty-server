@@ -11,10 +11,9 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/sifty-works/sifty-server/internal/models"
+	"github.com/sifty-works/sifty-server/internal/text"
 )
 
 //go:embed prompt.md
@@ -145,27 +144,27 @@ func validateOutput(plainText string, out extractionOutput, missing []string) Re
 	var rec Record
 	seen := map[string]bool{}
 	for _, item := range out.Requirements {
-		text := normalizeSpace(item.Text)
+		name := normalizeSpace(item.Text)
 		kind := strings.ToLower(strings.TrimSpace(item.Kind))
 		level := strings.ToLower(strings.TrimSpace(item.Level))
-		if text == "" || !validKinds[kind] || (level != "required" && level != "preferred") {
+		if name == "" || !validKinds[kind] || (level != "required" && level != "preferred") {
 			continue
 		}
-		if f := strings.Fields(text); len(f) > maxRequirementWords {
-			text = strings.Join(f[:maxRequirementWords], " ")
+		if f := strings.Fields(name); len(f) > maxRequirementWords {
+			name = strings.Join(f[:maxRequirementWords], " ")
 		}
-		q, ok := LocateQuote(plainText, item.Quote)
+		start, end, ok := text.LocateQuote(plainText, item.Quote)
 		if !ok {
 			continue
 		}
 		alts := groundAlternatives(plainText, item.Alternatives)
-		key := kind + "\x00" + strings.ToLower(text)
+		key := kind + "\x00" + strings.ToLower(name)
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
 		rec.Requirements = append(rec.Requirements, Requirement{
-			Text: text, Kind: kind, Level: level, Alts: alts, Quote: q,
+			Text: name, Kind: kind, Level: level, Alts: alts, Quote: Quote{Start: start, End: end},
 		})
 	}
 	if len(rec.Requirements) > maxRequirements {
@@ -192,11 +191,11 @@ func groundCond(plainText string, c *Condition, name string, missing []string, c
 	if value == "" {
 		return nil
 	}
-	q, ok := LocateQuote(plainText, c.Quote)
+	start, end, ok := text.LocateQuote(plainText, c.Quote)
 	if !ok {
 		return nil
 	}
-	qt := plainText[q.Start:q.End]
+	qt := plainText[start:end]
 	if check != nil && !check(qt) {
 		return nil
 	}
@@ -207,7 +206,7 @@ func groundAlternatives(source string, in []string) []string {
 	if len(in) == 0 {
 		return nil
 	}
-	hay := strings.ToLower(fold(source).str)
+	hay := strings.ToLower(text.Fold(source))
 	var out []string
 	seen := map[string]bool{}
 	for _, raw := range in {
@@ -216,7 +215,7 @@ func groundAlternatives(source string, in []string) []string {
 		if alt == "" || seen[key] {
 			continue
 		}
-		if !strings.Contains(hay, fold(key).str) {
+		if !strings.Contains(hay, text.Fold(key)) {
 			continue
 		}
 		seen[key] = true
@@ -229,74 +228,4 @@ func groundAlternatives(source string, in []string) []string {
 		return nil
 	}
 	return out
-}
-
-type foldedText struct {
-	str     string
-	offsets []int
-}
-
-func normRune(r rune) rune {
-	switch r {
-	case '‘', '’', '‚', '‛', '′', 'ʼ', '`', '´':
-		return '\''
-	case '“', '”', '„', '‟', '″', '«', '»':
-		return '"'
-	case '‐', '‑', '‒', '–', '—', '―', '−':
-		return '-'
-	case '\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF', '\u00AD':
-		return 0
-	}
-	if unicode.IsSpace(r) {
-		return ' '
-	}
-	return r
-}
-
-func FoldString(s string) string { return fold(s).str }
-
-func fold(text string) foldedText {
-	var sb strings.Builder
-	var offsets []int
-	prevSpace := true
-	for i, r := range text {
-		n := normRune(r)
-		if n == 0 {
-			continue
-		}
-		if n == ' ' {
-			if prevSpace {
-				continue
-			}
-			prevSpace = true
-		} else {
-			prevSpace = false
-		}
-		nb, _ := sb.WriteRune(n)
-		for j := 0; j < nb; j++ {
-			offsets = append(offsets, i)
-		}
-	}
-	s := sb.String()
-	for len(s) > 0 && s[len(s)-1] == ' ' {
-		s = s[:len(s)-1]
-		offsets = offsets[:len(offsets)-1]
-	}
-	return foldedText{str: s, offsets: offsets}
-}
-
-func LocateQuote(source, quote string) (Quote, bool) {
-	needle := fold(quote)
-	if utf8.RuneCountInString(needle.str) < 3 {
-		return Quote{}, false
-	}
-	hay := fold(source)
-	at := strings.Index(hay.str, needle.str)
-	if at < 0 {
-		return Quote{}, false
-	}
-	start := hay.offsets[at]
-	last := hay.offsets[at+len(needle.str)-1]
-	_, sz := utf8.DecodeRuneInString(source[last:])
-	return Quote{Start: start, End: last + sz}, true
 }

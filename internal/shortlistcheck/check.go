@@ -13,6 +13,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/fit"
 	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/reading"
+	"github.com/sifty-works/sifty-server/internal/text"
 )
 
 //go:embed prompt.md
@@ -113,11 +114,11 @@ func validate(in []Answer, open []fit.RequirementLine, evidence string) []Answer
 		verdict, ok := verdicts[a.Verdict]
 		line, found := FindLine(open, a.Requirement)
 		reason := strings.Join(strings.Fields(a.Reason), " ")
-		q, located := reading.LocateQuote(evidence, a.Excerpt)
+		start, end, located := text.LocateQuote(evidence, a.Excerpt)
 		if !ok || !found || !located || reason == "" || seen[line.Text] {
 			continue
 		}
-		excerpt := strings.TrimPrefix(strings.Join(strings.Fields(evidence[q.Start:q.End]), " "), "- ")
+		excerpt := strings.TrimPrefix(strings.Join(strings.Fields(evidence[start:end]), " "), "- ")
 		if utf8.RuneCountInString(excerpt) > maxExcerptRunes {
 			continue
 		}
@@ -130,19 +131,19 @@ func validate(in []Answer, open []fit.RequirementLine, evidence string) []Answer
 	return out
 }
 
-func FindLine(lines []fit.RequirementLine, text string) (fit.RequirementLine, bool) {
+func FindLine(lines []fit.RequirementLine, name string) (fit.RequirementLine, bool) {
 	for range 4 {
-		want := reading.FoldString(text)
+		want := text.Fold(name)
 		for _, l := range lines {
-			if reading.FoldString(l.Text) == want {
+			if text.Fold(l.Text) == want {
 				return l, true
 			}
 		}
-		shorter := withoutLastGroup(text)
-		if shorter == text {
+		shorter := withoutLastGroup(name)
+		if shorter == name {
 			break
 		}
-		text = shorter
+		name = shorter
 	}
 	return fit.RequirementLine{}, false
 }

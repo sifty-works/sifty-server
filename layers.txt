@@ -1,42 +1,67 @@
-# Allowed imports and SQL calls of each package of the repository, one line per package:
-#   <package>: <imports allowed>
-# Names are relative to the module path; database/sql is listed where SQL is allowed.
-# A package whose line does not list database/sql may not call the database either
-# (QueryContext, ExecContext, QueryRowContext, BeginTx, Exec, Query, QueryRow).
-# An exception is a single import, or a file that calls the database, with its reason:
-#   <package> -> <import>  # <reason>
-#   <file path> -> sql  # <reason>
-# Test files are not checked. A new package, a new import between packages and a
-# new SQL call outside a repo need a change to this file, which only the owner's
-# decision allows. An entry that nothing uses any more is reported; remove it.
-# scripts/layers.sh compares this file with `go list`; make check runs it.
+# The layer rules of the repository, checked by scripts/layers.sh (make check) against go list and the source files.
+#   A mechanism (db, runner, models, fetch, config, server, apperr, text) imports no module, and runner never imports models.
+#   A module is one task of the user; it imports mechanisms and packages of its own module, never another module.
+#   A worker is one way of doing a job behind an interface of its module; it imports no other worker.
+#   cmd/sifty only wires: it may import anything and runs no SQL.
+#   SQL calls and database/sql are for the packages listed after sql and for files named repo*.go or store*.go.
+# One line per kind: "mechanism:", "module <name>:", "worker:", "sql:", "wiring:", "outside:" and their packages.
+# The packages of a module are those of today that go into the package of that name; upkeep (the daily retention run and the
+# model-call journal cleanup, now in cmd/sifty) has none yet and application has only the Shortlist check so far (locate, web search, form reading and answers are not written).
+# A deviation of today's code is one line "<package> -> <import or database/sql>" or "<file> -> sql" with "# until: <change>",
+# the change that removes it; a line nothing uses any more is reported; remove it. New lines need the owner's decision.
 
-api:
-cmd/sifty: api internal/apperr internal/candidate internal/catalog internal/collect internal/config internal/db internal/fetch internal/fetch/fetchtest internal/fit internal/inbox internal/models internal/reading internal/runner internal/server internal/shortlistcheck internal/source web
-cmd/uncomment:
-internal/apperr:
-internal/candidate: database/sql internal/apperr internal/db internal/fetch internal/listing internal/models internal/places internal/reading internal/server
-internal/catalog: database/sql internal/db internal/listing internal/reading internal/source
-internal/collect: internal/apperr internal/catalog internal/config internal/db internal/fetch internal/listing internal/runner internal/server internal/source
-internal/config: internal/apperr
-internal/db: database/sql
-internal/fetch: internal/db
-internal/fetch/fetchtest: internal/fetch
-internal/fit: database/sql internal/apperr internal/candidate internal/catalog internal/config internal/db internal/listing internal/places internal/reading internal/skills
-internal/inbox: database/sql internal/apperr internal/candidate internal/catalog internal/config internal/db internal/fit internal/listing internal/models internal/places internal/server internal/shortlistcheck internal/skills
-internal/listing:
-internal/models: database/sql internal/apperr internal/config internal/db
-internal/places:
-internal/reading: internal/config internal/models
-internal/runner: database/sql internal/db
-internal/server: internal/apperr internal/models
-internal/shortlistcheck: database/sql internal/candidate internal/db internal/fit internal/models internal/reading
-internal/skills: internal/candidate internal/reading
-internal/source: internal/fetch internal/listing
-web:
+mechanism: internal/apperr internal/config internal/db internal/facts internal/fetch internal/fetch/fetchtest internal/models internal/runner internal/server internal/text
+sql: internal/db internal/models internal/runner
 
-cmd/sifty -> database/sql  # shortlist_check.go matches sql.ErrNoRows in the command; SQL belongs in a repo
-cmd/sifty/queue_readings.go -> sql  # the reading queue still runs SQL in the command; to move into a repo
-cmd/sifty/serve_cmd.go -> sql  # the model-call cleanup still runs SQL in the command; to move into a repo
-internal/collect/source_run.go -> sql  # the source-run log still runs SQL in the collect package; to move into a repo
-internal/fetch/blocks.go -> sql  # the block list still runs SQL in the fetch package; to move into a repo
+module collection: internal/catalog internal/collect internal/listing internal/source
+module analysis: internal/analysis internal/places internal/reading internal/skills
+module fit: internal/fit
+module lists: internal/inbox
+module profiles: internal/candidate
+module upkeep:
+module application: internal/shortlistcheck
+
+worker: internal/places internal/reading internal/skills internal/source
+
+wiring: cmd/sifty
+outside: api cmd/uncomment web
+
+never internal/runner -> internal/models
+
+internal/candidate -> internal/listing  # until: profiles
+internal/candidate -> internal/places  # until: profiles
+internal/catalog -> internal/reading  # until: collection
+internal/fit -> internal/candidate  # until: fit-criteria
+internal/fit -> internal/catalog  # until: fit-criteria
+internal/fit -> internal/listing  # until: fit-criteria
+internal/fit -> internal/places  # until: fit-criteria
+internal/fit -> internal/reading  # until: fit-criteria
+internal/fit -> internal/skills  # until: fit-criteria
+internal/inbox -> internal/candidate  # until: lists
+internal/inbox -> internal/catalog  # until: lists
+internal/inbox -> internal/fit  # until: lists
+internal/inbox -> internal/listing  # until: lists
+internal/inbox -> internal/places  # until: lists
+internal/inbox -> internal/shortlistcheck  # until: lists
+internal/inbox -> internal/skills  # until: lists
+internal/shortlistcheck -> internal/candidate  # until: application
+internal/shortlistcheck -> internal/fit  # until: application
+internal/shortlistcheck -> internal/reading  # until: application
+internal/skills -> internal/candidate  # until: analysis-workers
+internal/skills -> internal/reading  # until: analysis-workers
+
+cmd/sifty -> database/sql  # until: application
+cmd/sifty/queue_readings.go -> sql  # until: queue
+cmd/sifty/serve_cmd.go -> sql  # until: upkeep
+internal/catalog -> database/sql  # until: collection
+internal/catalog/catalog.go -> sql  # until: collection
+internal/catalog/exclusion.go -> sql  # until: collection
+internal/catalog/queue_readings.go -> sql  # until: collection
+internal/catalog/reading.go -> sql  # until: collection
+internal/catalog/retention.go -> sql  # until: upkeep
+internal/collect/source_run.go -> sql  # until: collection
+internal/fetch/blocks.go -> sql  # until: stores
+internal/inbox/exclusion.go -> sql  # until: lists
+internal/inbox/handler.go -> sql  # until: lists
+internal/inbox/service.go -> sql  # until: lists
+internal/inbox/shortlist_check.go -> sql  # until: lists

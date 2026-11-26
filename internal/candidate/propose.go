@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/sifty-works/sifty-server/internal/models"
-	"github.com/sifty-works/sifty-server/internal/reading"
+	"github.com/sifty-works/sifty-server/internal/text"
 )
 
 //go:embed propose_prompt.md
@@ -117,7 +117,7 @@ var proposalFields = []proposalField{
 }
 
 func foldKey(s string) string {
-	return strings.ToLower(strings.TrimSpace(reading.FoldString(s)))
+	return strings.ToLower(strings.TrimSpace(text.Fold(s)))
 }
 
 func indexOf[T any](items []T, name func(T) string, want string) int {
@@ -220,14 +220,14 @@ func ProposeFromChunk(ctx context.Context, m models.Model, chunk string) ([]RawF
 	return facts, nil
 }
 
-func FilterFacts(text string, raws []RawFact, me MeData, profile ProfileData) []RawFact {
+func FilterFacts(source string, raws []RawFact, me MeData, profile ProfileData) []RawFact {
 	var out []RawFact
 	seen := map[string]bool{}
 	for _, f := range raws {
 		if len(out) >= maxProposals {
 			break
 		}
-		_, ok := reading.LocateQuote(text, f.Quote)
+		_, _, ok := text.LocateQuote(source, f.Quote)
 		if !ok {
 			continue
 		}

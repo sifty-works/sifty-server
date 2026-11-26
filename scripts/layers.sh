@@ -14,18 +14,29 @@ FILENAME == rules {
   line = clean($0)
   if (index(line, " -> ") > 0) {
     split(line, p, " -> ")
-    allow[p[1] SUBSEP p[2]] = 1
+    if ($0 !~ /^never / && $0 !~ /# until: [^ ]/) {
+      print rules ": exception without \"# until: <change>\": " $0
+      bad = 1
+    }
+    if (p[1] ~ /^never /) never[substr(p[1], 7) SUBSEP p[2]] = 1
+    else allow[p[1] SUBSEP p[2]] = 1
     next
   }
-  pkg = line
-  sub(/:.*$/, "", pkg)
-  known[pkg] = 1
+  head = line
+  sub(/:.*$/, "", head)
   rest = line
   sub(/^[^:]*:/, "", rest)
-  n = split(rest, a, " ")
-  for (i = 1; i <= n; i++) {
-    allow[pkg SUBSEP a[i]] = 1
-    if (a[i] == "database/sql") sqlok[pkg] = 1
+  n = split(head, h, " ")
+  kind = h[1]
+  owner = h[2]
+  m = split(rest, a, " ")
+  for (i = 1; i <= m; i++) {
+    if (kind == "worker") { worker[a[i]] = 1; continue }
+    if (kind == "sql") { sqlok[a[i]] = 1; continue }
+    if (known[a[i]]) { print rules ": " a[i] " is listed twice"; bad = 1 }
+    known[a[i]] = 1
+    class[a[i]] = kind
+    modof[a[i]] = owner
   }
   next
 }
@@ -41,20 +52,44 @@ FILENAME == rules {
     bad = 1
     next
   }
+  dir = substr(f[3], length(root) + 2)
+  if (dir != "") dir = dir "/"
+  nf = split(f[4], files, " ")
+  store = 0
+  for (i = 1; i <= nf; i++) if (files[i] ~ /^(repo|store)[^\/]*\.go$/) store = 1
   n = split(f[2], a, " ")
   for (i = 1; i <= n; i++) {
     imp = a[i]
     if (index(imp, module "/") == 1) imp = substr(imp, length(module) + 2)
     else if (imp != "database/sql") continue
+    if ((pkg SUBSEP imp) in never) {
+      print pkg " → " imp ": never allowed by " rules
+      bad = 1
+      continue
+    }
+    c = class[pkg]
+    t = class[imp]
+    why = ""
+    if (imp == "database/sql") {
+      if (!sqlok[pkg] && !store) why = "database/sql outside a store file or a package listed after sql"
+    } else if (!(imp in known)) {
+      why = imp " has no entry in " rules
+    } else if (c == "outside" || c == "wiring" || t == "mechanism" && (c == "mechanism" || c == "module")) {
+    } else if (c == "module" && t == "module" && modof[pkg] == modof[imp]) {
+      if (worker[pkg] && worker[imp]) why = "a worker imports another worker"
+    } else if (c == "mechanism") {
+      why = "a mechanism imports a " t " (" modof[imp] ")"
+    } else {
+      why = "module " modof[pkg] " imports " (t == "module" ? "module " modof[imp] : t)
+    }
+    if (why == "") continue
     if ((pkg SUBSEP imp) in allow) used[pkg SUBSEP imp] = 1
     else {
-      print pkg " → " imp ": not allowed by " rules
+      print pkg " → " imp ": " why
       bad = 1
     }
   }
   if (sqlok[pkg]) next
-  dir = substr(f[3], length(root) + 2)
-  if (dir != "") dir = dir "/"
   n = split(f[4], a, " ")
   for (i = 1; i <= n; i++) {
     path = dir a[i]
@@ -63,9 +98,10 @@ FILENAME == rules {
       if (text ~ /\.(QueryContext|ExecContext|QueryRowContext|BeginTx|Exec|Query|QueryRow)\(([^)]|$)/) hit = 1
     close(root "/" path)
     if (!hit) continue
+    if (a[i] ~ /^(repo|store)/) continue
     if ((path SUBSEP "sql") in allow) used[path SUBSEP "sql"] = 1
     else {
-      print path ": SQL outside a package allowed database/sql"
+      print path ": SQL outside a store file"
       bad = 1
     }
   }
@@ -79,7 +115,7 @@ END {
     }
   for (k in allow) {
     split(k, p, SUBSEP)
-    if (!(k in used) && (p[1] in listed || !(p[1] in known))) {
+    if (!(k in used)) {
       print p[1] " → " p[2] ": allowed by " rules " but not used; remove it"
       bad = 1
     }

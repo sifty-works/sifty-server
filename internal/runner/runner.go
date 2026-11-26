@@ -44,6 +44,7 @@ type Kind struct {
 	Run    func(ctx context.Context, j *Job) error
 	Resume bool
 	Serial bool
+	Then   []string
 }
 
 type waitError struct{ t time.Time }
