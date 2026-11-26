@@ -28,17 +28,19 @@ type Requirement struct {
 }
 
 type Vacancy struct {
-	Title        string        `json:"title"`
-	Full         bool          `json:"-"`
-	Analysed     bool          `json:"-"`
-	Money        *Money        `json:"money,omitempty"`
-	WorkModes    []string      `json:"workModes,omitempty"`
-	Engagement   string        `json:"engagement,omitempty"`
-	Hours        *Hours        `json:"hours,omitempty"`
-	Locations    []string      `json:"locations,omitempty"`
-	TimeZone     string        `json:"timeZone,omitempty"`
-	Languages    []string      `json:"languages,omitempty"`
-	Requirements []Requirement `json:"-"`
+	Title        string                      `json:"title"`
+	Full         bool                        `json:"-"`
+	Analysed     bool                        `json:"-"`
+	Money        *Money                      `json:"money,omitempty"`
+	WorkModes    []string                    `json:"workModes,omitempty"`
+	Engagement   string                      `json:"engagement,omitempty"`
+	Hours        *Hours                      `json:"hours,omitempty"`
+	Locations    []string                    `json:"locations,omitempty"`
+	TimeZone     string                      `json:"timeZone,omitempty"`
+	Languages    []string                    `json:"languages,omitempty"`
+	Requirements []Requirement               `json:"-"`
+	Sources      map[facts.Kind]facts.Source `json:"-"`
+	Decided      []RequirementLine           `json:"-"`
 }
 
 func FromFacts(title string, full bool, set facts.Set) Vacancy {
@@ -50,6 +52,12 @@ func FromFacts(title string, full bool, set facts.Set) Vacancy {
 		}
 	}
 	for _, f := range set.Facts {
+		if old, ok := v.Sources[f.Kind]; !ok || weakSource(old) && !weakSource(sourceOf(f)) {
+			if v.Sources == nil {
+				v.Sources = map[facts.Kind]facts.Source{}
+			}
+			v.Sources[f.Kind] = sourceOf(f)
+		}
 		switch f.Kind {
 		case facts.Money:
 			if v.Money == nil && json.Unmarshal([]byte(f.Value), &v.Money) != nil {
@@ -66,7 +74,9 @@ func FromFacts(title string, full bool, set facts.Set) Vacancy {
 		case facts.Place:
 			add(&v.Locations, f.Value)
 		case facts.Language:
-			add(&v.Languages, f.Value)
+			if f.Flag == facts.Required {
+				add(&v.Languages, f.Value)
+			}
 		case facts.TimeZone:
 			if v.TimeZone == "" {
 				v.TimeZone = f.Value
@@ -79,4 +89,11 @@ func FromFacts(title string, full bool, set facts.Set) Vacancy {
 	}
 	v.Engagement = strings.Join(engagement, " ")
 	return v
+}
+
+func sourceOf(f facts.Fact) facts.Source {
+	if f.End > f.Start {
+		return facts.Source{Way: facts.Vocabulary, Origin: f.Source.Origin}
+	}
+	return f.Source
 }

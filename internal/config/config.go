@@ -130,7 +130,7 @@ func Defaults() Config {
 		},
 		Sources: []SourceConfig{},
 		Weights: map[string]float64{"role": 0.25, "money": 0.20, "location": 0.075, "remote_restriction": 0.075,
-			"time_zone": 0.10, "work_mode": 0.04, "engagement": 0.03, "hours": 0.03, "requirements": 0},
+			"time_zone": 0.10, "work_mode": 0.04, "engagement": 0.03, "hours": 0.03, "requirements": 0.15},
 		Rates: defaultRates(),
 	}
 }

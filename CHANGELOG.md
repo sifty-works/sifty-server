@@ -5,6 +5,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 ## Unreleased
 
 - Vacancies are analysed by code instead of a model: money, work mode, engagement, place, time zone, hours, required languages and the requirement lines (flagged required or preferred by their section) are found in the text and the site's fields, and Fits you, the requirements counter and the Shortlist check use them. No model call is made to read a vacancy; "Reading vacancy text" leaves Settings › Monitor and "Analyzing vacancy" takes its place. Requirement lines no longer list alternatives. Every Shortlist check is marked out of date once and runs again when its vacancy is opened.
+- Fits you compares each criterion on its own and scores only what is known ("scored on N of M"). A broken must (work mode, required language, work authorization) scores at most 15, is listed last in Best fit and shows its reason first; at most 40 when only an aggregator's field breaks it. Engagement is a preference; with relocation "yes" an office elsewhere is a mismatch, not a broken must. Requirement lines decided against you lower the number.
 
 ## 0.3.0
 

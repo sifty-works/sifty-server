@@ -1,7 +1,9 @@
 package fit_test
 
 import (
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/sifty-works/sifty-server/internal/analysis"
@@ -45,7 +47,7 @@ func criterion(t *testing.T, f fit.Fit, name string) float64 {
 	t.Helper()
 	for _, c := range f.Criteria {
 		if c.Name == name {
-			if !c.Known {
+			if c.Outcome == fit.Unknown || c.Outcome == fit.Skipped {
 				return -1
 			}
 			return c.Utility
@@ -95,8 +97,8 @@ func TestEachCriterionMatchesMismatchesOrCannotBeCompared(t *testing.T) {
 		{"restricted remote leaves work mode to the restriction", "work_mode", goals(candidate.GoalsView{WorkModes: []string{"remote"}}), vacancy{Location: "Remote (US only) · Remote"}, -1},
 		{"engagement from tag", "engagement", goals(candidate.GoalsView{Engagement: []string{"contract"}}), vacancy{Tags: []string{"Contract"}}, 1},
 		{"engagement disjoint", "engagement", goals(candidate.GoalsView{Engagement: []string{"contract"}}), vacancy{Fields: map[string]string{"employment_type": "FULL_TIME"}}, 0},
-		{"no engagement stated matches employment goal", "engagement", goals(candidate.GoalsView{Engagement: []string{"employment"}}), vacancy{Title: "Builder"}, 1},
-		{"no engagement stated mismatches contract goal", "engagement", goals(candidate.GoalsView{Engagement: []string{"contract"}}), vacancy{Title: "Builder"}, 0},
+		{"no engagement stated cannot be compared with an employment goal", "engagement", goals(candidate.GoalsView{Engagement: []string{"employment"}}), vacancy{Title: "Builder"}, -1},
+		{"no engagement stated cannot be compared with a contract goal", "engagement", goals(candidate.GoalsView{Engagement: []string{"contract"}}), vacancy{Title: "Builder"}, -1},
 		{"no engagement goal leaves criterion not comparable", "engagement", goals(candidate.GoalsView{WorkModes: []string{"remote"}}), vacancy{Title: "Builder"}, -1},
 		{"hours mode", "hours", goals(candidate.GoalsView{Hours: &candidate.Hours{Mode: "part_time"}}), vacancy{Text: "Hours: part-time"}, 1},
 		{"hours other mode", "hours", goals(candidate.GoalsView{Hours: &candidate.Hours{Mode: "part_time"}}), vacancy{Tags: []string{"Full-time"}}, 0},
@@ -169,8 +171,9 @@ func TestTimeZoneFromStatedZoneThenPlaces(t *testing.T) {
 
 func TestRequirementsScoreAffectsWeightedAverageWhenWeightIsNonZero(t *testing.T) {
 	p := fit.ProfileView{
-		Goals:  candidate.GoalsView{TargetRoles: []string{"Engineer"}},
-		Skills: []candidate.Skill{{Name: "Go"}},
+		Goals:        candidate.GoalsView{TargetRoles: []string{"Engineer"}},
+		Skills:       []candidate.Skill{{Name: "Go"}},
+		AbsentSkills: []candidate.AbsentSkill{{Name: "Kubernetes"}},
 	}
 	r0 := fit.Rules{Weights: map[string]float64{"role": 1}, Rates: rules().Rates}
 	r1 := fit.Rules{Weights: map[string]float64{"role": 1, "requirements": 1}, Rates: rules().Rates}
@@ -192,18 +195,84 @@ func TestRequirementsScoreAffectsWeightedAverageWhenWeightIsNonZero(t *testing.T
 	}
 }
 
-func TestNumberIsWeightedMeanWithUnknownAsHalfAndZeroWeightLeftOut(t *testing.T) {
+func TestNumberIsWeightedMeanOfKnownCriteriaAndSaysHowManyWereScored(t *testing.T) {
 	p := goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Compensation: eur})
 	v := vacancy{Title: "Go Engineer", Text: "Salary: EUR 100,000 per year"}
 	r := rules()
-	f := fit.Score(p, fromCode(v), r)
-	if want := int(math.Round((0.45 + 0.5*0.35) / 0.8 * 100)); f.State != fit.Scored || f.Score != want || len(f.Criteria) != 8 {
-		t.Fatalf("got %s %d with %d criteria, want scored %d", f.State, f.Score, len(f.Criteria), want)
+	t.Run("an unknown criterion is left out of the mean", func(t *testing.T) {
+		f := fit.Score(p, fromCode(v), r)
+		if f.State != fit.Scored || f.Score != 100 || f.ScoredOn != 2 || f.Of != 2 {
+			t.Errorf("got %s %d on %d of %d, want scored 100 on 2 of 2", f.State, f.Score, f.ScoredOn, f.Of)
+		}
+		pw := goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, WorkModes: []string{"remote"}, Compensation: eur})
+		if f = fit.Score(pw, fromCode(v), r); f.Score != 100 || f.ScoredOn != 2 || f.Of != 3 {
+			t.Errorf("an unknown work mode: got %d on %d of %d, want 100 on 2 of 3", f.Score, f.ScoredOn, f.Of)
+		}
+	})
+	t.Run("a criterion of weight 0 is left out", func(t *testing.T) {
+		r.Weights = map[string]float64{"role": 1, "money": 0}
+		f := fit.Score(goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Compensation: eur}), fromCode(vacancy{Title: "Go Engineer", Text: "Salary: EUR 45,000 per year"}), r)
+		if f.Score != 100 || f.ScoredOn != 1 || f.Of != 1 || f.Bucket != "Strong" {
+			t.Errorf("only role weighted: got %d on %d of %d %s", f.Score, f.ScoredOn, f.Of, f.Bucket)
+		}
+	})
+	t.Run("nothing known gives no number", func(t *testing.T) {
+		pw := goals(candidate.GoalsView{WorkModes: []string{"remote"}, Hours: &candidate.Hours{Mode: "part_time"}})
+		f := fit.Score(pw, fit.Vacancy{Title: "Builder", Full: true, Analysed: true}, rules())
+		if f.State != fit.NoFacts || f.Score != 0 || f.ScoredOn != 0 || f.Bucket != "Not scored" || f.Broken {
+			t.Errorf("got %+v, want no number scored on 0", f)
+		}
+	})
+}
+
+func TestBrokenMustCapsByItsSourceAndUnknownMustCostsNothing(t *testing.T) {
+	inText := facts.Source{Way: facts.Vocabulary, Origin: facts.Employer}
+	field := facts.Source{Way: facts.SiteField, Origin: facts.Aggregator}
+	money := func(max int, src facts.Source) facts.Fact {
+		return facts.Fact{Kind: facts.Money, Value: fmt.Sprintf(`{"max":%d,"currency":"EUR","period":"year"}`, max), Source: src, End: 1}
 	}
-	r.Weights = map[string]float64{"role": 1, "money": 0}
-	f = fit.Score(p, fromCode(v), r)
-	if f.Score != 100 || len(f.Criteria) != 1 || f.Bucket != "Strong" {
-		t.Errorf("only role weighted: got %d %s %+v", f.Score, f.Bucket, f.Criteria)
+	fact := func(kind facts.Kind, value string, src facts.Source) facts.Fact {
+		f := facts.Fact{Kind: kind, Value: value, Source: src, Flag: facts.Required}
+		if src == inText {
+			f.End = 1
+		}
+		return f
+	}
+	remote := goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Compensation: eur, WorkModes: []string{"remote"}})
+	cases := []struct {
+		name     string
+		p        fit.ProfileView
+		facts    []facts.Fact
+		score    int
+		broken   bool
+		reason   string
+		scoredOn int
+	}{
+		{"work mode broken by the text", remote, []facts.Fact{money(120000, inText), fact(facts.WorkMode, "onsite", inText)}, 15, true, "Onsite only — you want remote", 3},
+		{"engagement mismatch from the text caps nothing", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Engagement: []string{"contract"}}),
+			[]facts.Fact{fact(facts.Engagement, "employment", inText)}, 89, false, "Employment only — you want contract", 2},
+		{"required language missing from My data", fit.ProfileView{Goals: candidate.GoalsView{TargetRoles: []string{"Go Engineer"}}, Languages: []candidate.Language{{Name: "English"}}},
+			[]facts.Fact{fact(facts.Language, "Mandarin", inText)}, 15, true, "Requires Mandarin — not in your languages", 1},
+		{"work authorization broken by the text", fit.ProfileView{Goals: candidate.GoalsView{TargetRoles: []string{"Go Engineer"}}, Authorizations: []candidate.WorkAuthorization{{Country: "US", Status: "need_visa"}}},
+			[]facts.Fact{fact(facts.WorkMode, "remote", inText), fact(facts.Place, "US", inText)}, 15, true, "Remote only in", 2},
+		{"work mode broken only by an aggregator field", remote, []facts.Fact{money(120000, inText), fact(facts.WorkMode, "onsite", field)}, 40, false, "Onsite only — you want remote", 3},
+		{"unknown must costs nothing and says why", remote, []facts.Fact{money(120000, inText)}, 100, false, "Work mode not stated", 2},
+		{"required language and no language in My data", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}}),
+			[]facts.Fact{fact(facts.Language, "Mandarin", inText)}, 100, false, "Requires Mandarin — your languages are not listed", 1},
+		{"mismatch on a preferred criterion caps nothing", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Compensation: eur}),
+			[]facts.Fact{money(45000, inText)}, 78, false, "Pays €45k a year — below your minimum of EUR 90,000 a year", 2},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			v := fit.FromFacts("Go Engineer", true, facts.Set{Analysed: true, Facts: c.facts})
+			f := fit.Score(c.p, v, rules())
+			if f.State != fit.Scored || f.Score != c.score || f.Broken != c.broken || f.ScoredOn != c.scoredOn {
+				t.Errorf("got %s %d broken %v on %d, want scored %d broken %v on %d", f.State, f.Score, f.Broken, f.ScoredOn, c.score, c.broken, c.scoredOn)
+			}
+			if len(f.Reasons) == 0 || !strings.HasPrefix(f.Reasons[0], c.reason) {
+				t.Errorf("reasons %q, want the first to start with %q", f.Reasons, c.reason)
+			}
+		})
 	}
 }
 
@@ -268,10 +337,10 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 		candidate.WorkAuthorization{Country: "EU", Status: "eligible"})
 	f := score(p, vacancy{Location: "Remote (EU only) · Remote", Text: "Salary: EUR 120,000 per year\nEmployment type: Permanent, full-time"})
 	want := map[string]fit.Tile{
-		"Money":     {Value: "€120k a year", Converted: "≈ €120,000", Line: "Your minimum: EUR 90,000 a year", Verdict: "✓"},
-		"Location":  {Value: "Remote (EU only)", Line: "You prefer: PT · Europe & Africa", Verdict: "✓"},
-		"Work mode": {Value: "remote", Line: "You want: onsite", Verdict: "✕"},
-		"Contract":  {Value: "employment · full-time", Line: "You want: employment · full-time", Verdict: "✓"},
+		"Money":     {Value: "€120k a year", Converted: "≈ €120,000", Line: "Pays €120k a year — meets your minimum", Verdict: "✓"},
+		"Location":  {Value: "Remote (EU only)", Line: "Remote (EU only) — you prefer PT · Remote work is open to you there · Time zone fits Europe & Africa", Verdict: "✓"},
+		"Work mode": {Value: "remote", Line: "Remote only — you want onsite", Verdict: "✕"},
+		"Contract":  {Value: "employment · full-time", Line: "Employment — you want employment · Full-time — you want full-time", Verdict: "✓"},
 	}
 	for _, tile := range f.Tiles {
 		w := want[tile.Name]
@@ -291,7 +360,7 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 	}
 	noEng := score(goals(candidate.GoalsView{Engagement: []string{"employment"}}), vacancy{Title: "Builder"})
 	for _, tile := range noEng.Tiles {
-		if tile.Name == "Contract" && (tile.Value != "Employment (assumed)" || tile.Verdict != "✓") {
+		if tile.Name == "Contract" && (tile.Value != "Engagement not stated" || tile.Verdict != "?") {
 			t.Errorf("no engagement stated: Contract tile = %+v", tile)
 		}
 	}

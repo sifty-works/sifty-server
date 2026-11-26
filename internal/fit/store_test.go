@@ -212,9 +212,9 @@ func TestStoredFitFollowsTheFactsOfTheCurrentVersion(t *testing.T) {
 		id := noSalaryVacancy(t, cat)
 		recompute(t, d, nil)
 		before := stored(t, d, 1, id)
-		saveMoney(t, d, id, 1, 80000)
+		saveMoney(t, d, id, 1, 20000)
 		recompute(t, d, nil)
-		if after := stored(t, d, 1, id); after.score.Int64 <= before.score.Int64 {
+		if after := stored(t, d, 1, id); after.score.Int64 >= before.score.Int64 {
 			t.Errorf("money fact not used: before=%d after=%d", before.score.Int64, after.score.Int64)
 		}
 	})

@@ -9,13 +9,16 @@ import (
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/config"
+	"github.com/sifty-works/sifty-server/internal/facts"
 	"github.com/sifty-works/sifty-server/internal/places"
-	"github.com/sifty-works/sifty-server/internal/skills"
 )
 
 type ProfileView struct {
 	Goals          candidate.GoalsView
 	Authorizations []candidate.WorkAuthorization
+	Languages      []candidate.Language
+	Relocation     string
+	Rates          map[string]float64 `json:"-"`
 	Skills         []candidate.Skill
 	AbsentSkills   []candidate.AbsentSkill
 	Confirmed      []candidate.ConfirmedFact
@@ -34,29 +37,35 @@ type RequirementLine struct {
 
 type Rules struct{ Weights, Rates map[string]float64 }
 
-var Criteria = []string{"role", "money", "location", "remote_restriction", "work_mode", "engagement", "hours", "time_zone", "requirements"}
+const na = -1.0
 
 const (
 	Scored  = "scored"
 	NoText  = "no_text"
 	NoGoals = "no_goals"
+	NoFacts = "no_facts"
 )
 
 var Texts = map[string]string{
 	"":      "Not compared yet",
 	NoText:  "Full job description is unavailable",
 	NoGoals: "Your profile states no goals to compare",
+	NoFacts: "Nothing the vacancy states can be compared with your goals",
 }
 
 const (
 	StrongFrom  = 75
 	PartialFrom = 55
+
+	CapBroken = 15
+	CapWeak   = 40
 )
 
 type Criterion struct {
-	Name            string
-	Weight, Utility float64
-	Known           bool
+	Name       string
+	Weight     float64
+	Strictness Strictness
+	Verdict
 }
 
 type Tile struct {
@@ -74,110 +83,138 @@ type Fit struct {
 	Bucket                 string
 	Text                   string
 	Criteria               []Criterion
+	ScoredOn, Of           int
+	Reasons                []string
+	Broken                 bool
 	Tiles                  []Tile
 	ReqRead                bool
 	ReqOK, ReqNo, ReqMaybe int
 	Requirements           []RequirementLine
 }
 
-const na = -1.0
-
 var tiles = []struct {
 	name     string
 	criteria []string
-}{{"Money", []string{"money"}}, {"Location", []string{"location", "remote_restriction", "time_zone"}},
-	{"Work mode", []string{"work_mode"}}, {"Contract", []string{"engagement", "hours"}}}
+	empty    string
+	value    func(v Vacancy, g geo, rates map[string]float64) (value, converted, full string)
+}{
+	{"Money", []string{"money"}, "No minimum stated", moneyTile},
+	{"Location", []string{"location", "remote_restriction", "time_zone"}, "No preference stated", locationTile},
+	{"Work mode", []string{"work_mode"}, "You want: not stated", func(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
+		return list(v.WorkModes, "Not stated"), "", ""
+	}},
+	{"Contract", []string{"engagement", "hours"}, "You want: not stated", contractTile},
+}
 
 func Score(p ProfileView, v Vacancy, r Rules) Fit {
-	g := p.Goals
-	var ps []places.Place
-	open, known := has(v.WorkModes, "remote"), true
-	var zoneCountries []string
-	for _, l := range v.Locations {
-		pl := places.Resolve(l)
-		ps = append(ps, pl)
-		open = open && pl.Worldwide
-		known = known && pl.Known()
-		zoneCountries = append(zoneCountries, pl.Countries...)
-	}
-	u := map[string]float64{
-		"role":               role(g.TargetRoles, v.Title),
-		"money":              money(g.Compensation, v.Money, r.Rates),
-		"location":           location(g.PreferredLocations, ps, open),
-		"remote_restriction": restriction(p.Authorizations, ps, has(v.WorkModes, "remote"), open, known),
-		"time_zone":          na,
-		"work_mode":          na,
-		"engagement":         overlap(g.Engagement, engagementDefault(v.Engagement)),
-		"hours":              hours(g.Hours, v.Hours),
-		"requirements":       na,
-	}
-	if len(g.TimeZones) > 0 {
-		zones := places.ZoneBands(v.TimeZone)
-		if zones == nil {
-			zones = places.BandsOf(zoneCountries)
-		}
-		u["time_zone"] = overlap(g.TimeZones, zones)
-	}
-	if u["work_mode"] = overlap(g.WorkModes, v.WorkModes); u["work_mode"] == 1 && has(v.WorkModes, "remote") && !open && has(g.WorkModes, "remote") {
-		u["work_mode"] = na
-	}
-	f := Fit{Bucket: "Not scored"}
+	f := Fit{Bucket: "Not scored", Reasons: []string{}}
+	p.Rates = r.Rates
 	if v.Analysed {
-		idx := skills.NewIndex(names(p.Skills, func(s candidate.Skill) string { return s.Name }), names(p.AbsentSkills, func(s candidate.AbsentSkill) string { return s.Name }))
-		var reqNum, reqDen float64
-		for i, req := range v.Requirements {
-			w := 1.0
-			if req.Level == "required" {
-				w = 2.0
-			}
-			dr := decide(req.Text, idx, p.Confirmed, p.DerivedYears)
-			switch dr.Verdict {
+		f.ReqRead = true
+		f.Requirements = requirementLines(p, v)
+		v.Decided = f.Requirements
+		for _, l := range f.Requirements {
+			switch l.Verdict {
 			case "✓":
-				reqNum += w
 				f.ReqOK++
 			case "✕":
 				f.ReqNo++
 			default:
-				reqNum += w * 0.5
 				f.ReqMaybe++
 			}
-			reqDen += w
-			f.Requirements = append(f.Requirements, RequirementLine{
-				Index: i, Text: req.Text, Level: req.Level,
-				Verdict: dr.Verdict, Evidence: dr.Evidence, NamedSkills: dr.NamedSkills,
-			})
-		}
-		f.ReqRead = true
-		if reqDen > 0 && (f.ReqOK > 0 || f.ReqNo > 0) {
-			u["requirements"] = reqNum / reqDen
 		}
 	}
 	var num, den float64
-	for _, name := range Criteria {
-		if w := r.Weights[name]; w > 0 {
-			c := Criterion{name, w, max(u[name], 0.5), u[name] >= 0}
-			if c.Known {
-				c.Utility = u[name]
+	var text, weak, other, unknown []string
+	capAt := 100
+	for _, c := range Comparers {
+		s := strictnessOf(c.Name())
+		cr := Criterion{Name: c.Name(), Weight: r.Weights[c.Name()], Strictness: s, Verdict: c.Compare(v, p, s)}
+		f.Criteria = append(f.Criteria, cr)
+		switch {
+		case cr.Outcome == Skipped || s == Ignore:
+			continue
+		case cr.Outcome == Unknown:
+			unknown = append(unknown, cr.Reason)
+		case cr.Outcome == Mismatch && s == Must && !cr.Soft:
+			if weakSource(cr.Source) {
+				capAt, weak = min(capAt, CapWeak), append(weak, cr.Reason)
+			} else {
+				capAt, f.Broken, text = min(capAt, CapBroken), true, append(text, cr.Reason)
 			}
-			f.Criteria = append(f.Criteria, c)
-			num, den = num+w*c.Utility, den+w
+		case cr.Outcome == Mismatch:
+			other = append(other, cr.Reason)
 		}
+		if cr.Weight > 0 {
+			f.Of++
+			if cr.Outcome != Unknown {
+				f.ScoredOn++
+				num, den = num+cr.Weight*cr.Utility, den+cr.Weight
+			}
+		}
+	}
+	for _, rs := range [][]string{text, weak, other, unknown} {
+		for _, reason := range rs {
+			if reason != "" {
+				f.Reasons = append(f.Reasons, reason)
+			}
+		}
+	}
+	g := geoOf(v)
+	for _, t := range tiles {
+		value, converted, full := t.value(v, g, r.Rates)
+		line, verdict := tileLine(f.Criteria, t.criteria, t.empty)
+		f.Tiles = append(f.Tiles, Tile{t.name, value, converted, full, line, verdict})
 	}
 	switch {
 	case !v.Full:
+		f.Broken = false
 		f.State, f.Text = NoText, Texts[NoText]
-	case den == 0 || len(g.TargetRoles)+len(g.Engagement)+len(g.WorkModes)+len(g.TimeZones)+len(g.PreferredLocations) == 0 &&
-		(g.Hours == nil || g.Hours.Mode == "") && (g.Compensation == nil || g.Compensation.CashMin == nil || *g.Compensation.CashMin <= 0):
+	case noGoals(p.Goals):
+		f.Broken = false
 		f.State, f.Text = NoGoals, Texts[NoGoals]
+	case den == 0 && !f.Broken:
+		f.State, f.Text = NoFacts, Texts[NoFacts]
 	default:
-		f.State, f.Score = Scored, int(math.Round(num/den*100))
+		f.State = Scored
+		if den > 0 {
+			f.Score = min(capAt, int(math.Round(num/den*100)))
+		}
 		f.Bucket = Bucket(f.Score)
 	}
-	values, converted, lines, full := texts(p, v, open, r.Rates)
-	for i, t := range tiles {
-		f.Tiles = append(f.Tiles, Tile{t.name, values[i], converted[i], full[i], lines[i], verdict(f.Criteria, t.criteria)})
-	}
 	return f
+}
+
+func noGoals(g candidate.GoalsView) bool {
+	return len(g.TargetRoles)+len(g.Engagement)+len(g.WorkModes)+len(g.TimeZones)+len(g.PreferredLocations) == 0 &&
+		(g.Hours == nil || g.Hours.Mode == "") && (g.Compensation == nil || g.Compensation.CashMin == nil || *g.Compensation.CashMin <= 0)
+}
+
+func tileLine(cs []Criterion, names []string, empty string) (string, string) {
+	var lines []string
+	verdict, compared := "?", false
+	for _, c := range cs {
+		if !slices.Contains(names, c.Name) || c.Outcome == Skipped {
+			continue
+		}
+		compared = true
+		if c.Reason != "" {
+			lines = append(lines, c.Reason)
+		}
+		switch {
+		case c.Outcome == Mismatch:
+			verdict = "✕"
+		case c.Outcome == Match && verdict == "?":
+			verdict = "✓"
+		}
+	}
+	switch {
+	case len(lines) > 0:
+		return strings.Join(lines, " · "), verdict
+	case compared:
+		return "Not stated in the vacancy", verdict
+	}
+	return empty, verdict
 }
 
 func Bucket(score int) string {
@@ -199,17 +236,8 @@ func TileFor(ts []Tile, criterion string) (Tile, bool) {
 	return Tile{}, false
 }
 
-func verdict(cs []Criterion, names []string) string {
-	out := "?"
-	for _, c := range cs {
-		if c.Known && has(names, c.Name) {
-			if c.Utility < 1 {
-				return "✕"
-			}
-			out = "✓"
-		}
-	}
-	return out
+func weakSource(s facts.Source) bool {
+	return s.Way == "" || s.Way == facts.SiteField && s.Origin == facts.Aggregator
 }
 
 func role(targets []string, title string) float64 {
@@ -344,13 +372,6 @@ func hours(h *candidate.Hours, vh *Hours) float64 {
 	return 1
 }
 
-func engagementDefault(e string) []string {
-	if e == "" {
-		return []string{"employment"}
-	}
-	return strings.Fields(e)
-}
-
 func overlap(a, b []string) float64 {
 	if len(a) == 0 || len(b) == 0 {
 		return na
@@ -370,54 +391,6 @@ func has(xs []string, x string) bool {
 		}
 	}
 	return false
-}
-
-func texts(p ProfileView, v Vacancy, open bool, rates map[string]float64) ([]string, []string, []string, []string) {
-	g := p.Goals
-	val := []string{"Not stated", "Not stated", list(v.WorkModes, "Not stated"), "Not stated"}
-	conv := []string{"", "", "", ""}
-	full := []string{"", "", "", ""}
-	line := []string{"No minimum stated", "No preference stated", "You want: " + list(g.WorkModes, "not stated"), "You want: not stated"}
-	if m := v.Money; m != nil {
-		val[0] = symbol(m.Currency) + cash(m.Min, m.Max) + per(m.Period)
-		if eur := convert(m.Max, m, "EUR", "year", rates); eur > 0 {
-			conv[0] = "≈ €" + amount(rounded(eur))
-		}
-	}
-	if c := g.Compensation; c != nil && c.CashMin != nil {
-		line[0] = "Your minimum: " + strings.TrimSpace(c.Currency+" "+amount(*c.CashMin)+per(c.Period)+" "+c.GrossNet)
-	}
-	if len(v.Locations) > 0 {
-		val[1], full[1] = places.Short(v.Locations)
-	} else if open {
-		val[1] = "Remote, anywhere"
-	}
-	var want []string
-	for _, l := range g.PreferredLocations {
-		want = append(want, strings.Trim(l.City+", "+l.Country, ", "))
-	}
-	for _, b := range places.Bands() {
-		if has(g.TimeZones, b.Code) {
-			want = append(want, b.Label)
-		}
-	}
-	if len(want) > 0 {
-		line[1] = "You prefer: " + strings.Join(want, " · ")
-	}
-	engLabel := v.Engagement
-	if engLabel == "" {
-		engLabel = "Employment (assumed)"
-	}
-	contract := []string{engLabel}
-	if h := v.Hours; h != nil {
-		contract = append(contract, h.Mode, strings.Trim(amount(h.Min)+"–"+amount(h.Max), "–")+map[bool]string{true: " h/week"}[h.Max > 0])
-	}
-	goal := append([]string{}, g.Engagement...)
-	if h := g.Hours; h != nil {
-		goal = append(goal, h.Mode)
-	}
-	val[3], line[3] = list(contract, "Not stated"), "You want: "+list(goal, "not stated")
-	return val, conv, line, full
 }
 
 func symbol(currency string) string {

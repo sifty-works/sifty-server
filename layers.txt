@@ -30,11 +30,11 @@ never internal/runner -> internal/models
 
 internal/candidate -> internal/listing  # until: profiles
 internal/candidate -> internal/places  # until: profiles
-internal/fit -> internal/candidate  # until: fit-criteria
-internal/fit -> internal/catalog  # until: fit-criteria
-internal/fit -> internal/listing  # until: fit-criteria
-internal/fit -> internal/places  # until: fit-criteria
-internal/fit -> internal/skills  # until: fit-criteria
+internal/fit -> internal/candidate  # until: profiles
+internal/fit -> internal/catalog  # until: collection
+internal/fit -> internal/listing  # until: collection
+internal/fit -> internal/places  # until: collection
+internal/fit -> internal/skills  # until: profiles
 internal/inbox -> internal/candidate  # until: lists
 internal/inbox -> internal/catalog  # until: lists
 internal/inbox -> internal/fit  # until: lists

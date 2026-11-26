@@ -67,6 +67,7 @@ type FitMark struct {
 	Text             string `json:"text"`
 	Dimmed           bool   `json:"dimmed"`
 	RequirementsText string `json:"requirementsText"`
+	BrokenMust       bool   `json:"brokenMust"`
 }
 
 type RequirementGroup struct {
@@ -82,6 +83,10 @@ type Band struct {
 	RequirementsText string             `json:"requirementsText"`
 	RequirementCount int                `json:"requirementCount"`
 	Groups           []RequirementGroup `json:"groups"`
+	ScoredOn         int                `json:"scoredOn"`
+	ScoredOf         int                `json:"scoredOf"`
+	Reasons          []string           `json:"reasons"`
+	BrokenMust       bool               `json:"brokenMust"`
 }
 
 func reqText(state string, reqRead bool, reqOK, reqNo, reqMaybe int, inAnalysisSet bool) string {
@@ -138,6 +143,7 @@ func fitMark(s fit.Stored, inputs int64, vacancyID int64, analysisSet map[int64]
 		n := int(s.Score.Int64)
 		m.Score, m.Bucket = &n, fit.Bucket(n)
 		m.Text = fmt.Sprintf("Fits you %d: %s", n, m.Bucket)
+		m.BrokenMust = s.Broken.Bool && !m.Dimmed
 	}
 	m.RequirementsText = reqText(s.State.String, s.ReqOK.Valid,
 		int(s.ReqOK.Int64), int(s.ReqNo.Int64), int(s.ReqMaybe.Int64),
@@ -701,6 +707,7 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enq
 		RequirementsText: reqText(f.State, f.ReqRead, f.ReqOK, f.ReqNo, f.ReqMaybe, rs[vacancyID]),
 		RequirementCount: len(f.Requirements),
 		Groups:           groups,
+		ScoredOn:         f.ScoredOn, ScoredOf: f.Of, Reasons: f.Reasons, BrokenMust: f.Broken,
 	}
 	if f.State == fit.Scored {
 		band.Score, band.Text = &f.Score, fmt.Sprintf("Fits you %d /100", f.Score)

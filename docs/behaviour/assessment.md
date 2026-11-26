@@ -4,28 +4,30 @@ What the user gets from assessment: every vacancy in their lists carries one num
 
 ## What the user states
 
-**Goals, per profile:** target roles; minimum compensation with currency, period and tax basis; engagement; hours; work modes; preferred locations; time zones, chosen from six fixed UTC bands; other requirements, read by the Shortlist check and not by Fits you. An empty compensation, engagement, hours, work modes or preferred locations field of a profile other than the first is taken from the first profile when assessing (see `profiles.md`).
+**Goals, per profile:** target roles; minimum compensation with currency, period and tax basis; engagement; hours; work modes; preferred locations; willingness to relocate, which only softens Work mode (see below); time zones, chosen from six fixed UTC bands; other requirements, read by the Shortlist check and not by Fits you. An empty compensation, engagement, hours, work modes or preferred locations field of a profile other than the first is taken from the first profile when assessing (see `profiles.md`).
 
 **My data, shared by all profiles:** skills with a level; skills the user does not have; "Confirmed by you", a list of "You have: …" and "You do not have: …" statements and of free-text facts about the user; experience, from which code derives total years, years in leadership roles, years in engineering roles, founder experience and work in the last year; languages; current location; work authorizations by country or by region, each eligible or needing a visa, where a region covers its countries (the EU covers its member states).
 
 ## Fits you
 
-Fits you is a number from 0 to 100 and the only number the user sees. It is a weighted average of the criteria below, rounded; a criterion that cannot be compared counts as 0.5, and a criterion with weight 0 is left out of the number and the tiles. A profile with no goals gives no number: goals are target roles, a minimum compensation, engagement, hours, work modes, preferred locations and time zones; work authorizations alone are not goals. A vacancy whose full description is unavailable gives no number.
+Fits you is a number from 0 to 100 and the only number the user sees. Each criterion below is compared on its own and gives a match, a mismatch or "cannot be compared", with a reason in words and the source of the fact it rests on. The number is the weighted average of the criteria that could be compared, rounded; a criterion that cannot be compared, and a criterion with weight 0, count for nothing, neither for nor against. The result says on how many criteria it was scored ("scored on 3 of 6") and lists the reasons. A criterion the profile states no goal for is not counted. A profile with no goals gives no number: goals are target roles, a minimum compensation, engagement, hours, work modes, preferred locations and time zones; work authorizations and languages alone are not goals. A vacancy whose full description is unavailable gives no number, and neither does one of which nothing can be compared with the goals ("Nothing the vacancy states can be compared with your goals").
 
-| Criterion | Starting weight | How it is compared |
-|---|---|---|
-| Role | 0.25 | best word overlap of the vacancy title with a target role |
-| Money | 0.20 | `min(1, top of the vacancy range / user's minimum)` after conversion |
-| Location | 0.075 | see Location below |
-| Remote restriction | 0.075 | see Location below |
-| Time zone | 0.10 | 1 when the vacancy and the user share a band |
-| Work mode | 0.04 | 1 when the vacancy offers one of the user's work modes |
-| Engagement | 0.03 | employment or contract against the user's goal; a vacancy that states no engagement is treated as employment |
-| Hours | 0.03 | full-time or part-time against the user's goal, and for part-time the weekly hours when the user states them; ranges that do not overlap are a mismatch |
-| Onsite work authorization | set from data | see Location below |
-| Requirements | set from data | the requirements score below |
+| Criterion | Starting weight | Strictness | How it is compared |
+|---|---|---|---|
+| Role | 0.25 | prefer | best word overlap of the vacancy title with a target role; a match from half of the words, "Partly matches your target roles" below that, and "far from your target roles" only when no word matches |
+| Money | 0.20 | prefer | `min(1, top of the vacancy range / user's minimum)` after conversion |
+| Location | 0.075 | prefer | see Location below |
+| Remote restriction (work authorization) | 0.075 | must | see Location below |
+| Time zone | 0.10 | prefer | 1 when the vacancy and the user share a band |
+| Work mode | 0.04 | must | 1 when the vacancy offers one of the user's work modes; when the profile says it is willing to relocate, an onsite or hybrid vacancy is a mismatch of weight like a prefer criterion, not a broken must ("Onsite only — you want remote, open to relocation") |
+| Engagement | 0.03 | prefer | employment or contract against the user's goal; a vacancy that states no engagement cannot be compared |
+| Hours | 0.03 | prefer | full-time or part-time against the user's goal, and for part-time the weekly hours when the user states them; ranges that do not overlap are a mismatch |
+| Languages | 0 | must | every required language of the vacancy is among the languages in My data; without a language in My data it cannot be compared |
+| Requirements | 0.15 | prefer | the requirements score below |
 
-Weights live in configuration. The weights of onsite work authorization and of requirements are chosen by measurement on hand-labelled vacancies before the first release.
+Weights live in configuration; the strictness of each criterion is fixed in the code for now.
+
+**Must and prefer.** A mismatch on a prefer criterion only lowers the number. A mismatch on a must criterion is a broken must: the number is at most 15 when the fact comes from the vacancy's own text or the employer's field, and the vacancy is listed after every vacancy without a broken must in Best fit. When the fact is only an aggregator's field, the number is at most 40 and the position in Best fit does not change. A must that cannot be compared costs nothing and gives a reason ("Work mode not stated"). The reasons of broken musts come first, then the other mismatches, then the musts that could not be compared; they read like "Onsite only — you want remote" or "Requires Mandarin — not in your languages".
 
 **Money.** The vacancy's range is converted to the user's currency by rates from configuration. A sum without a tax note is gross. A sum without a period is yearly; a monthly sum is multiplied by 12, a daily sum by 260, an hourly sum by 2080. Money cannot be compared when the vacancy states no top of its range or no currency, when a currency has no rate, or when the vacancy's tax basis differs from the user's.
 
@@ -40,7 +42,7 @@ Weights live in configuration. The weights of onsite work authorization and of r
 - A vacancy's requirements are the lines of its requirement sections found by code (in a text with no such section, the lines that state a requirement), each with its level, required or nice to have, from its section and marker words.
 - Each requirement is decided by code against My data: ✓ when the skill is in the user's skills by the skills vocabulary or the requirement is confirmed as had; ✕ when it is in the skills the user does not have or confirmed as not had; ? otherwise. A requirement that asks for years of experience is not decided by code; the derived years are shown as evidence.
 - The counter "✓ 4 · ✕ 1 · ? 6" is shown in the Inbox row and on the vacancy page.
-- The requirements score is the average of ✓ = 1, ✕ = 0 and ? = 0.5, with required requirements counted twice and nice-to-have ones once. Without a decided requirement it counts as 0.5. It enters Fits you as the Requirements criterion.
+- The requirements score is the average of ✓ = 1 and ✕ = 0 over the decided requirements, with required requirements counted twice and nice-to-have ones once; undecided ones are left out. Without a decided requirement it cannot be compared. It enters Fits you as the Requirements criterion, and a requirement decided ✕ is a mismatch of it.
 - Model matching of requirements is not part of the first version. A later checker can be connected through the same interface, and only after it decides hand-labelled examples better than code.
 
 ## Facts of a vacancy
@@ -50,10 +52,10 @@ Facts are found by code, without a model, for every vacancy visible in a profile
 ## In the lists
 
 - Every row in all four lists shows Fits you as a filled mark with its bucket, and the requirements counter. The tooltip reads "Fits you 82: Strong", followed by the counter when requirements are read (" · ✓ 4 · ✕ 1 · ? 6").
-- Empty states of Fits you: "Not compared yet", "Full job description is unavailable", "Your profile states no goals to compare".
+- Empty states of Fits you: "Not compared yet", "Full job description is unavailable", "Your profile states no goals to compare", "Nothing the vacancy states can be compared with your goals".
 - Empty states of the counter: "Analysing requirements…", "Not analysed yet", "No requirements stated", "Not checked yet" (no requirement is decided), "Full job description is unavailable".
-- A result is out of date when the profile's goals, the work authorizations, the weights, the rates or the scoring version changed, or the vacancy's text changed. It is dimmed, still showing its old number, until the new one is ready, and the Fit filter counts it as Not scored. A change of the vacancy's title, location, tags or stated fields without a change of its text is not dimmed; its result is recomputed after the collection run that brought the change.
-- **Best fit** sorts by Fits you, highest first, then by id; dimmed results and vacancies without a number come after the current ones, by id. It is the default sort of Inbox and Shortlist.
+- A result is out of date when the profile's goals, the work authorizations, the languages, the weights, the rates or the scoring version changed, or the vacancy's text changed. It is dimmed, still showing its old number, until the new one is ready, and the Fit filter counts it as Not scored. A change of the vacancy's title, location, tags or stated fields without a change of its text is not dimmed; its result is recomputed after the collection run that brought the change.
+- **Best fit** sorts by Fits you, highest first, then by id; dimmed results and vacancies without a number come after the current ones, by id; vacancies with a broken must come last, by their number. It is the default sort of Inbox and Shortlist.
 - **Newest** sorts by publication date, newest first; vacancies with no publication date come last, by when they were first seen, then by id.
 - The chosen sort is remembered in the browser (see `inbox.md`).
 
@@ -61,7 +63,7 @@ Facts are found by code, without a model, for every vacancy visible in a profile
 
 From top to bottom:
 
-1. **Fits you band.** "Fits you 82 /100", the bucket and the requirements counter, and the "Refresh source" button (see `collection.md`). On the right, four tiles, each showing the vacancy's value, a line comparing it with the user's goal, and a verdict ✓, ✕ or ?:
+1. **Fits you band.** "Fits you 82 /100", the bucket, "scored on 3 of 6", the reasons (broken musts first) and the requirements counter, and the "Refresh source" button (see `collection.md`). On the right, four tiles, each showing the vacancy's value, a line comparing it with the user's goal, and a verdict ✓, ✕ or ?:
 
    | Tile | Criteria behind it |
    |---|---|
@@ -70,7 +72,7 @@ From top to bottom:
    | Work mode | Work mode |
    | Contract | Engagement, Hours |
 
-   A tile shows ✕ when any of its criteria is a mismatch, ✓ when every comparable criterion matches, and ? otherwise, so a tile never disagrees with the number. Money shows the vacancy's own sum compactly: the currency symbol where one exists ($, €, £) and otherwise the code ("CHF 120k"), then the amount or the range, written in thousands or millions with one decimal when it is not whole ("$190–225k", "€7.5k", "€900–1.2M") and in full below a thousand, then the period the vacancy states ("a year"). Its conversion, "≈ €207,000", stands beside that sum and is absent when no rate is known. The Contract tile shows "Employment (assumed)" when the vacancy states no engagement. The Location tile shows its places in the list row's short form (see `inbox.md`), with the full text on hover when shortened.
+   A tile shows ✕ when any of its criteria is a mismatch, ✓ when every comparable criterion matches, and ? otherwise, so a tile never disagrees with the number; its line is made of the reasons of its criteria ("Onsite only — you want remote"). Money shows the vacancy's own sum compactly: the currency symbol where one exists ($, €, £) and otherwise the code ("CHF 120k"), then the amount or the range, written in thousands or millions with one decimal when it is not whole ("$190–225k", "€7.5k", "€900–1.2M") and in full below a thousand, then the period the vacancy states ("a year"). Its conversion, "≈ €207,000", stands beside that sum and is absent when no rate is known. The Contract tile shows "Engagement not stated" when the vacancy states no engagement. The Location tile shows its places in the list row's short form (see `inbox.md`), with the full text on hover when shortened.
 2. **What they ask.** "N requirements" with the counter, then the groups Required and Nice to have. Each row shows the requirement, its alternatives, its verdict, and on the right the evidence from My data ("8 years", "Go · Rust").
    - A requirement row has two controls, one **+** ("I have this") and one **−** ("I do not have this"). On a row that names one known skill or none, each fires at once. On a row that names several known skills (including alternatives), each opens a short list with one line per named skill and a last line for the requirement as a whole: "I have <skill>" and "I have this requirement" under **+**, "I do not have <skill>" and "I do not have this requirement" under **−**.
    - **+** adds the skill to Skills at the level Proficient when the skills vocabulary knows it, otherwise it adds "You have: …" to Confirmed by you. A skill that is among the skills the user does not have is taken out of that list. "I have <skill>" adds that skill alone, so the requirement keeps its verdict and its other skills can still be answered. "I have this requirement" adds every skill the requirement names and, when that still leaves it undecided, "You have: …" to Confirmed by you.

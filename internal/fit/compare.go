@@ -16,20 +16,18 @@ const (
 	Match    Outcome = "match"
 	Mismatch Outcome = "mismatch"
 	Unknown  Outcome = "unknown"
+	Skipped  Outcome = "skipped"
 )
-
-type Goal struct {
-	Kind, Value string
-	Strictness  Strictness
-}
 
 type Verdict struct {
 	Outcome Outcome
+	Utility float64
 	Source  facts.Source
 	Reason  string
+	Soft    bool
 }
 
 type Comparer interface {
 	Name() string
-	Compare(have []facts.Fact, goal Goal) Verdict
+	Compare(v Vacancy, p ProfileView, s Strictness) Verdict
 }

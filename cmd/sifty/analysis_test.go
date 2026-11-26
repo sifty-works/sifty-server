@@ -122,7 +122,7 @@ func TestAnalysisRunsBeforeFitsYouAndFitsYouReadsTheFacts(t *testing.T) {
 		}
 		return id
 	}
-	visible := add("https://jobs.example.com/an-v", "Platform Engineer", "<p>Salary: EUR 90,000 per year. Fully remote.</p><h2>Requirements</h2><ul><li>Go</li></ul>")
+	visible := add("https://jobs.example.com/an-v", "Platform Engineer", "<p>Salary: EUR 30,000 per year. Fully remote.</p><h2>Requirements</h2><ul><li>Go</li></ul>")
 	hidden := add("https://jobs.example.com/an-h", "Pastry Chef", "<p>Salary: EUR 30,000 per year.</p>")
 	seed.Close()
 

@@ -46,6 +46,22 @@ func decide(text string, idx *skills.Index, confirmed []candidate.ConfirmedFact,
 	return skills.Decide(text, idx)
 }
 
+func requirementLines(p ProfileView, v Vacancy) []RequirementLine {
+	if !v.Analysed {
+		return nil
+	}
+	idx := skills.NewIndex(names(p.Skills, func(s candidate.Skill) string { return s.Name }), names(p.AbsentSkills, func(s candidate.AbsentSkill) string { return s.Name }))
+	var out []RequirementLine
+	for i, req := range v.Requirements {
+		dr := decide(req.Text, idx, p.Confirmed, p.DerivedYears)
+		out = append(out, RequirementLine{
+			Index: i, Text: req.Text, Level: req.Level,
+			Verdict: dr.Verdict, Evidence: dr.Evidence, NamedSkills: dr.NamedSkills,
+		})
+	}
+	return out
+}
+
 func yearsEvidence(text string, dy candidate.DerivedYears) string {
 	years := dy.Total
 	if leadKeyRe.MatchString(text) {
