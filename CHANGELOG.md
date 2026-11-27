@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Analysis: an edit of any vocabulary or phrase list the analysis reads now re-reads stored postings by itself (locally, with no model call), so no posting keeps facts from an older list.
+
 ## 0.21.0
 
 - Key facts: Work mode no longer reads "hybrid" from unrelated words ("hybrid financing", "hybrid cloud architectures"), and "Hybrid, 2+ days in office" is hybrid only; Hours no longer comes from "full-time experience", "benefits for full-time employees" or a part-time return after leave; a place under a bare "Location" line, or after a label glued to the previous word, is read; German and Spanish language requirements ("Deutschkenntnisse", "inglés avanzado") are read. Stored postings are read again.

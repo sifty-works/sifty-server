@@ -22,6 +22,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
+	"github.com/sifty-works/sifty-server/internal/skills"
 )
 
 func TestAnalysisSavesFactsWithoutModelCall(t *testing.T) {
@@ -183,5 +184,44 @@ func TestAnUnreadableProfileDoesNotStopAnalysisOfTheOthersAndIsReported(t *testi
 	}
 	if jobs := r.Active(analysis.Kind); len(jobs) != 1 || jobs[0].Subject != analysis.Subject(id, 1) {
 		t.Errorf("queued %+v, want the analysis of the vacancy visible in the readable profile", jobs)
+	}
+}
+
+func TestVacancyIsAnalysedAgainWhenTheDataTheWorkersReadChanges(t *testing.T) {
+	d := openTestDB(t)
+	ctx := context.Background()
+	id, _, err := catalog.New(d, time.Now).Upsert(ctx, listing.Posting{
+		URL: "https://jobs.example.com/dv1", Title: "Platform Engineer", Company: "Stackworks", TextState: listing.TextFull,
+		Text: "<p>Fully remote.</p><h2>Requirements</h2><ul><li>5 years of Go</li></ul>",
+	}, "src")
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	pending := func() int {
+		got, err := analysis.Pending(ctx, d, "1=1", nil)
+		if err != nil {
+			t.Fatalf("pending: %v", err)
+		}
+		return len(got)
+	}
+	if pending() != 1 {
+		t.Fatalf("pending before analysis = %d, want 1", pending())
+	}
+	if err := analysis.Analyse(ctx, d, loadForAnalysis(d), id, 1); err != nil {
+		t.Fatalf("analyse: %v", err)
+	}
+	if n := pending(); n != 0 {
+		t.Fatalf("pending after analysis = %d, want 0", n)
+	}
+
+	original := skills.VocabBytes
+	t.Cleanup(func() { skills.VocabBytes = original })
+	skills.VocabBytes = append(append([]byte{}, original...), "\n# edited\n"...)
+	if n := pending(); n != 1 {
+		t.Errorf("pending after the skills vocabulary changed = %d, want 1", n)
+	}
+	skills.VocabBytes = original
+	if n := pending(); n != 0 {
+		t.Errorf("pending after the vocabulary was restored = %d, want 0", n)
 	}
 }

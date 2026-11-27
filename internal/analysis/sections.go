@@ -55,8 +55,6 @@ type heading struct {
 	at    int
 }
 
-const sectionsVersion = 1
-
 const (
 	exactOnly = iota
 	anyPhrase

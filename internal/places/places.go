@@ -14,7 +14,7 @@ import (
 )
 
 //go:embed places.yaml
-var vocabYAML []byte
+var VocabBytes []byte
 
 type ReferenceCountry struct {
 	Code string `json:"code"`
@@ -71,7 +71,7 @@ var (
 
 func mustLoad() vocabulary {
 	var v vocabulary
-	if err := yaml.Unmarshal(vocabYAML, &v); err != nil {
+	if err := yaml.Unmarshal(VocabBytes, &v); err != nil {
 		panic(fmt.Sprintf("places: load places.yaml: %v", err))
 	}
 	return v

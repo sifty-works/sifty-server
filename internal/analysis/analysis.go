@@ -3,6 +3,7 @@ package analysis
 import (
 	"context"
 	"fmt"
+	"hash/crc32"
 	"hash/fnv"
 	"strconv"
 	"strings"
@@ -10,7 +11,9 @@ import (
 
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/facts"
+	"github.com/sifty-works/sifty-server/internal/places"
 	"github.com/sifty-works/sifty-server/internal/runner"
+	"github.com/sifty-works/sifty-server/internal/skills"
 )
 
 const Kind = "analyze_vacancy"
@@ -41,6 +44,14 @@ type Worker interface {
 	Version() int
 	Produces() []facts.Kind
 	Extract(ctx context.Context, doc *Doc) ([]facts.Fact, error)
+}
+
+func derivedVersion(hand int) int {
+	sum := uint32(0)
+	for _, data := range [][]byte{conditionsYAML, keyFactsYAML, sectionsYAML, wordsYAML, places.VocabBytes, skills.VocabBytes} {
+		sum = crc32.Update(sum, crc32.IEEETable, data)
+	}
+	return hand<<32 | int(sum)
 }
 
 var Workers = []Worker{siteFields{}, conditions{}, requirements{}, keyFacts{}}
