@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.9.0
+
 - The skills vocabulary knows about 200 more skills (tools such as Excel, Salesforce, Figma, Databricks, Datadog, Airflow, security standards and blockchain platforms), so more requirement lines are matched against your skills. A requirement naming a skill you have not stated stays ?; state it in your profile.
 
 ## 0.8.0
