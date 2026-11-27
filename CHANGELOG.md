@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Requirements: a requirements section now ends where the posting moves on. Duties under an unknown heading ("How success is measured"), closing text (equal opportunity, "you will hear from us"), page footers and recruitment scam warnings no longer appear as requirements; a requirements list written as one paragraph per item is still read in full, and company sentences that state an eligibility condition (residence, visa, work authorization) stay. Stored postings are read again.
+
 ## 0.19.0
 
 - Status bar: one line in three parts. Left: the "Sifty" switch, which pauses and resumes all background work, and the collection ("Last collection 15:08", "+N in Inbox" since midnight, "Next 18:08"). Middle: the messages, which take turns sliding in from above, with the machine's CPU load when there are none. Right: analysis progress with the time left or "All analyzed", other jobs left, today's model calls against the daily limit, and the model with a panel to choose the provider of each kind of work. "N sources need attention" moved from the header into the bar.

@@ -131,6 +131,21 @@ func TestTermsOutsideRequirementSectionsAreNotRequired(t *testing.T) {
 		{"an equal-opportunity list item is no requirement",
 			`<h2>Requirements</h2><ul><li>Go experience</li><li>We are an equal opportunity employer</li></ul>`,
 			[]string{"requirement required Go experience"}},
+		{"paragraphs under an unknown heading without a list are no requirements while a sub-heading above a list stays in the section",
+			`<h2>Requirements</h2><ul><li>Go experience</li></ul><p><strong>How we measure success</strong></p><p>You will ship your first feature in a month.</p><p>Everyone here owns a part of the product.</p><p><strong>Systems Design</strong></p><ul><li>Design distributed systems</li></ul>`,
+			[]string{"requirement required Go experience", "requirement required Design distributed systems"}},
+		{"a heading-like paragraph ends the run of requirement paragraphs while short real items stay",
+			`<p>Requirements</p><p>5+ years of accounting experience.</p><p>Webcam</p><p>Microphone</p><p>How we measure success</p><p>First 90 days</p><p>You have been through the product end to end.</p><p>Nice to have</p><p>Experience with Spark.</p><p>Our promise</p><p>Everyone at Acme Robotics is powered by people from around the world who care about what they build and how they build it, and we think that matters a lot for everyone.</p>`,
+			[]string{"requirement required 5+ years of accounting experience.", "requirement required Webcam", "requirement required Microphone", "requirement preferred Experience with Spark."}},
+		{"a company paragraph without a demand word or an eligibility word is no requirement before any heading-like paragraph",
+			`<h2>Requirements</h2><p>5 years of Go.</p><p>We are a small team of engineers who ship every day.</p><p>Acme Robotics is a remote-first company and employment eligibility is contingent upon residing in an approved hiring location.</p><p>Strong Kubernetes and Rust.</p>`,
+			[]string{"requirement required 5 years of Go.", "requirement required Acme Robotics is a remote-first company and employment eligibility is contingent upon residing in an approved hiring location.", "requirement required Strong Kubernetes and Rust."}},
+		{"a company line without a demand word is no requirement in prose after the list but stays as a list item",
+			`<h2>Requirements</h2><ul><li>Go experience</li><li>We use Go and Kubernetes daily</li></ul><p>Our engineers have years of experience in robotics.</p><p>We expect experience with Rust.</p>`,
+			[]string{"requirement required Go experience", "requirement required We use Go and Kubernetes daily", "requirement required We expect experience with Rust."}},
+		{"scam warnings and official-channel notes are no requirements while fraud experience stays",
+			`<h2>Requirements</h2><ul><li>Go experience</li><li>Candidates are contacted only through official channels</li><li>Beware of recruitment scams</li><li>3+ years in fraud prevention</li></ul>`,
+			[]string{"requirement required Go experience", "requirement required 3+ years in fraud prevention"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

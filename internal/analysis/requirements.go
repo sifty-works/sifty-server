@@ -18,6 +18,10 @@ const (
 	maxRequirementLines  = 40
 	maxRequirementLength = 300
 	minRequirementLength = 4
+
+	minPlainHeadingWords  = 2
+	maxPlainHeadingWords  = 6
+	maxLongParagraphWords = 25
 )
 
 var (
@@ -30,9 +34,10 @@ var (
 	aboutCompanyRe   = regexp.MustCompile(`(?i)^(?:we\b|our\b|this\s+(?:role|position|job)\b)`)
 	thisLeadRe       = regexp.MustCompile(`(?i)^this\b`)
 	demandRe         = regexp.MustCompile(`(?i)\b(?:want|need|looking for|seeking|require|expect)`)
+	eligibleLineRe   = regexp.MustCompile(`(?i)\b(?:` + alt(append(slices.Clone(vocab.Engagement["authorization_words"]), vocab.Place["eligibility_cues"]...)) + `)\b`)
 	fallbackRe       = regexp.MustCompile(`(?i)\b(?:experience|knowledge|proficien\w*|familiar\w*|years|degree|bachelor|master|skilled|understanding|ability to|fluen\w*|expertise)\b`)
 	offerWordRe      = regexp.MustCompile(`(?i)\b(?:salary|benefits|equity|vacation|insurance|perks|we offer|stipend)\b`)
-	nonRequirementRe = regexp.MustCompile(`(?i)\b(?:(?:competitive|attractive|generous|excellent) (?:salary|compensation|pay|benefits|package)|base salary|(?:salary|pay|compensation) (?:range|band|package|details)|total (?:starting )?compensation|(?:salary|compensation|pay|bonus|equity) (?:and|&) (?:equity|bonus|benefits|stock)|benefits package|we offer|perks|stipend|pto|vacation (?:policy|days|time)|unlimited (?:vacation|paid)|paid (?:time off|leave|vacation|holidays?)|(?:parental|maternity|paternity) leave|fertility|family planning|(?:health|dental|vision|medical)(?:\s*(?:,|and|&)\s*(?:health|dental|vision|medical))*\s+(?:insurance|benefits|coverage|plans?)|(?:medical|health)[, ]+(?:and )?(?:dental|vision)|dental[, ]+(?:and )?vision|insurance (?:coverage|plans?)|401\s?\(?k|stock options|equity (?:grants?|package|options)|reasonable accommodations?|request (?:an? )?accommodations?|to apply|when applying|how to apply|apply (?:by|online|now|today|(?:right )?here|via|through|using)|(?:application|hiring|interview) process|(?:submit|submitting) (?:a|an|your) (?:job )?application|if you (?:have a disability|need an? accommodation)|please let us know|inclusive (?:environment|workplace|culture)|we strive|join (?:us|our team)|best and brightest)\b`)
+	nonRequirementRe = regexp.MustCompile(`(?i)\b(?:(?:competitive|attractive|generous|excellent) (?:salary|compensation|pay|benefits|package)|base salary|(?:salary|pay|compensation) (?:range|band|package|details)|total (?:starting )?compensation|(?:salary|compensation|pay|bonus|equity) (?:and|&) (?:equity|bonus|benefits|stock)|benefits package|we offer|perks|stipend|beware of (?:recruitment )?scams?|fraudulent (?:job )?offers?|recruitment fraud|official channels|pto|vacation (?:policy|days|time)|unlimited (?:vacation|paid)|paid (?:time off|leave|vacation|holidays?)|(?:parental|maternity|paternity) leave|fertility|family planning|(?:health|dental|vision|medical)(?:\s*(?:,|and|&)\s*(?:health|dental|vision|medical))*\s+(?:insurance|benefits|coverage|plans?)|(?:medical|health)[, ]+(?:and )?(?:dental|vision)|dental[, ]+(?:and )?vision|insurance (?:coverage|plans?)|401\s?\(?k|stock options|equity (?:grants?|package|options)|reasonable accommodations?|request (?:an? )?accommodations?|to apply|when applying|how to apply|apply (?:by|online|now|today|(?:right )?here|via|through|using)|(?:application|hiring|interview) process|(?:submit|submitting) (?:a|an|your) (?:job )?application|if you (?:have a disability|need an? accommodation)|please let us know|inclusive (?:environment|workplace|culture)|we strive|join (?:us|our team)|best and brightest)\b`)
 	inlineBulletRe   = regexp.MustCompile(`(?:^|\s)[•·▪●◦]\s*`)
 	inlineDashRe     = regexp.MustCompile(`(?:^|\s)-\s+`)
 	hashtagRe        = regexp.MustCompile(`^(?:#[\p{L}\p{N}_-]+\s*)+$`)
@@ -42,7 +47,7 @@ type requirements struct{}
 
 func (requirements) Name() string { return "requirement_lines" }
 
-func (requirements) Version() int { return 7 }
+func (requirements) Version() int { return 8 }
 
 func (requirements) Produces() []facts.Kind { return []facts.Kind{facts.Requirement} }
 
@@ -62,27 +67,38 @@ func (requirements) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 func requirementLines(doc *Doc, items []Span, hasSection bool) []facts.Fact {
 	var out []facts.Fact
 	company := strings.ToLower(doc.Company)
-	aboutCompany := func(text string, fallback bool) bool {
+	aboutCompany := func(text string, fallback, strict bool) bool {
 		lower := strings.ToLower(text)
 		if company != "" && strings.HasPrefix(lower, "at "+company+",") {
 			return true
 		}
 		about := aboutCompanyRe.MatchString(text)
 		lead := about || company != "" && strings.HasPrefix(lower, company)
-		return fallback && (thisLeadRe.MatchString(text) && !about || lead && !demandRe.MatchString(text))
+		return fallback && thisLeadRe.MatchString(text) && !about || (fallback || strict) && lead && !demandRe.MatchString(text) && !eligibleLineRe.MatchString(text)
 	}
-	for _, line := range doc.lines() {
+	lines := doc.lines()
+	firstEnd, blockStart, inline, headed := 0, -1, false, false
+	for i, line := range lines {
 		if strings.HasSuffix(line.Text, ":") {
 			continue
 		}
 		within, _ := doc.sectionOf(line.Start)
 		section := within.Name
 		inSection := section == SectionRequirements || section == SectionNiceToHave
-		last := lastItemEnd(items, within)
-		if inSection && last >= 0 && line.Start >= last {
-			continue
+		later := false
+		if inSection {
+			block, opened := blockOf(doc, within, line.Start)
+			if block.Start != blockStart {
+				blockStart, firstEnd, headed = block.Start, line.End, false
+				inline = !strings.Contains(doc.Original[block.Start:line.Start], "\n")
+			}
+			last := lastItemEnd(items, block)
+			if last < 0 && !opened && !headed && line.End > firstEnd && plainHeading(doc, items, lines, i, within) {
+				headed = true
+				continue
+			}
+			later = last >= 0 && line.Start >= last || last < 0 && (opened || headed || inline && line.Start >= firstEnd)
 		}
-		later := inSection && last < 0 && within.InlineEnd > 0 && line.Start >= within.InlineEnd
 		base := facts.Flag("")
 		fallback := false
 		switch {
@@ -107,7 +123,7 @@ func requirementLines(doc *Doc, items []Span, hasSection bool) []facts.Fact {
 				if (fallback || later) && !reads {
 					continue
 				}
-				if !nonRequirementRe.MatchString(piece.Text) && !eeoRe.MatchString(piece.Text) && !hashtagRe.MatchString(piece.Text) && !aboutCompany(piece.Text, fallback) {
+				if !nonRequirementRe.MatchString(piece.Text) && !eeoRe.MatchString(piece.Text) && !hashtagRe.MatchString(piece.Text) && !aboutCompany(piece.Text, fallback, later || inSection && !inItem(items, line)) {
 					out = append(out, requirementFact(piece, base))
 				}
 			}
@@ -142,6 +158,44 @@ func listItems(doc *Doc) []Span {
 		walk(n)
 	}
 	return out
+}
+
+func plainHeading(doc *Doc, items []Span, lines []Line, i int, within Section) bool {
+	if !shortPlain(lines[i], items) || fallbackRe.MatchString(lines[i].Text) || len(skills.Groups(lines[i].Text)) > 0 {
+		return false
+	}
+	if i+1 >= len(lines) || lines[i+1].Start >= within.End {
+		return true
+	}
+	next := lines[i+1]
+	if slices.ContainsFunc(doc.Headings, func(h Span) bool { return h.Start >= lines[i].End && h.End <= next.Start }) {
+		return false
+	}
+	return shortPlain(next, items) || len(strings.Fields(next.Text)) > maxLongParagraphWords
+}
+
+func inItem(items []Span, l Line) bool {
+	return slices.ContainsFunc(items, func(s Span) bool { return l.Start >= s.Start && l.End <= s.End })
+}
+
+func shortPlain(l Line, items []Span) bool {
+	words := len(strings.Fields(l.Text))
+	return words >= minPlainHeadingWords && words <= maxPlainHeadingWords && !strings.ContainsAny(l.Text[len(l.Text)-1:], ".!?:;") && !inItem(items, l)
+}
+
+func blockOf(doc *Doc, within Section, offset int) (Section, bool) {
+	block, opened := within, false
+	for _, h := range doc.Headings {
+		if h.Start <= within.Start || h.Start >= within.End {
+			continue
+		}
+		if h.Start > offset {
+			block.End = h.Start
+			break
+		}
+		block.Start, opened = h.Start, true
+	}
+	return block, opened
 }
 
 func lastItemEnd(items []Span, within Section) int {
