@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.11.0
+
 - The Key facts table adds Experience (the years the vacancy asks, ✓ when your years reach them, ✕ when you fall short by more than two), Seniority (from the title) and Company stage (Seed, Series A–E, a raise and valuation, early stage, VC-backed, bootstrapped, profitable or public), each shown only when the vacancy states it. They do not change Fits you. Years are read in more forms ("five years", "5-year"), which also sharpens the level a skill line asks for. Every vacancy is analysed again once.
 
 - A restricted remote vacancy's Work mode card reads "Remote — see Work authorization" instead of "Not stated in the vacancy".
