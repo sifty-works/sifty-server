@@ -31,7 +31,7 @@ var (
 	demandRe         = regexp.MustCompile(`(?i)\b(?:want|need|looking for|seeking|require|expect)`)
 	fallbackRe       = regexp.MustCompile(`(?i)\b(?:experience|knowledge|proficien\w*|familiar\w*|years|degree|bachelor|master|skilled|understanding|ability to|fluen\w*|expertise)\b`)
 	offerWordRe      = regexp.MustCompile(`(?i)\b(?:salary|benefits|equity|vacation|insurance|perks|we offer|stipend)\b`)
-	nonRequirementRe = regexp.MustCompile(`(?i)\b(?:(?:competitive|attractive|generous|excellent) (?:salary|compensation|pay|benefits|package)|base salary|(?:salary|pay|compensation) (?:range|band|package|details)|total (?:starting )?compensation|(?:salary|compensation|pay|bonus|equity) (?:and|&) (?:equity|bonus|benefits|stock)|benefits package|we offer|perks|stipend|pto|vacation (?:policy|days|time)|unlimited (?:vacation|paid)|paid (?:time off|leave|vacation|holidays?)|(?:parental|maternity|paternity) leave|fertility|family planning|(?:health|dental|vision|medical)(?:\s*(?:,|and|&)\s*(?:health|dental|vision|medical))*\s+(?:insurance|benefits|coverage|plans?)|(?:medical|health)[, ]+(?:and )?(?:dental|vision)|dental[, ]+(?:and )?vision|insurance (?:coverage|plans?)|401\s?\(?k|stock options|equity (?:grants?|package|options)|reasonable accommodations?|request (?:an? )?accommodations?|to apply|when applying|how to apply|apply (?:by|online|now|today|here|via|through|using)|(?:application|hiring|interview) process|(?:submit|submitting) (?:a|an|your) (?:job )?application|if you (?:have a disability|need an? accommodation)|please let us know|inclusive (?:environment|workplace|culture)|we strive|join (?:us|our team)|best and brightest)\b`)
+	nonRequirementRe = regexp.MustCompile(`(?i)\b(?:(?:competitive|attractive|generous|excellent) (?:salary|compensation|pay|benefits|package)|base salary|(?:salary|pay|compensation) (?:range|band|package|details)|total (?:starting )?compensation|(?:salary|compensation|pay|bonus|equity) (?:and|&) (?:equity|bonus|benefits|stock)|benefits package|we offer|perks|stipend|pto|vacation (?:policy|days|time)|unlimited (?:vacation|paid)|paid (?:time off|leave|vacation|holidays?)|(?:parental|maternity|paternity) leave|fertility|family planning|(?:health|dental|vision|medical)(?:\s*(?:,|and|&)\s*(?:health|dental|vision|medical))*\s+(?:insurance|benefits|coverage|plans?)|(?:medical|health)[, ]+(?:and )?(?:dental|vision)|dental[, ]+(?:and )?vision|insurance (?:coverage|plans?)|401\s?\(?k|stock options|equity (?:grants?|package|options)|reasonable accommodations?|request (?:an? )?accommodations?|to apply|when applying|how to apply|apply (?:by|online|now|today|(?:right )?here|via|through|using)|(?:application|hiring|interview) process|(?:submit|submitting) (?:a|an|your) (?:job )?application|if you (?:have a disability|need an? accommodation)|please let us know|inclusive (?:environment|workplace|culture)|we strive|join (?:us|our team)|best and brightest)\b`)
 	inlineBulletRe   = regexp.MustCompile(`(?:^|\s)[•·▪●◦]\s*`)
 	inlineDashRe     = regexp.MustCompile(`(?:^|\s)-\s+`)
 	hashtagRe        = regexp.MustCompile(`^(?:#[\p{L}\p{N}_-]+\s*)+$`)
@@ -41,7 +41,7 @@ type requirements struct{}
 
 func (requirements) Name() string { return "requirement_lines" }
 
-func (requirements) Version() int { return 4 }
+func (requirements) Version() int { return 5 }
 
 func (requirements) Produces() []facts.Kind { return []facts.Kind{facts.Requirement} }
 
@@ -77,9 +77,11 @@ func requirementLines(doc *Doc, items []Span, hasSection bool) []facts.Fact {
 		within, _ := doc.sectionOf(line.Start)
 		section := within.Name
 		inSection := section == SectionRequirements || section == SectionNiceToHave
-		if inSection && afterLastItem(items, within, line) {
+		last := lastItemEnd(items, within)
+		if inSection && last >= 0 && line.Start >= last {
 			continue
 		}
+		later := inSection && last < 0 && within.InlineEnd > 0 && line.Start >= within.InlineEnd
 		base := facts.Flag("")
 		fallback := false
 		switch {
@@ -100,7 +102,7 @@ func requirementLines(doc *Doc, items []Span, hasSection bool) []facts.Fact {
 		}
 		for _, l := range lines {
 			for _, piece := range splitLong(l, fallback) {
-				if fallback && !fallbackRe.MatchString(piece.Text) {
+				if (fallback || later) && !fallbackRe.MatchString(piece.Text) {
 					continue
 				}
 				if !nonRequirementRe.MatchString(piece.Text) && !eeoRe.MatchString(piece.Text) && !hashtagRe.MatchString(piece.Text) && !aboutCompany(piece.Text, fallback) {
@@ -140,14 +142,14 @@ func listItems(doc *Doc) []Span {
 	return out
 }
 
-func afterLastItem(items []Span, within Section, line Line) bool {
+func lastItemEnd(items []Span, within Section) int {
 	last := -1
 	for _, i := range items {
 		if i.Start >= within.Start && i.End <= within.End {
 			last = max(last, i.End)
 		}
 	}
-	return last >= 0 && line.Start >= last
+	return last
 }
 
 func splitBullets(l Line) []Line {

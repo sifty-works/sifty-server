@@ -18,6 +18,7 @@ const Kind = "analyze_vacancy"
 type Section struct {
 	Name       string
 	Start, End int
+	InlineEnd  int
 }
 
 type Doc struct {

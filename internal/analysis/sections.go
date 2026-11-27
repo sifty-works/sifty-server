@@ -302,6 +302,14 @@ func lineLength(s string) int {
 	return len(s)
 }
 
+func inlineEnd(text string, label Span, line string) int {
+	end := label.End + lineLength(text[label.End:])
+	if line == "" || strings.Trim(text[label.End:end], " \t:;\r") == "" {
+		return 0
+	}
+	return end
+}
+
 func Split(doc *Doc) ([]Section, []Span) {
 	text := doc.Original
 	var located []struct {
@@ -350,7 +358,7 @@ func Split(doc *Doc) ([]Section, []Span) {
 			kind = SectionOther
 		}
 		closeAt(h.Start)
-		open, level = Section{Name: kind, Start: h.Start}, h.level
+		open, level = Section{Name: kind, Start: h.Start, InlineEnd: inlineEnd(text, h.Span, h.line)}, h.level
 	}
 	closeAt(len(text))
 	return sections, spans
