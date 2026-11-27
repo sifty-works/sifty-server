@@ -66,10 +66,10 @@ type Fact struct {
 type DomainLabel struct{ Name, Label string }
 
 var Domains = []DomainLabel{
-	{"infrastructure", "Infrastructure"}, {"defi", "DeFi"}, {"exchange", "Exchange"}, {"wallet", "Wallet"},
+	{"infrastructure", "Infrastructure"}, {"defi", "DeFi"}, {"exchange", "Exchange"}, {"wallet", "Wallet & custody"},
 	{"payments", "Payments"}, {"fintech", "Fintech"}, {"ai", "AI"}, {"security", "Security"}, {"data", "Data"},
 	{"gaming", "Gaming"}, {"gambling", "Gambling"}, {"prediction_markets", "Prediction markets"}, {"adtech", "Adtech"},
-	{"ecommerce", "E-commerce"}, {"health", "Health"}, {"education", "Education"}, {"government", "Government"},
+	{"ecommerce", "E-commerce"}, {"health", "Health"}, {"education", "Education"}, {"government", "Government & defence"},
 	{"media", "Media"}, {"nft", "NFT"}, {"saas", "SaaS"}, {"hardware", "Hardware"}, {"other", "Other"},
 }
 

@@ -29,6 +29,7 @@ func ValidateProfileData(p ProfileData) []string {
 	errs = append(errs, validateHours(p.Hours)...)
 	errs = append(errs, validateOptions("Work mode", "Remote, Hybrid or Onsite", p.WorkMode, "remote", "hybrid", "onsite")...)
 	errs = append(errs, validatePlaces(p.Locations)...)
+	errs = append(errs, validateOptions("Domain", "a listed domain", p.Domain, domainKeys()...)...)
 	return errs
 }
 

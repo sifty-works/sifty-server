@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/sifty-works/sifty-server/internal/facts"
 	"github.com/sifty-works/sifty-server/internal/places"
 )
 
@@ -25,6 +26,7 @@ type ReferenceOptions struct {
 	Engagement        []OptionItem `json:"engagement"`
 	WorkingTime       []OptionItem `json:"workingTime"`
 	WorkModes         []OptionItem `json:"workModes"`
+	Domains           []OptionItem `json:"domains"`
 	Relocation        []OptionItem `json:"relocation"`
 	NoticeUnits       []OptionItem `json:"noticeUnits"`
 	Gender            []OptionItem `json:"gender"`
@@ -50,5 +52,16 @@ func mustLoadReference() ReferenceResp {
 	if err := json.Unmarshal(optionsJSON, &r); err != nil {
 		panic(fmt.Sprintf("candidate: load options.json: %v", err))
 	}
+	for _, d := range facts.Domains {
+		r.Options.Domains = append(r.Options.Domains, OptionItem{Value: d.Name, Label: d.Label})
+	}
 	return r
+}
+
+func domainKeys() []string {
+	keys := make([]string, len(facts.Domains))
+	for i, d := range facts.Domains {
+		keys[i] = d.Name
+	}
+	return keys
 }

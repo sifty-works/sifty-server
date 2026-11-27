@@ -25,6 +25,7 @@ type ProfileData struct {
 	WorkingTime       Buckets       `json:"workingTime"`
 	Hours             *Hours        `json:"hours,omitempty"`
 	WorkMode          Buckets       `json:"workMode"`
+	Domain            Buckets       `json:"domain"`
 	Locations         PlaceBuckets  `json:"locations"`
 	Relocation        string        `json:"relocation,omitempty"`
 	TimeZones         []string      `json:"timeZones,omitempty"`
@@ -51,6 +52,9 @@ func Effective(p, base ProfileData) ProfileData {
 	if out.Locations.IsZero() {
 		out.Locations = base.Locations
 	}
+	if out.Domain.IsZero() {
+		out.Domain = base.Domain
+	}
 	return out
 }
 
@@ -63,10 +67,11 @@ type GoalsView struct {
 	TimeZones      []string
 	Hours          *Hours
 	Locations      PlaceBuckets
+	Domain         Buckets
 }
 
 func Goals(p ProfileData) GoalsView {
-	return GoalsView{p.TargetRoles, p.Compensation, p.EngagementType, p.WorkingTime, p.WorkMode, p.TimeZones, p.Hours, p.Locations}
+	return GoalsView{p.TargetRoles, p.Compensation, p.EngagementType, p.WorkingTime, p.WorkMode, p.TimeZones, p.Hours, p.Locations, p.Domain}
 }
 
 func InheritedFields(p, base ProfileData) []string {
@@ -82,6 +87,7 @@ func InheritedFields(p, base ProfileData) []string {
 	add(p.Hours == nil, base.Hours != nil, "hours")
 	add(p.WorkMode.IsZero(), !base.WorkMode.IsZero(), "workMode")
 	add(p.Locations.IsZero(), !base.Locations.IsZero(), "locations")
+	add(p.Domain.IsZero(), !base.Domain.IsZero(), "domain")
 	return out
 }
 

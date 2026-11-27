@@ -724,6 +724,30 @@ func TestInheritanceUnchangedInheritedFieldRemainsInherited(t *testing.T) {
 	}
 }
 
+func TestDomainGoalIsStoredAndInheritedFromTheFirstProfile(t *testing.T) {
+	d := openTestDB(t)
+	ts := newServer(t, d)
+
+	first, _ := send(t, ts, http.MethodPatch, "/api/profiles/1", map[string]any{
+		"domain": map[string]any{"preferred": []string{"infrastructure"}, "possible": []string{"defi"}, "never": []string{"gambling"}},
+	})
+	own, _ := first["own"].(map[string]any)
+	if stored, _ := own["domain"].(map[string]any); len(stored["never"].([]any)) != 1 {
+		t.Errorf("stored domain lists = %v, want the three lists as sent", stored)
+	}
+
+	out, _ := send(t, ts, http.MethodPost, "/api/profiles", map[string]any{"name": "Second"})
+	detail, _ := get(t, ts, fmt.Sprintf("/api/profiles/%d", int64(out["id"].(float64))))
+	if inherited, _ := detail["inherited"].(map[string]any); inherited["domain"] == nil {
+		t.Error("domain should be inherited by the second profile")
+	}
+	effective, _ := detail["effective"].(map[string]any)
+	domain, _ := effective["domain"].(map[string]any)
+	if never, _ := domain["never"].([]any); len(never) != 1 || never[0] != "gambling" {
+		t.Errorf("effective domain = %v, want the first profile's lists", domain)
+	}
+}
+
 func TestInheritancePatchingInheritedValueUnchangedKeepsItInherited(t *testing.T) {
 	d := openTestDB(t)
 	ts := newServer(t, d)

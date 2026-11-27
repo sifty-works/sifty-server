@@ -88,6 +88,7 @@ type ProfilePatchReq struct {
 	WorkingTime       *Buckets      `json:"workingTime,omitempty"`
 	Hours             *Hours        `json:"hours,omitempty"`
 	WorkMode          *Buckets      `json:"workMode,omitempty"`
+	Domain            *Buckets      `json:"domain,omitempty"`
 	Locations         *PlaceBuckets `json:"locations,omitempty"`
 	Relocation        *string       `json:"relocation,omitempty"`
 	TimeZones         *[]string     `json:"timeZones,omitempty"`
@@ -195,6 +196,7 @@ func clearInheritedUnchanged(patch *ProfilePatchReq, own, first ProfileData) {
 		{"workingTime", patch.WorkingTime, first.WorkingTime, own.WorkingTime.IsZero()},
 		{"workMode", patch.WorkMode, first.WorkMode, own.WorkMode.IsZero()},
 		{"locations", patch.Locations, first.Locations, own.Locations.IsZero()},
+		{"domain", patch.Domain, first.Domain, own.Domain.IsZero()},
 	} {
 		if _, sent := patch.named[g.name]; sent && g.inheritsHere && jsonEqual(g.sent, g.first) {
 			delete(patch.named, g.name)

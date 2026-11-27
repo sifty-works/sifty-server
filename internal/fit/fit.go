@@ -219,7 +219,7 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 		line, verdict, bucket := tileLine(f.Criteria, t.criterion, t.empty)
 		f.Tiles = append(f.Tiles, Tile{t.name, value, converted, full, line, verdict, bucket})
 	}
-	f.Tiles = append(f.Tiles, keyFactTiles(v, p)...)
+	f.Tiles = append(f.Tiles, keyFactTiles(v, p, f.Criteria)...)
 	switch {
 	case !v.Full:
 		f.Broken = false
@@ -240,7 +240,7 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 }
 
 func noGoals(g candidate.GoalsView) bool {
-	return len(g.TargetRoles)+len(g.TimeZones) == 0 && g.EngagementType.IsZero() && g.WorkingTime.IsZero() && g.WorkMode.IsZero() && g.Locations.IsZero() &&
+	return len(g.TargetRoles)+len(g.TimeZones) == 0 && g.EngagementType.IsZero() && g.WorkingTime.IsZero() && g.WorkMode.IsZero() && g.Locations.IsZero() && g.Domain.IsZero() &&
 		(g.Compensation == nil || g.Compensation.CashMin == nil || *g.Compensation.CashMin <= 0)
 }
 
@@ -272,7 +272,7 @@ func Bucket(score int) string {
 }
 
 func weakSource(s facts.Source) bool {
-	return s.Way == "" || s.Way == facts.SiteField && s.Origin == facts.Aggregator
+	return s.Way == "" || s.Way == facts.Model || s.Way == facts.SiteField && s.Origin == facts.Aggregator
 }
 
 func role(targets []string, title string) float64 {

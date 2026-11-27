@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- The company's domain is a goal: the Goals table has a Domain row with 22 domains (Infrastructure, DeFi, Exchange, Gambling…) to place in Preferred, Possible, Unwanted or Never. It enters Fit with weight 0.10; a domain in Never caps Fit at 40, not 15, and does not move the vacancy to the end of Best fit, because the domain is read by the model and it is wrong for about one company in ten. A company not read yet counts as not stated. Every result is recomputed once.
+
 ## 0.15.0
 
 - The model set for Reading can now read each company's main domain (Exchange, DeFi, Infrastructure, Gambling and 18 more) from its newest vacancy, once per company. It shows as a Domain row in Key facts, marked "Read by the model", and does not change Fit yet. Settings → Models has a "Precise reading" switch, off by default: on, every new vacancy's company is read in the background, newest first, waiting two minutes after you last used a model; off, only the company of a vacancy you open is read. On a paid provider background reading also needs "Allow paid bulk work". A local model takes about 1.5 seconds per company.

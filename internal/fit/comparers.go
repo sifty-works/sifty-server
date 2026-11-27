@@ -31,6 +31,7 @@ var Comparers = []Comparer{
 	comparer{"time_zone", compareTimeZone},
 	comparer{"work_mode", compareWorkMode},
 	comparer{"engagement", compareEngagement},
+	comparer{"domain", compareDomain},
 	comparer{"hours", compareHours},
 	comparer{"languages", compareLanguages},
 	comparer{"requirements", compareRequirements},
@@ -189,6 +190,19 @@ func compareEngagement(v Vacancy, p ProfileView, s Strictness) Verdict {
 	return bucketVerdict(valueHits(b, strings.Fields(v.Engagement)), v.Sources[facts.Engagement], "Engagement not stated")
 }
 
+func compareDomain(v Vacancy, p ProfileView, s Strictness) Verdict {
+	b := p.Goals.Domain
+	if b.IsZero() {
+		return skipped()
+	}
+	labels := domainLabels(v.Domains)
+	hits := make([]hit, len(labels))
+	for i, d := range v.Domains {
+		hits[i] = hit{labels[i], b.Of(d)}
+	}
+	return bucketVerdict(hits, v.Sources[facts.Domain], "Domain not stated")
+}
+
 func compareHours(v Vacancy, p ProfileView, s Strictness) Verdict {
 	b := p.Goals.WorkingTime
 	if b.IsZero() {
@@ -327,7 +341,7 @@ func languagesTile(v Vacancy, _ geo, _ map[string]float64) (string, string, stri
 
 const shortfallYears = 2
 
-func keyFactTiles(v Vacancy, p ProfileView) []Tile {
+func keyFactTiles(v Vacancy, p ProfileView, cs []Criterion) []Tile {
 	var out []Tile
 	if v.Years > 0 {
 		out = append(out, experienceTile(v, p))
@@ -338,14 +352,34 @@ func keyFactTiles(v Vacancy, p ProfileView) []Tile {
 			out = append(out, t)
 		}
 	}
-	if len(v.Domains) > 0 {
-		labels := make([]string, len(v.Domains))
-		for i, d := range v.Domains {
-			labels[i] = facts.DomainTitle(d)
-		}
-		out = append(out, Tile{Name: "Domain", Value: strings.Join(labels, " · "), Line: "Read by the model", Verdict: "?"})
+	return append(append(out, domainTile(v, p, cs)...), conditionTiles(v, p.Today)...)
+}
+
+func domainLabels(keys []string) []string {
+	labels := make([]string, len(keys))
+	for i, k := range keys {
+		labels[i] = facts.DomainTitle(k)
 	}
-	return append(out, conditionTiles(v, p.Today)...)
+	return labels
+}
+
+func domainTile(v Vacancy, p ProfileView, cs []Criterion) []Tile {
+	goal := !p.Goals.Domain.IsZero()
+	if len(v.Domains) == 0 && !goal {
+		return nil
+	}
+	t := Tile{Name: "Domain", Value: "Not stated", Verdict: "?"}
+	if len(v.Domains) > 0 {
+		t.Value, t.Line = strings.Join(domainLabels(v.Domains), " · "), "Read by the model"
+	}
+	if goal {
+		line, verdict, bucket := tileLine(cs, "domain", "")
+		if len(v.Domains) > 0 {
+			line += " · read by the model"
+		}
+		t.Verdict, t.Bucket, t.Line = verdict, bucket, line
+	}
+	return []Tile{t}
 }
 
 func conditionTiles(v Vacancy, today time.Time) []Tile {

@@ -28,10 +28,10 @@ func rules() fit.Rules {
 }
 
 type vacancy struct {
-	Title, Company, Location string
-	Tags                     []string
-	Fields                   map[string]string
-	Text                     string
+	Title, Company, Location, Domain string
+	Tags                             []string
+	Fields                           map[string]string
+	Text                             string
 }
 
 func fromCode(v vacancy) fit.Vacancy {
@@ -42,6 +42,9 @@ func fromCode(v vacancy) fit.Vacancy {
 		found, _ := w.Extract(ctx, doc)
 		doc.Facts = append(doc.Facts, found...)
 		set.Facts = append(set.Facts, found...)
+	}
+	if v.Domain != "" {
+		set.Facts = append(set.Facts, facts.Fact{Kind: facts.Domain, Value: v.Domain, Source: facts.Source{Way: facts.Model, Origin: facts.Employer}})
 	}
 	return fit.FromFacts(v.Title, true, set)
 }
@@ -114,6 +117,9 @@ func TestEachCriterionMatchesMismatchesOrCannotBeCompared(t *testing.T) {
 		{"the best of several work modes counts", "work_mode", goals(candidate.GoalsView{WorkMode: candidate.Buckets{Preferred: []string{"hybrid"}, Never: []string{"onsite"}}}), vacancy{Text: "Work mode: Hybrid or Onsite"}, 1},
 		{"work mode not stated", "work_mode", goals(candidate.GoalsView{WorkMode: preferred("remote")}), vacancy{}, -1},
 		{"restricted remote leaves work mode to the restriction", "work_mode", goals(candidate.GoalsView{WorkMode: preferred("remote")}), vacancy{Location: "Remote (US only) · Remote"}, -1},
+		{"preferred domain", "domain", goals(candidate.GoalsView{Domain: preferred("exchange")}), vacancy{Domain: "exchange"}, 1},
+		{"never domain", "domain", goals(candidate.GoalsView{Domain: candidate.Buckets{Preferred: []string{"exchange"}, Never: []string{"gambling"}}}), vacancy{Domain: "gambling"}, 0},
+		{"domain not read cannot be compared", "domain", goals(candidate.GoalsView{Domain: preferred("exchange")}), vacancy{}, -1},
 		{"engagement from tag", "engagement", goals(candidate.GoalsView{EngagementType: preferred("contract")}), vacancy{Tags: []string{"Contract"}}, 1},
 		{"unwanted engagement", "engagement", goals(candidate.GoalsView{EngagementType: candidate.Buckets{Preferred: []string{"contract"}, Unwanted: []string{"employment"}}}), vacancy{Fields: map[string]string{"employment_type": "PERMANENT"}}, 0.25},
 		{"engagement in no list is left out", "engagement", goals(candidate.GoalsView{EngagementType: preferred("contract")}), vacancy{Fields: map[string]string{"employment_type": "PERMANENT"}}, -1},
@@ -288,6 +294,10 @@ func TestBrokenMustCapsByItsSourceAndUnknownMustCostsHalfItsWeight(t *testing.T)
 		{"unknown must counts half-way and says why", remote, []facts.Fact{money(120000, inText)}, 98, false, "Work mode not stated", 2},
 		{"required language and no language in My data", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}}),
 			[]facts.Fact{fact(facts.Language, "Mandarin", inText)}, 100, false, "Requires Mandarin — your languages are not listed", 1},
+		{"gambling in the Never list read by the model caps at 40 and is not broken", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Domain: candidate.Buckets{Preferred: []string{"exchange"}, Never: []string{"gambling"}}}),
+			[]facts.Fact{{Kind: facts.Domain, Value: "gambling", Source: facts.Source{Way: facts.Model, Origin: facts.Employer}}}, 40, false, "Gambling — in your Never list", 2},
+		{"a domain list alone is a goal", goals(candidate.GoalsView{Domain: candidate.Buckets{Unwanted: []string{"exchange"}}}),
+			[]facts.Fact{{Kind: facts.Domain, Value: "exchange", Source: facts.Source{Way: facts.Model, Origin: facts.Employer}}}, 25, false, "Exchange — unwanted", 1},
 		{"mismatch on a preferred criterion caps nothing", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Compensation: eur}),
 			[]facts.Fact{money(45000, inText)}, 78, false, "Pays €45k a year — below your minimum of EUR 90,000 a year", 2},
 	}
@@ -362,10 +372,10 @@ func TestMoneyTileIsCompactAndKeepsItsConversionApart(t *testing.T) {
 
 func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 	p := goals(candidate.GoalsView{Compensation: eur, WorkMode: candidate.Buckets{Preferred: []string{"onsite"}, Never: []string{"remote"}}, EngagementType: preferred("employment"),
-		WorkingTime: candidate.Buckets{Possible: []string{"full_time"}}, TimeZones: []string{"europe_africa"}, Locations: preferredPlaces(candidate.Location{Country: "PT"})},
+		WorkingTime: candidate.Buckets{Possible: []string{"full_time"}}, TimeZones: []string{"europe_africa"}, Locations: preferredPlaces(candidate.Location{Country: "PT"}), Domain: preferred("exchange")},
 		candidate.WorkAuthorization{Country: "EU", Status: "eligible"})
 	p.Languages = []candidate.Language{{Name: "English"}}
-	f := score(p, vacancy{Location: "Remote (EU only) · Remote", Text: "Salary: EUR 120,000 per year\nEmployment type: Permanent, full-time"})
+	f := score(p, vacancy{Domain: "exchange", Location: "Remote (EU only) · Remote", Text: "Salary: EUR 120,000 per year\nEmployment type: Permanent, full-time"})
 	want := []fit.Tile{
 		{Name: "Money", Value: "€120k a year", Converted: "≈ €120,000", Line: "Pays €120k a year — meets your minimum", Verdict: "✓"},
 		{Name: "Location", Value: "Remote (EU only)", Line: "Remote (EU only) — preferred", Verdict: "✓", Bucket: "preferred"},
@@ -375,6 +385,7 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 		{Name: "Languages", Value: "Not stated", Line: "Not stated in the vacancy", Verdict: "?"},
 		{Name: "Hours", Value: "full-time", Line: "Full-time — possible", Verdict: "✓", Bucket: "possible"},
 		{Name: "Work authorization", Value: "Remote (EU only)", Line: "Remote work is open to you there", Verdict: "✓"},
+		{Name: "Domain", Value: "Exchange", Line: "Exchange — preferred · read by the model", Verdict: "✓", Bucket: "preferred"},
 	}
 	if len(f.Tiles) != len(want) {
 		t.Fatalf("got %d tiles, want %d: %+v", len(f.Tiles), len(want), f.Tiles)
@@ -384,7 +395,7 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 			t.Errorf("tile %d = %+v, want %+v", i, tile, w)
 		}
 	}
-	for i, name := range []string{"money", "location", "work_mode", "engagement", "time_zone", "languages", "hours", "remote_restriction"} {
+	for i, name := range []string{"money", "location", "work_mode", "engagement", "time_zone", "languages", "hours", "remote_restriction", "domain"} {
 		var c fit.Criterion
 		for _, cr := range f.Criteria {
 			if cr.Name == name {
