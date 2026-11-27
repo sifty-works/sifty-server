@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.18.0
+
 - Key facts marks: green ✓ when a value matches your goal, red ✕ when it is against it, a grey ✓ when the vacancy states it but there is nothing to compare it with (no goal, a value in none of your lists, a fact that is no criterion), and ? only when the vacancy does not state it. Work mode is compared by its lists also for restricted remote work.
 - Remote work only in a country none of your work authorizations names is now a mismatch of Work authorization (Fit at most 15, last in Best fit), when the profile names at least one authorization; an eligible authorization in one country of the EU/EEA or Switzerland covers the whole zone. Every Fit result is recomputed once.
 - Skills: alternatives of one requirement ("C++ or Rust") are separate chips; a chip shows your own level, the level the vacancy asks is in its picker; a skill asked twice shows once; an alternative covered by another skill you have is shown as settled. The columns lose their "N of M" count, and "Mark your skills →" beside the first row of skills opens the first unanswered one.
