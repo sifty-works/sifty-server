@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.6.0
+
 - Every Fits you number has the same size, 100 included. The idle status bar no longer shows "0 in the catalogue": that count was the vacancies collected since the application started, not the catalogue.
 
 ## 0.5.0
