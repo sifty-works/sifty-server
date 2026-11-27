@@ -136,7 +136,7 @@ func TestVacancyPageShowsTheBandWithItsTiles(t *testing.T) {
 		return b["band"].(map[string]any)
 	}
 	b := band(full)
-	if b["score"] == nil || b["text"] != fmt.Sprintf("Fits you %v /100", b["score"]) || len(b["tiles"].([]any)) != 4 {
+	if b["score"] == nil || b["text"] != fmt.Sprintf("Fits you %v /100", b["score"]) || len(b["tiles"].([]any)) != 8 {
 		t.Errorf("band of a scored vacancy: %v", b)
 	}
 	if b := band(summaryID); b["score"] != nil || b["text"] != "Full job description is unavailable" {

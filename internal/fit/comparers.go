@@ -281,6 +281,30 @@ func moneyTile(v Vacancy, _ geo, rates map[string]float64) (string, string, stri
 	return moneyValue(m), "", ""
 }
 
+func timeZoneTile(v Vacancy, g geo, _ map[string]float64) (string, string, string) {
+	if v.TimeZone != "" {
+		return v.TimeZone, "", ""
+	}
+	var zones []string
+	for _, b := range places.Bands() {
+		if has(places.BandsOf(g.countries), b.Code) {
+			zones = append(zones, b.Label)
+		}
+	}
+	return list(zones, "Not stated"), "", ""
+}
+
+func authorizationTile(v Vacancy, g geo, _ map[string]float64) (string, string, string) {
+	if !g.remote {
+		return "Not stated", "", ""
+	}
+	if g.anywhere {
+		return "No restriction", "", ""
+	}
+	short, full := places.Short(v.Locations)
+	return list([]string{short}, "Not stated"), "", full
+}
+
 func locationTile(v Vacancy, g geo, _ map[string]float64) (string, string, string) {
 	switch {
 	case len(v.Locations) > 0:
@@ -293,13 +317,17 @@ func locationTile(v Vacancy, g geo, _ map[string]float64) (string, string, strin
 }
 
 func contractTile(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
-	engagement := v.Engagement
-	if engagement == "" {
-		engagement = "Engagement not stated"
+	return list(strings.Fields(v.Engagement), "Not stated"), "", ""
+}
+
+func hoursTile(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
+	h := v.Hours
+	if h == nil {
+		return "Not stated", "", ""
 	}
-	contract := []string{engagement}
-	if h := v.Hours; h != nil {
-		contract = append(contract, h.Mode, strings.Trim(amount(h.Min)+"–"+amount(h.Max), "–")+map[bool]string{true: " h/week"}[h.Max > 0])
-	}
-	return list(contract, "Not stated"), "", ""
+	return list([]string{h.Mode, strings.Trim(amount(h.Min)+"–"+amount(h.Max), "–") + map[bool]string{true: " h/week"}[h.Max > 0]}, "Not stated"), "", ""
+}
+
+func languagesTile(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
+	return list(v.Languages, "Not stated"), "", ""
 }

@@ -340,34 +340,51 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 	p := goals(candidate.GoalsView{Compensation: eur, WorkModes: []string{"onsite"}, Engagement: []string{"employment"},
 		Hours: &candidate.Hours{Mode: "full_time"}, TimeZones: []string{"europe_africa"}, PreferredLocations: []candidate.Location{{Country: "PT"}}},
 		candidate.WorkAuthorization{Country: "EU", Status: "eligible"})
+	p.Languages = []candidate.Language{{Name: "English"}}
 	f := score(p, vacancy{Location: "Remote (EU only) · Remote", Text: "Salary: EUR 120,000 per year\nEmployment type: Permanent, full-time"})
-	want := map[string]fit.Tile{
-		"Money":     {Value: "€120k a year", Converted: "≈ €120,000", Line: "Pays €120k a year — meets your minimum", Verdict: "✓"},
-		"Location":  {Value: "Remote (EU only)", Line: "Remote (EU only) — you prefer PT · Remote work is open to you there · Time zone fits Europe & Africa", Verdict: "✓"},
-		"Work mode": {Value: "remote", Line: "Remote only — you want onsite", Verdict: "✕"},
-		"Contract":  {Value: "employment · full-time", Line: "Employment — you want employment · Full-time — you want full-time", Verdict: "✓"},
+	want := []fit.Tile{
+		{Name: "Money", Value: "€120k a year", Converted: "≈ €120,000", Line: "Pays €120k a year — meets your minimum", Verdict: "✓", Goal: true},
+		{Name: "Location", Value: "Remote (EU only)", Line: "Remote (EU only) — you prefer PT", Verdict: "✓", Goal: true},
+		{Name: "Work mode", Value: "remote", Line: "Remote only — you want onsite", Verdict: "✕", Goal: true},
+		{Name: "Contract", Value: "employment", Line: "Employment — you want employment", Verdict: "✓", Goal: true},
+		{Name: "Time zone", Value: "Europe & Africa", Line: "Time zone fits Europe & Africa", Verdict: "✓", Goal: true},
+		{Name: "Languages", Value: "Not stated", Line: "Not stated in the vacancy", Verdict: "?"},
+		{Name: "Hours", Value: "full-time", Line: "Full-time — you want full-time", Verdict: "✓", Goal: true},
+		{Name: "Work authorization", Value: "Remote (EU only)", Line: "Remote work is open to you there", Verdict: "✓", Goal: true},
 	}
-	for _, tile := range f.Tiles {
-		w := want[tile.Name]
-		if tile.Value != w.Value || tile.Converted != w.Converted || tile.Line != w.Line || tile.Verdict != w.Verdict {
-			t.Errorf("%s tile = %+v, want %+v", tile.Name, tile, w)
-		}
+	if len(f.Tiles) != len(want) {
+		t.Fatalf("got %d tiles, want %d: %+v", len(f.Tiles), len(want), f.Tiles)
 	}
-	for i, names := range [][]string{{"money"}, {"location", "remote_restriction", "time_zone"}, {"work_mode"}, {"engagement", "hours"}} {
-		mismatch, match := false, false
-		for _, n := range names {
-			u := criterion(t, f, n)
-			mismatch, match = mismatch || (u >= 0 && u < 1), match || u == 1
-		}
-		if got := f.Tiles[i].Verdict; (got == "✕") != mismatch || (got == "✓") != (match && !mismatch) {
-			t.Errorf("%s tile %s disagrees with %v", f.Tiles[i].Name, got, names)
+	for i, w := range want {
+		if tile := f.Tiles[i]; tile != w {
+			t.Errorf("tile %d = %+v, want %+v", i, tile, w)
 		}
 	}
-	noEng := score(goals(candidate.GoalsView{Engagement: []string{"employment"}}), vacancy{Title: "Builder"})
-	for _, tile := range noEng.Tiles {
-		if tile.Name == "Contract" && (tile.Value != "Engagement not stated" || tile.Verdict != "?") {
-			t.Errorf("no engagement stated: Contract tile = %+v", tile)
+	for i, name := range []string{"money", "location", "work_mode", "engagement", "time_zone", "languages", "hours", "remote_restriction"} {
+		u := criterion(t, f, name)
+		if got := f.Tiles[i].Verdict; (got == "✕") != (u >= 0 && u < 1) || (got == "✓") != (u == 1) {
+			t.Errorf("%s tile %s disagrees with its criterion %s", f.Tiles[i].Name, got, name)
 		}
+	}
+	tile := func(f fit.Fit, name string) fit.Tile {
+		for _, tl := range f.Tiles {
+			if tl.Name == name {
+				return tl
+			}
+		}
+		t.Fatalf("no %s tile in %+v", name, f.Tiles)
+		return fit.Tile{}
+	}
+	lang := tile(score(p, vacancy{Text: "Requirements\n- Fluent Mandarin required"}), "Languages")
+	if lang.Value != "Mandarin" || lang.Verdict != "✕" || !lang.Goal || lang.Line != "Requires Mandarin — not in your languages" {
+		t.Errorf("a language the user lacks: Languages tile = %+v", lang)
+	}
+	noZone := tile(score(goals(candidate.GoalsView{Engagement: []string{"employment"}}), vacancy{Title: "Builder"}), "Time zone")
+	if noZone.Value != "Not stated" || noZone.Verdict != "?" || noZone.Goal {
+		t.Errorf("no time zone stated, no time zone goal: Time zone tile = %+v", noZone)
+	}
+	if c := tile(score(goals(candidate.GoalsView{Engagement: []string{"employment"}}), vacancy{Title: "Builder"}), "Contract"); c.Value != "Not stated" || c.Verdict != "?" {
+		t.Errorf("no engagement stated: Contract tile = %+v", c)
 	}
 }
 

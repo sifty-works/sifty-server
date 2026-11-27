@@ -2,7 +2,6 @@ package fit
 
 import (
 	"math"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -78,6 +77,7 @@ type Tile struct {
 	Full      string `json:"full,omitempty"`
 	Line      string `json:"line"`
 	Verdict   string `json:"verdict"`
+	Goal      bool   `json:"goal"`
 }
 
 type Fit struct {
@@ -96,17 +96,21 @@ type Fit struct {
 }
 
 var tiles = []struct {
-	name     string
-	criteria []string
-	empty    string
-	value    func(v Vacancy, g geo, rates map[string]float64) (value, converted, full string)
+	name      string
+	criterion string
+	empty     string
+	value     func(v Vacancy, g geo, rates map[string]float64) (value, converted, full string)
 }{
-	{"Money", []string{"money"}, "No minimum stated", moneyTile},
-	{"Location", []string{"location", "remote_restriction", "time_zone"}, "No preference stated", locationTile},
-	{"Work mode", []string{"work_mode"}, "You want: not stated", func(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
+	{"Money", "money", "No minimum stated", moneyTile},
+	{"Location", "location", "No preference stated", locationTile},
+	{"Work mode", "work_mode", "You want: not stated", func(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
 		return list(v.WorkModes, "Not stated"), "", ""
 	}},
-	{"Contract", []string{"engagement", "hours"}, "You want: not stated", contractTile},
+	{"Contract", "engagement", "You want: not stated", contractTile},
+	{"Time zone", "time_zone", "No preference stated", timeZoneTile},
+	{"Languages", "languages", "Not stated in the vacancy", languagesTile},
+	{"Hours", "hours", "You want: not stated", hoursTile},
+	{"Work authorization", "remote_restriction", "Checked for remote vacancies only", authorizationTile},
 }
 
 func Score(p ProfileView, v Vacancy, r Rules) Fit {
@@ -168,8 +172,8 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 	g := geoOf(v)
 	for _, t := range tiles {
 		value, converted, full := t.value(v, g, r.Rates)
-		line, verdict := tileLine(f.Criteria, t.criteria, t.empty)
-		f.Tiles = append(f.Tiles, Tile{t.name, value, converted, full, line, verdict})
+		line, verdict, goal := tileLine(f.Criteria, t.criterion, t.empty)
+		f.Tiles = append(f.Tiles, Tile{t.name, value, converted, full, line, verdict, goal})
 	}
 	switch {
 	case !v.Full:
@@ -195,31 +199,21 @@ func noGoals(g candidate.GoalsView) bool {
 		(g.Hours == nil || g.Hours.Mode == "") && (g.Compensation == nil || g.Compensation.CashMin == nil || *g.Compensation.CashMin <= 0)
 }
 
-func tileLine(cs []Criterion, names []string, empty string) (string, string) {
-	var lines []string
-	verdict, compared := "?", false
+func tileLine(cs []Criterion, name, empty string) (string, string, bool) {
 	for _, c := range cs {
-		if !slices.Contains(names, c.Name) || c.Outcome == Skipped {
+		if c.Name != name || c.Outcome == Skipped {
 			continue
 		}
-		compared = true
-		if c.Reason != "" {
-			lines = append(lines, c.Reason)
+		verdict := map[Outcome]string{Match: "✓", Mismatch: "✕"}[c.Outcome]
+		if verdict == "" {
+			verdict = "?"
 		}
-		switch {
-		case c.Outcome == Mismatch:
-			verdict = "✕"
-		case c.Outcome == Match && verdict == "?":
-			verdict = "✓"
+		if c.Reason == "" {
+			c.Reason = "Not stated in the vacancy"
 		}
+		return c.Reason, verdict, true
 	}
-	switch {
-	case len(lines) > 0:
-		return strings.Join(lines, " · "), verdict
-	case compared:
-		return "Not stated in the vacancy", verdict
-	}
-	return empty, verdict
+	return empty, "?", false
 }
 
 func Bucket(score int) string {
@@ -234,7 +228,7 @@ func Bucket(score int) string {
 
 func TileFor(ts []Tile, criterion string) (Tile, bool) {
 	for i, td := range tiles {
-		if slices.Contains(td.criteria, criterion) && i < len(ts) {
+		if td.criterion == criterion && i < len(ts) {
 			return ts[i], true
 		}
 	}

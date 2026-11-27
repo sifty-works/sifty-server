@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- The vacancy page shows a Key facts table under the four cards: time zone, required languages, hours and work authorization, each with its mark. A fact the vacancy does not state is listed in one "Not stated" line only when your profile has a goal for it. Location no longer mixes in time zone and work authorization, and Contract no longer mixes in hours.
+
 - Fits you counts a criterion your profile has a goal for but the vacancy does not state as half-way, at half its weight, so a vacancy matching on one or two known criteria no longer scores 100. The tile still shows "?" and the band still says on how many criteria it was scored. Every result is recomputed once.
 
 ## 0.6.0
