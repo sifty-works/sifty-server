@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.8.0
+
 - Work mode, engagement, hours and locations are each four lists in your profile: Preferred, Possible, Unwanted and Never, shown as one Goals table where a value moves by drag or a menu and every change is saved at once. Preferred raises Fits you most, Possible a little less, Unwanted lowers it, and Never caps it at 15 and puts the vacancy last in Best fit; a value in no list has no effect. Your old goals were converted once: chosen work modes became Preferred and the others Never (Unwanted if you were willing to relocate), chosen engagement and hours became Preferred and the others Unwanted, preferred locations became Preferred. Every result is recomputed once.
 
 - The vacancy band shows the number and the tiles, each tile with the list its value fell in, and a "Never" line when a value is in your Never list; the reasons, "scored on" and the requirement counter left the band. A key fact you have a goal for but the vacancy does not state is an ordinary row reading "Not stated". "Copy all skills to search" is a regular button.
