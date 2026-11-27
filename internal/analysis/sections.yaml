@@ -20,6 +20,18 @@ headings:
   - {text: "a day in the life", kind: role}
   - {text: "aufgaben", kind: role}
   - {text: "deine aufgaben", kind: role}
+  - {text: "what you'll be doing", kind: role}
+  - {text: "what you will be doing", kind: role}
+  - {text: "job responsibilities", kind: role}
+  - {text: "you will", kind: role}
+  - {text: "roles and responsibilities", kind: role}
+  - {text: "in this role, you'll", kind: role}
+  - {text: "in this role, you will", kind: role}
+  - {text: "what success looks like", kind: role}
+  - {text: "what you'll own", kind: role}
+  - {text: "role description", kind: role}
+  - {text: "what you will work on", kind: role}
+  - {text: "you'll be", kind: role}
   - {text: "ihre aufgaben", kind: role}
   - {text: "requirements", kind: requirements}
   - {text: "qualifications", kind: requirements}
@@ -44,11 +56,50 @@ headings:
   - {text: "education", kind: requirements}
   - {text: "anforderungen", kind: requirements}
   - {text: "dein profil", kind: requirements}
+  - {text: "minimum requirements", kind: requirements}
+  - {text: "additional requirements", kind: requirements}
+  - {text: "required qualifications", kind: requirements}
+  - {text: "required experience", kind: requirements}
+  - {text: "required skills and experience", kind: requirements}
+  - {text: "required", kind: requirements}
+  - {text: "job requirements", kind: requirements}
+  - {text: "what you bring", kind: requirements}
+  - {text: "what we look for", kind: requirements}
+  - {text: "what we look for in you", kind: requirements}
+  - {text: "we're looking for candidates who have", kind: requirements}
+  - {text: "we are looking for candidates who have", kind: requirements}
+  - {text: "what makes you a great fit", kind: requirements}
+  - {text: "what you need", kind: requirements}
+  - {text: "technical skills", kind: requirements}
+  - {text: "your qualifications", kind: requirements}
+  - {text: "must-have experience and skills", kind: requirements}
+  - {text: "you'll bring", kind: requirements}
+  - {text: "you will bring", kind: requirements}
+  - {text: "what you will have", kind: requirements}
+  - {text: "what you'll need", kind: requirements}
+  - {text: "what you will need", kind: requirements}
+  - {text: "what you'll have", kind: requirements}
+  - {text: "experience required", kind: requirements}
+  - {text: "experience and qualifications", kind: requirements}
+  - {text: "minimum qualification", kind: requirements}
+  - {text: "this role is likely a fit for someone with", kind: requirements}
+  - {text: "mandatory", kind: requirements}
+  - {text: "skills you should have", kind: requirements}
   - {text: "ihr profil", kind: requirements}
   - {text: "nice to have", kind: nice_to_have}
   - {text: "nice to haves", kind: nice_to_have}
   - {text: "nice-to-have", kind: nice_to_have}
   - {text: "nice-to-haves", kind: nice_to_have}
+  - {text: "preferred skills and experience", kind: nice_to_have}
+  - {text: "preferred requirements", kind: nice_to_have}
+  - {text: "preferred experience", kind: nice_to_have}
+  - {text: "preferred skills", kind: nice_to_have}
+  - {text: "nice to have experience", kind: nice_to_have}
+  - {text: "nice-to-have experience", kind: nice_to_have}
+  - {text: "strong candidates may have", kind: nice_to_have}
+  - {text: "you might also have", kind: nice_to_have}
+  - {text: "what will set you apart", kind: nice_to_have}
+  - {text: "what else will help you be successful", kind: nice_to_have}
   - {text: "preferred qualifications", kind: nice_to_have}
   - {text: "preferred", kind: nice_to_have}
   - {text: "bonus points", kind: nice_to_have}
@@ -89,6 +140,12 @@ headings:
   - {text: "why us", kind: offer}
   - {text: "why work with us", kind: offer}
   - {text: "why you'll love it here", kind: offer}
+  - {text: "benefits and perks", kind: offer}
+  - {text: "benefits for full-time employees", kind: offer}
+  - {text: "internship benefits", kind: offer}
+  - {text: "compensation and benefits", kind: offer}
+  - {text: "benefits overview", kind: offer}
+  - {text: "additional perks", kind: offer}
   - {text: "about the team", kind: company}
   - {text: "the team", kind: company}
   - {text: "our team", kind: company}
@@ -99,6 +156,7 @@ headings:
   - {text: "culture", kind: company}
   - {text: "diversity", kind: company}
   - {text: "about the company", kind: company}
+  - {text: "technologies we use", kind: company}
   - {text: "über uns", kind: company}
   - {text: "how to apply", kind: process}
   - {text: "hiring process", kind: process}
@@ -106,7 +164,21 @@ headings:
   - {text: "what to expect", kind: process}
   - {text: "application process", kind: process}
   - {text: "next steps", kind: process}
+  - {text: "to apply", kind: process}
+  - {text: "when applying", kind: process}
+  - {text: "disabilities include, but are not limited to", kind: other}
+  - {text: "work environment", kind: other}
+  - {text: "location", kind: other}
+  - {text: "essential physical requirements", kind: other}
+  - {text: "physical requirements", kind: other}
+  - {text: "position details", kind: other}
+  - {text: "open roles", kind: other}
+  - {text: "clear all filters", kind: other}
+  - {text: "get in touch", kind: other}
+  - {text: "privacy policy", kind: other}
+  - {text: "cookie policy", kind: other}
 contains:
+  - {text: "physical requirements", kind: other}
   - {text: "nice to have", kind: nice_to_have}
   - {text: "nice-to-have", kind: nice_to_have}
   - {text: "preferred", kind: nice_to_have}
@@ -142,3 +214,5 @@ contains:
   - {text: "our mission", kind: company}
   - {text: "our values", kind: company}
   - {text: "equal opportunity", kind: company}
+  - {text: "we look for", kind: requirements}
+  - {text: "set you apart", kind: nice_to_have}

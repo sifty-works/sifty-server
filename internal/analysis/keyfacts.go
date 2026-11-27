@@ -96,7 +96,7 @@ type keyFacts struct{}
 
 func (keyFacts) Name() string { return "key_facts" }
 
-func (keyFacts) Version() int { return 3 }
+func (keyFacts) Version() int { return 4 }
 
 func (keyFacts) Produces() []facts.Kind {
 	return []facts.Kind{facts.Years, facts.Seniority, facts.CompanyStage, facts.Deadline, facts.ContractLen, facts.Clearance, facts.Relocation, facts.Visa}
@@ -116,14 +116,14 @@ func yearsAsked(doc *Doc) (facts.Fact, bool) {
 	hasSection := hasRequirementSection(doc)
 	for _, loose := range []bool{false, true} {
 		best, most := facts.Fact{}, 0
-		for _, line := range textLines(doc.Original) {
+		for _, line := range doc.lines() {
 			section := doc.sectionAt(line.Start)
 			eligible := section == SectionRequirements ||
 				!hasSection && (section == SectionIntro || section == SectionRole || section == SectionOther) && fallbackRe.MatchString(line.Text)
 			if loose {
 				eligible = section != SectionCompany && section != SectionNiceToHave && section != SectionOffer && section != SectionProcess && !eeoRe.MatchString(line.Text)
 			}
-			if doc.isHeading(line) || !eligible {
+			if !eligible {
 				continue
 			}
 			for _, at := range yearWordRe.FindAllStringIndex(line.Text, -1) {
@@ -156,8 +156,8 @@ func seniorityOf(doc *Doc) (facts.Fact, bool) {
 	if i, _ := levelIn(titleRes, doc.Title); i >= 0 {
 		return vocabFact(facts.Seniority, keyVocab.Levels[i].Name, "", 0, 0), true
 	}
-	for _, line := range textLines(doc.Original) {
-		if section := doc.sectionAt(line.Start); doc.isHeading(line) || section == SectionCompany || section == SectionOffer || section == SectionProcess {
+	for _, line := range doc.lines() {
+		if section := doc.sectionAt(line.Start); section == SectionCompany || section == SectionOffer || section == SectionProcess {
 			continue
 		}
 		if i, loc := levelIn(textRes, line.Text); i >= 0 {
@@ -169,8 +169,8 @@ func seniorityOf(doc *Doc) (facts.Fact, bool) {
 
 func stageOf(doc *Doc) (facts.Fact, bool) {
 	best, rank := facts.Fact{}, len(stageRes)
-	for _, line := range textLines(doc.Original) {
-		if section := doc.sectionAt(line.Start); doc.isHeading(line) || section != SectionIntro && section != SectionCompany {
+	for _, line := range doc.lines() {
+		if !doc.openingOrCompany(line.Start) {
 			continue
 		}
 		for i, re := range stageRes {

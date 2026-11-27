@@ -110,7 +110,7 @@ type conditions struct{}
 
 func (conditions) Name() string { return "conditions" }
 
-func (conditions) Version() int { return 12 }
+func (conditions) Version() int { return 13 }
 
 func (conditions) Produces() []facts.Kind {
 	return []facts.Kind{facts.Money, facts.WorkMode, facts.Engagement, facts.Place, facts.TimeZone, facts.Hours, facts.Language}
@@ -132,10 +132,7 @@ func (conditions) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 	languages := map[string]facts.Fact{}
 	engagements := map[string]bool{}
 	typeRows := 99
-	for _, line := range textLines(doc.Original) {
-		if doc.isHeading(line) {
-			continue
-		}
+	for _, line := range doc.lines() {
 		section := doc.sectionAt(line.Start)
 		if !skip[facts.Money] {
 			if f, ok := moneyIn(line); ok {
@@ -481,10 +478,7 @@ func linePlaces(line Line, section string) []facts.Fact {
 }
 
 func textRestrictsPlace(doc *Doc) bool {
-	for _, line := range textLines(doc.Original) {
-		if doc.isHeading(line) {
-			continue
-		}
+	for _, line := range doc.lines() {
 		if !softZoneRe.MatchString(line.Text) {
 			if zoneWordRe.MatchString(line.Text) {
 				return true

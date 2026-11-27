@@ -32,6 +32,8 @@ type Doc struct {
 	Sections                 []Section
 	Headings                 []Span
 	Facts                    []facts.Fact
+	bodyLines                []Line
+	linesRead                bool
 }
 
 type Worker interface {
@@ -175,20 +177,57 @@ func textLines(s string) []Line {
 	return out
 }
 
-func (d *Doc) sectionAt(offset int) string {
+func (d *Doc) sectionOf(offset int) (Section, bool) {
 	for _, s := range d.Sections {
 		if offset >= s.Start && offset < s.End {
-			return s.Name
+			return s, true
 		}
 	}
-	return SectionIntro
+	return Section{Name: SectionIntro}, false
 }
 
-func (d *Doc) isHeading(l Line) bool {
-	for _, h := range d.Headings {
-		if l.Start < h.End && h.Start < l.End {
-			return true
+func (d *Doc) openingOrCompany(offset int) bool {
+	s, _ := d.sectionOf(offset)
+	return s.Name == SectionIntro || s.Name == SectionCompany || s.Name == SectionRole && len(d.Sections) > 0 && s.Start == d.Sections[0].Start
+}
+
+func (d *Doc) sectionAt(offset int) string {
+	s, _ := d.sectionOf(offset)
+	return s.Name
+}
+
+func (d *Doc) lines() []Line {
+	if !d.linesRead {
+		for _, l := range textLines(d.Original) {
+			d.bodyLines = append(d.bodyLines, d.pieces(l)...)
+		}
+		d.linesRead = true
+	}
+	return d.bodyLines
+}
+
+func (d *Doc) pieces(l Line) []Line {
+	var out []Line
+	emit := func(from, to int) {
+		text := d.Original[from:to]
+		trimmed := strings.TrimLeft(text, " \t:;")
+		from += len(text) - len(trimmed)
+		trimmed = strings.TrimRight(trimmed, " \t\r")
+		if trimmed != "" {
+			out = append(out, Line{Text: trimmed, Start: from, End: from + len(trimmed)})
 		}
 	}
-	return false
+	at := l.Start
+	for _, h := range d.Headings {
+		if l.Start < h.End && h.Start < l.End {
+			if h.Start > at {
+				emit(at, min(h.Start, l.End))
+			}
+			at = max(at, h.End)
+		}
+	}
+	if at < l.End {
+		emit(at, l.End)
+	}
+	return out
 }

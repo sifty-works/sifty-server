@@ -111,16 +111,6 @@ func sentenceFact(kind facts.Kind, value string, line Line, at int) facts.Fact {
 	return vocabFact(kind, value, "", line.Start+start, line.Start+start+len(sentence))
 }
 
-func bodyLines(doc *Doc) []Line {
-	var out []Line
-	for _, line := range textLines(doc.Original) {
-		if !doc.isHeading(line) {
-			out = append(out, line)
-		}
-	}
-	return out
-}
-
 func asksApplicant(text string, loc []int) bool {
 	start, end := 0, len(text)
 	for _, b := range sentenceRe.FindAllStringIndex(text, -1) {
@@ -144,7 +134,7 @@ func denied(text string, loc []int) bool {
 
 func deadlineOf(doc *Doc) (facts.Fact, bool) {
 	now := doc.FirstSeen
-	for _, line := range bodyLines(doc) {
+	for _, line := range doc.lines() {
 		for _, m := range deadlineRe.FindAllStringSubmatch(line.Text, -1) {
 			at := strings.Index(line.Text, m[0])
 			var day, month, year int
@@ -200,7 +190,7 @@ func countOf(s string) string {
 }
 
 func contractLengthOf(doc *Doc) (facts.Fact, bool) {
-	for _, line := range bodyLines(doc) {
+	for _, line := range doc.lines() {
 		for _, p := range lengthRes {
 			for _, m := range p.re.FindAllStringSubmatchIndex(line.Text, -1) {
 				before, after := line.Text[:m[0]], line.Text[m[1]:]
@@ -229,7 +219,7 @@ func clearanceOf(doc *Doc) (facts.Fact, bool) {
 		local int
 	}
 	var hits []hit
-	for _, line := range bodyLines(doc) {
+	for _, line := range doc.lines() {
 		if eeoRe.MatchString(line.Text) {
 			continue
 		}
@@ -259,7 +249,7 @@ func clearanceOf(doc *Doc) (facts.Fact, bool) {
 }
 
 func relocationOf(doc *Doc) (facts.Fact, bool) {
-	for _, line := range bodyLines(doc) {
+	for _, line := range doc.lines() {
 		for _, re := range relocationRes {
 			for _, m := range re.FindAllStringIndex(line.Text, -1) {
 				if partyRe.MatchString(line.Text[:m[0]]) || relocationNoiseRe.MatchString(line.Text[m[1]:]) {
@@ -273,7 +263,7 @@ func relocationOf(doc *Doc) (facts.Fact, bool) {
 }
 
 func visaOf(doc *Doc) (facts.Fact, bool) {
-	for _, line := range bodyLines(doc) {
+	for _, line := range doc.lines() {
 		for _, re := range []*regexp.Regexp{sponsorRe, visaSupportRe} {
 			for _, m := range re.FindAllStringIndex(line.Text, -1) {
 				if asksApplicant(line.Text, m) {

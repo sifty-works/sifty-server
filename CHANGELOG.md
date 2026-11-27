@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Requirement lines no longer take in benefits, pay ranges, equal-opportunity, how-to-apply and hiring-process text: a heading glued to a paragraph ("…on your CV.Benefits & Perks;") or written inside one ("…planning. What We Look For In You 10+ years…") now opens its section, prose after a requirements section's last list is not a requirement, and such lines are never requirements. Headings the analysis did not know ("Minimum requirements", "What you bring", "Must-haves", "Your profile" and about sixty more) are read. Every vacancy is analysed again once.
+
 ## 0.13.0
 
 - The vacancy page shows Skills inside the Fit band under Key facts, in two columns, Required and Nice to have, each with "N of M", the skills you lack first, then the unknown ones, then those you have; "N skills to answer" or "All skills answered" stands under the number. Every criterion of Fit is a row of Key facts, with ? and "Not stated" when the vacancy does not state it. The requirement lines that name no skill move to a folded "Other requirements" section with "I have it" and "I don't" buttons.
