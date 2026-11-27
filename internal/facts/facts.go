@@ -15,6 +15,11 @@ const (
 	Years        Kind = "years"
 	Seniority    Kind = "seniority"
 	CompanyStage Kind = "company_stage"
+	Deadline     Kind = "deadline"
+	ContractLen  Kind = "contract_length"
+	Clearance    Kind = "clearance"
+	Relocation   Kind = "relocation"
+	Visa         Kind = "visa"
 	Analysed     Kind = "analysed"
 )
 

@@ -17,8 +17,8 @@ import (
 var VocabBytes []byte
 
 type vocabData struct {
-	TechnologyContext []string    `yaml:"technology_context"`
-	NumberWords       []string    `yaml:"number_words"`
+	TechnologyContext []string `yaml:"technology_context"`
+	Numbers           map[string]int
 	Levels            levelsData  `yaml:"levels"`
 	Groups            []groupData `yaml:"groups"`
 }
@@ -45,13 +45,13 @@ type termInfo struct {
 }
 
 type vocab struct {
-	terms       map[string]termInfo
-	maxWords    int
-	context     map[string]bool
-	order       []string
-	numberWords []string
-	years       []yearRule
-	words       []wordRule
+	terms    map[string]termInfo
+	maxWords int
+	context  map[string]bool
+	order    []string
+	numbers  map[string]int
+	years    []yearRule
+	words    []wordRule
 }
 
 type yearRule struct {
@@ -70,7 +70,7 @@ var defaultVocab = func() *vocab {
 	if err := yaml.Unmarshal(VocabBytes, &d); err != nil {
 		panic("skills: load vocab.yaml: " + err.Error())
 	}
-	v := &vocab{terms: map[string]termInfo{}, context: map[string]bool{}, order: d.Levels.Order, numberWords: d.NumberWords, maxWords: 1}
+	v := &vocab{terms: map[string]termInfo{}, context: map[string]bool{}, order: d.Levels.Order, numbers: d.Numbers, maxWords: 1}
 	for _, w := range d.TechnologyContext {
 		v.context[strings.ToLower(strings.TrimSpace(w))] = true
 	}
@@ -347,15 +347,29 @@ type Entry struct {
 	Index    int
 }
 
-var yearsRe = regexp.MustCompile(`(?i)\b(\d+|` + strings.Join(defaultVocab.numberWords, "|") + `)(?:\s*(?:-|–|to)\s*\d+)?\s*\+?[\s-]*(?:years?|yrs?)\b`)
+var NumberPattern = func() string {
+	var words []string
+	for w := range defaultVocab.numbers {
+		words = append(words, strings.ReplaceAll(w, "-", "[- ]"))
+	}
+	sort.Strings(words)
+	return strings.Join(words, "|")
+}()
+
+var yearsRe = regexp.MustCompile(`(?i)\b(\d+|` + NumberPattern + `)(?:\s*(?:-|–|to)\s*\d+)?\s*\+?[\s-]*(?:years?|yrs?)\b`)
+
+func NumberOf(word string) (int, bool) {
+	if n, err := strconv.Atoi(word); err == nil {
+		return n, true
+	}
+	n, ok := defaultVocab.numbers[strings.ReplaceAll(strings.ToLower(word), " ", "-")]
+	return n, ok
+}
 
 func YearsIn(text string) (int, bool) {
 	most := 0
 	for _, m := range yearsRe.FindAllStringSubmatch(text, -1) {
-		years, err := strconv.Atoi(m[1])
-		if err != nil {
-			years = slices.Index(defaultVocab.numberWords, strings.ToLower(m[1])) + 1
-		}
+		years, _ := NumberOf(m[1])
 		most = max(most, years)
 	}
 	return most, most > 0

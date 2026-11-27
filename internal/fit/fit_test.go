@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sifty-works/sifty-server/internal/analysis"
 	"github.com/sifty-works/sifty-server/internal/candidate"
@@ -425,6 +426,48 @@ func TestKeyFactsDoNotChangeFitsYou(t *testing.T) {
 	a, b := fit.Score(p, plain, rules()), fit.Score(p, stated, rules())
 	if a.State != fit.Scored || a.Score != b.Score || a.ScoredOn != b.ScoredOn || a.Of != b.Of || len(a.Criteria) != len(b.Criteria) {
 		t.Errorf("Fits you with key facts = %d on %d of %d, without = %d on %d of %d", b.Score, b.ScoredOn, b.Of, a.Score, a.ScoredOn, a.Of)
+	}
+}
+
+func TestApplyByTileIsClosedOnlyAfterItsDay(t *testing.T) {
+	p := goals(candidate.GoalsView{TargetRoles: []string{"Engineer"}})
+	p.Today = time.Date(2026, 12, 10, 15, 30, 0, 0, time.UTC)
+	cases := []struct{ name, deadline, verdict, line string }{
+		{"tomorrow is still open", "2026-12-11", "?", ""},
+		{"today is the last day", "2026-12-10", "?", "Closes today"},
+		{"yesterday is closed", "2026-12-09", "✕", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := fit.Score(p, fit.Vacancy{Title: "Engineer", Full: true, Analysed: true, Deadline: tc.deadline}, rules())
+			for _, tl := range f.Tiles {
+				if tl.Name == "Apply by" {
+					if tl.Verdict != tc.verdict || tc.line != "" && tl.Line != tc.line {
+						t.Errorf("Apply by tile for %s = %q %q, want %q %q", tc.deadline, tl.Verdict, tl.Line, tc.verdict, tc.line)
+					}
+					return
+				}
+			}
+			t.Errorf("no Apply by tile in %+v", f.Tiles)
+		})
+	}
+}
+
+func TestConditionTilesSayWhatIsRefusedAndDoNotChangeFitsYou(t *testing.T) {
+	p := goals(candidate.GoalsView{TargetRoles: []string{"Engineer"}})
+	plain := fit.Vacancy{Title: "Engineer", Full: true, Analysed: true}
+	stated := plain
+	stated.Deadline, stated.Length, stated.Clearance, stated.Relocation, stated.Visa = "2099-12-01", "6 months", "US citizen", "none", "refused"
+	a, b := fit.Score(p, plain, rules()), fit.Score(p, stated, rules())
+	if a.State != fit.Scored || a.Score != b.Score || a.ScoredOn != b.ScoredOn || a.Of != b.Of {
+		t.Errorf("Fits you with condition facts = %d on %d of %d, without = %d on %d of %d", b.Score, b.ScoredOn, b.Of, a.Score, a.ScoredOn, a.Of)
+	}
+	got := map[string]string{}
+	for _, tl := range b.Tiles {
+		got[tl.Name] = tl.Value
+	}
+	if got["Relocation"] != "Not offered" || got["Visa"] != "No sponsorship" {
+		t.Errorf("Relocation none and Visa refused show %q and %q", got["Relocation"], got["Visa"])
 	}
 }
 

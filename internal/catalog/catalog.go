@@ -758,13 +758,13 @@ type VacancyText struct {
 	ID, Version                                    int64
 	URL, ApplyURL                                  string
 	Title, Company, Location, TagsJSON, FieldsJSON string
-	TextState                                      string
+	TextState, FirstSeen                           string
 	Body                                           []byte
 }
 
 func (c *Catalog) VacancyTexts(ctx context.Context, after int64, limit int) ([]VacancyText, error) {
 	rows, err := c.db.QueryContext(ctx,
-		`SELECT v.id, v.version, v.url, v.apply_url, v.title, v.company, v.location, v.tags, v.source_fields, v.text_state, v.body
+		`SELECT v.id, v.version, v.url, v.apply_url, v.title, v.company, v.location, v.tags, v.source_fields, v.text_state, v.first_seen, v.body
 		 FROM vacancy v
 		 WHERE v.id>? ORDER BY v.id LIMIT ?`, after, limit)
 	if err != nil {
@@ -775,7 +775,7 @@ func (c *Catalog) VacancyTexts(ctx context.Context, after int64, limit int) ([]V
 	for rows.Next() {
 		var r VacancyText
 		if err := rows.Scan(&r.ID, &r.Version, &r.URL, &r.ApplyURL, &r.Title, &r.Company, &r.Location, &r.TagsJSON, &r.FieldsJSON,
-			&r.TextState, &r.Body); err != nil {
+			&r.TextState, &r.FirstSeen, &r.Body); err != nil {
 			return nil, fmt.Errorf("catalog: vacancy texts: scan: %w", err)
 		}
 		out = append(out, r)

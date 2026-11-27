@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
@@ -22,6 +23,7 @@ type ProfileView struct {
 	AbsentSkills   []candidate.AbsentSkill
 	Confirmed      []candidate.ConfirmedFact
 	DerivedYears   candidate.DerivedYears
+	Today          time.Time `json:"-"`
 }
 
 type RequirementLine struct {

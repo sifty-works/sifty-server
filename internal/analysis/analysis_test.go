@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sifty-works/sifty-server/internal/analysis"
 	"github.com/sifty-works/sifty-server/internal/facts"
@@ -27,7 +28,7 @@ func readTitled(t *testing.T, company, title, body string) *analysis.Doc {
 func readSite(t *testing.T, company, title, location, body string) *analysis.Doc {
 	t.Helper()
 	body = listing.Normalize(body)
-	doc := &analysis.Doc{Title: title, Company: company, Location: location, Origin: facts.Aggregator, Body: body, Original: listing.PlainText(body)}
+	doc := &analysis.Doc{Title: title, Company: company, Location: location, Origin: facts.Aggregator, Body: body, Original: listing.PlainText(body), FirstSeen: time.Now()}
 	doc.Sections, doc.Headings = analysis.Split(doc)
 	for _, w := range analysis.Workers {
 		found, err := w.Extract(context.Background(), doc)
@@ -399,6 +400,62 @@ func TestKeyFactsAreReadOnlyFromWhatTheVacancyStates(t *testing.T) {
 			}
 			if joined := strings.Join(got, "; "); joined != tc.want {
 				t.Errorf("key facts = %q, want %q", joined, tc.want)
+			}
+		})
+	}
+}
+
+func TestConditionFactsAreReadFromWhatTheVacancyStates(t *testing.T) {
+	soon, past := time.Now().AddDate(0, 0, 10), time.Now().AddDate(0, 0, -10)
+	cases := []struct{ name, body, want string }{
+		{"a year-less date ahead takes the nearest year", "<p>Apply by " + soon.Format("2 January") + "</p>", "deadline " + soon.Format("2006-01-02")},
+		{"a year-less date just passed stays in the past", "<p>Apply by " + past.Format("2 January") + "</p>", "deadline " + past.Format("2006-01-02")},
+		{"an ISO date is read as written", "<p>Applications close on 2026-12-01</p>", "deadline 2026-12-01"},
+		{"a start date and an interview date are no deadline", "<p>Start date: 15 January 2027. Interviews on 5 December 2026.</p>", ""},
+		{"the date after the cue is the deadline, not a later start", "<p>Apply by 1 December 2026; the role starts on 15 January 2027.</p>", "deadline 2026-12-01"},
+		{"a date that does not exist is no deadline", "<p>Apply by 31 February 2026</p>", ""},
+		{"a six-month contract is six months", "<p>A 6-month contract</p>", "contract_length 6 months"},
+		{"a one-year fixed term stays one year", "<p>A 1-year fixed-term contract</p>", "contract_length 1 year"},
+		{"a spelled-out number of months is read", "<p>A seven-month contract</p>", "contract_length 7 months"},
+		{"a contract followed by a number of months with a plus is read", "<p>Contract, 6+ months</p>", "contract_length 6 months"},
+		{"a range of months is shown as a range", "<p>A 3-6 month contract</p>", "contract_length 3–6 months"},
+		{"weeks are shown as weeks", "<p>Duration: 16 weeks</p>", "contract_length 16 weeks"},
+		{"a commitment range keeps both ends", "<p>Commitment of 4 to 8 months.</p>", "contract_length 4–8 months"},
+		{"a probation period is no contract length", "<p>Permanent contract, 6 months probation.</p>", ""},
+		{"a smart contract has no length", "<p>We audit a smart contract for 3 months.</p>", ""},
+		{"contract management experience is no contract length", "<p>Minimum 6 months contract management experience</p>", ""},
+		{"contracts our customers sign are no contract length", "<p>Our customers sign 12-month contracts.</p>", ""},
+		{"a citizenship in an equal-opportunity paragraph is no clearance", "<p>Acme is an equal opportunity employer; employees on federal work must be US citizens or permanent residents.</p>", ""},
+		{"a denied clearance is no clearance", "<p>No security clearance required.</p>", ""},
+		{"building public trust is no public trust position", "<p>We work to build public trust with our customers.</p>", ""},
+		{"customs clearance is no clearance", "<p>We ship customs clearance software and run a clearance sale.</p>", ""},
+		{"a relocation bonus is relocation offered", "<p>We pay a relocation bonus.</p>", "relocation offered"},
+		{"no relocation support is none offered", "<p>There is no relocation support.</p>", "relocation none"},
+		{"a denial before a but does not reach what follows", "<p>Visa sponsorship is not available, but we offer relocation assistance.</p>", "relocation offered; visa refused"},
+		{"relocation in a customer's business is no relocation offer", "<p>We build software for relocation companies; our customers manage relocation assistance for families.</p>", ""},
+		{"relocation that is not available is none offered", "<p>Relocation not available.</p>", "relocation none"},
+		{"relocation that is not required is no relocation offer", "<p>Relocation is not required.</p>", ""},
+		{"a question about sponsorship is no visa statement", "<p>Do you need, or will you need in the future, sponsorship for a work visa?</p>", ""},
+		{"a statement the applicant is asked to type is no visa statement", "<p>Please type Yes to confirm that you require visa sponsorship.</p>", ""},
+		{"not requiring sponsorship now or later is visa refused", "<p>Applicants who will not now or in the future require work visa sponsorship are welcome.</p>", "visa refused"},
+		{"refusing sponsorship including a transfer is visa refused", "<p>Acme does not offer visa sponsorship, including H-1B transfers.</p>", "visa refused"},
+		{"supported visa transfers are visa offered", "<p>Visa transfers supported.</p>", "visa offered"},
+		{"sponsoring visas is visa offered", "<p>We sponsor visas.</p>", "visa offered"},
+		{"unable to sponsor is visa refused", "<p>We are unable to sponsor.</p>", "visa refused"},
+		{"visa sponsorship that is not available is visa refused", "<p>Visa sponsorship is not available.</p>", "visa refused"},
+		{"sponsoring events is no visa", "<p>We sponsor open source projects and events.</p>", ""},
+	}
+	kinds := map[facts.Kind]bool{facts.Deadline: true, facts.ContractLen: true, facts.Clearance: true, facts.Relocation: true, facts.Visa: true}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			for _, f := range read(t, "Acme", tc.body).Facts {
+				if kinds[f.Kind] {
+					got = append(got, string(f.Kind)+" "+f.Value)
+				}
+			}
+			if joined := strings.Join(got, "; "); joined != tc.want {
+				t.Errorf("condition facts = %q, want %q", joined, tc.want)
 			}
 		})
 	}

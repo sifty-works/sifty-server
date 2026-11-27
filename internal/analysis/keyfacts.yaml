@@ -31,3 +31,40 @@ stages:
   - {name: Raised, amount: required, patterns: ['raised', 'in (?:total )?funding', 'funding round']}
   - {name: Early stage, patterns: ['early[- ]stage', 'pre-?seed']}
   - {name: VC-backed, patterns: ['(?:venture|vc)[- ](?:backed|funded)', 'backed by [^.;]{0,60}\b(?:investors?|vcs?|ventures?|capital)\b']}
+deadline_cues: [apply by, apply before, apply until, apply no later than, application deadline, applications close, applications are due, applications due, applications must be received by, applications will be accepted until, closing date, deadline to apply, deadline for applications, last day to apply, last date to apply, submit your application by]
+weekdays: [monday, tuesday, wednesday, thursday, friday, saturday, sunday, mon, tue, tues, wed, thu, thur, thurs, fri, sat, sun]
+months:
+  - {name: '1', patterns: [january, jan]}
+  - {name: '2', patterns: [february, feb]}
+  - {name: '3', patterns: [march, mar]}
+  - {name: '4', patterns: [april, apr]}
+  - {name: '5', patterns: [may]}
+  - {name: '6', patterns: [june, jun]}
+  - {name: '7', patterns: [july, jul]}
+  - {name: '8', patterns: [august, aug]}
+  - {name: '9', patterns: [september, sept, sep]}
+  - {name: '10', patterns: [october, oct]}
+  - {name: '11', patterns: [november, nov]}
+  - {name: '12', patterns: [december, dec]}
+contract_nouns: [contract, contracts, fixed-term, fixed term, engagement, assignment, placement, secondment, appointment, maternity cover, internship, internships]
+length_qualifiers: [about, approximately, approx, around, roughly, up to, a minimum of, at least, initially]
+length_noise: [probation, notice, trial]
+contract_labels: [contract, contract length, contract duration, contract term, duration, initial term, assignment, engagement, placement, secondment, internship, project length, commitment, will run for, runs for, will last, lasts, initially]
+clearance_levels: [top secret, secret, ts/sci, sci, ts, sc, dv, ctc, public trust, confidential, nato secret, bpss, nppv]
+clearance_leads: [security, active, current, valid, existing, government, federal, dod, national security]
+citizenship_cues: [must be, need to be, have to be, required to be, should be, only open to]
+citizenship_required: [required, mandatory, needed, necessary, preferred, only]
+relocation_support: [assistance, support, package, packages, program, programs, programme, programmes, bonus, allowance, stipend, budget, benefits, benefit, expenses, costs, help, reimbursement, payment, payments, lump sum, funds, covered, provided, offered, available, included, supported, negotiable]
+relocation_leads: [assist, assists, help, helps, support, supports, cover, covers, pay, pays, offer, offers, provide, provides, reimburse, reimburses, fund, funds, include, includes]
+relocation_noise_after: [services, service, companies, company, industry, business, software, agents, agency, firms]
+visa_words: [visa, visas, work permit, work permits, immigration, h-1b, h1b, blue card, employment pass, work pass]
+visa_support: [support, supported, assistance, help, transfer, transfers, provided, included, covered, available, processing, offered]
+sponsor_objects: [candidates, applicants, anyone, you, employees, international, foreign, work, employment, now, currently, in the future]
+denial_words: [no, not, never, without, unable, cannot, nor, neither]
+contrast_words: [but, however, although, though, whereas, while, yet]
+form_starts: [do you, will you, are you, would you, can you]
+form_asks: ['(?:type|confirm|acknowledge|certify|attest)\b[^.?!]{0,40}\b(?:yes|no|below|that you)\b']
+clearance_terms:
+  - {name: 'U.S. person (ITAR)', patterns: ['(?:must|need to|have to|required to|should)\s+be\s+an?\s+(?:U\.?S\.?|United States)\s+persons?', '(?:only|solely)\s+(?:hire|consider|employ)\s+(?:U\.?S\.?|United States)\s+persons?', '(?:U\.?S\.?|United States)\s+persons?\s+status']}
+  - {name: 'U.S. export controls', patterns: ['subject\s+to\s+(?:U\.?S\.?|United States)\s+export\s+(?:controls?|laws|regulations)']}
+  - {name: 'Public trust', patterns: ['public\s+trust\s+(?:position|designation)']}

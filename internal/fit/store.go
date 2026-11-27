@@ -116,6 +116,7 @@ func LoadProfile(ctx context.Context, database *db.DB, id int64, r Rules) (Profi
 		AbsentSkills:   me.AbsentSkills,
 		Confirmed:      me.ConfirmedFacts,
 		DerivedYears:   candidate.DeriveYears(me.Experience, time.Now()),
+		Today:          time.Now(),
 	}
 	return Profile{id, v, Inputs(v, r)}, nil
 }

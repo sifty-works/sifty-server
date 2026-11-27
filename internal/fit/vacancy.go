@@ -47,6 +47,11 @@ type Vacancy struct {
 	Years        int                         `json:"-"`
 	Seniority    string                      `json:"-"`
 	Stage        string                      `json:"-"`
+	Deadline     string                      `json:"-"`
+	Length       string                      `json:"-"`
+	Clearance    string                      `json:"-"`
+	Relocation   string                      `json:"-"`
+	Visa         string                      `json:"-"`
 	Requirements []Requirement               `json:"-"`
 	Sources      map[facts.Kind]facts.Source `json:"-"`
 	Judged       []Judged                    `json:"-"`
@@ -97,6 +102,26 @@ func FromFacts(title string, full bool, set facts.Set) Vacancy {
 		case facts.CompanyStage:
 			if v.Stage == "" {
 				v.Stage = f.Value
+			}
+		case facts.Deadline:
+			if v.Deadline == "" {
+				v.Deadline = f.Value
+			}
+		case facts.ContractLen:
+			if v.Length == "" {
+				v.Length = f.Value
+			}
+		case facts.Clearance:
+			if v.Clearance == "" {
+				v.Clearance = f.Value
+			}
+		case facts.Relocation:
+			if v.Relocation == "" {
+				v.Relocation = f.Value
+			}
+		case facts.Visa:
+			if v.Visa == "" {
+				v.Visa = f.Value
 			}
 		case facts.TimeZone:
 			if v.TimeZone == "" {

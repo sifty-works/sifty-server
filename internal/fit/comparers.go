@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/facts"
@@ -337,7 +338,60 @@ func keyFactTiles(v Vacancy, p ProfileView) []Tile {
 			out = append(out, t)
 		}
 	}
+	return append(out, conditionTiles(v, p.Today)...)
+}
+
+func conditionTiles(v Vacancy, today time.Time) []Tile {
+	var out []Tile
+	if v.Deadline != "" {
+		out = append(out, applyByTile(v.Deadline, today))
+	}
+	if v.Length != "" {
+		out = append(out, Tile{Name: "Contract length", Value: v.Length, Verdict: "?"})
+	}
+	for _, t := range []Tile{
+		{Name: "Citizenship or clearance", Value: v.Clearance},
+		{Name: "Relocation", Value: map[string]string{"offered": "Offered", "none": "Not offered"}[v.Relocation]},
+		{Name: "Visa", Value: map[string]string{"offered": "Sponsorship offered", "refused": "No sponsorship"}[v.Visa]},
+	} {
+		if t.Value != "" {
+			t.Verdict = "?"
+			out = append(out, t)
+		}
+	}
 	return out
+}
+
+func plural(n int, unit string) string {
+	if n == 1 {
+		return "1 " + unit
+	}
+	return strconv.Itoa(n) + " " + unit + "s"
+}
+
+func applyByTile(deadline string, today time.Time) Tile {
+	t := Tile{Name: "Apply by", Value: deadline, Verdict: "?"}
+	date, err := time.Parse("2006-01-02", deadline)
+	if err != nil {
+		return t
+	}
+	t.Value = date.Format("2 Jan 2006")
+	if today.IsZero() {
+		return t
+	}
+	y, m, d := today.Date()
+	days := int(date.Sub(time.Date(y, m, d, 0, 0, 0, 0, time.UTC)).Hours() / 24)
+	switch {
+	case days > 0:
+		t.Line = plural(days, "day") + " left"
+	case days == 0:
+		t.Line = "Closes today"
+	case days == -1:
+		t.Line, t.Verdict = "Closed yesterday", "✕"
+	default:
+		t.Line, t.Verdict = "Closed "+plural(-days, "day")+" ago", "✕"
+	}
+	return t
 }
 
 func experienceTile(v Vacancy, p ProfileView) Tile {

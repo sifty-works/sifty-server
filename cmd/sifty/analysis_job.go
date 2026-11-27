@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sifty-works/sifty-server/internal/analysis"
 	"github.com/sifty-works/sifty-server/internal/candidate"
@@ -28,6 +29,7 @@ func loadForAnalysis(database *db.DB) analysis.Loader {
 			return nil, 0, false, fmt.Errorf("analysis: vacancy %d: %w", id, err)
 		}
 		doc := &analysis.Doc{URL: t.URL, ApplyURL: t.ApplyURL, Title: t.Title, Company: t.Company, Location: t.Location, Body: body, Original: listing.PlainText(body)}
+		doc.FirstSeen, _ = time.Parse(time.RFC3339, t.FirstSeen)
 		json.Unmarshal([]byte(t.TagsJSON), &doc.Tags)
 		json.Unmarshal([]byte(t.FieldsJSON), &doc.Fields)
 		return doc, t.Version, true, nil

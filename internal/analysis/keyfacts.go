@@ -32,6 +32,29 @@ var keyVocab = func() (v struct {
 	StageNoise     []string `yaml:"stage_noise"`
 	AmountNoise    []string `yaml:"amount_noise"`
 	ValuationCues  []string `yaml:"valuation_cues"`
+
+	DeadlineCues        []string `yaml:"deadline_cues"`
+	Weekdays            []string
+	Months              []named
+	ContractNouns       []string `yaml:"contract_nouns"`
+	ContractLabels      []string `yaml:"contract_labels"`
+	LengthQualifiers    []string `yaml:"length_qualifiers"`
+	LengthNoise         []string `yaml:"length_noise"`
+	FormStarts          []string `yaml:"form_starts"`
+	FormAsks            []string `yaml:"form_asks"`
+	ClearanceTerms      []named  `yaml:"clearance_terms"`
+	ClearanceLevels     []string `yaml:"clearance_levels"`
+	ClearanceLeads      []string `yaml:"clearance_leads"`
+	CitizenshipCues     []string `yaml:"citizenship_cues"`
+	CitizenshipRequired []string `yaml:"citizenship_required"`
+	RelocationSupport   []string `yaml:"relocation_support"`
+	RelocationLeads     []string `yaml:"relocation_leads"`
+	RelocationNoise     []string `yaml:"relocation_noise_after"`
+	VisaWords           []string `yaml:"visa_words"`
+	VisaSupport         []string `yaml:"visa_support"`
+	SponsorObjects      []string `yaml:"sponsor_objects"`
+	DenialWords         []string `yaml:"denial_words"`
+	ContrastWords       []string `yaml:"contrast_words"`
 }) {
 	if err := yaml.Unmarshal(keyFactsYAML, &v); err != nil {
 		panic("analysis: load keyfacts.yaml: " + err.Error())
@@ -73,15 +96,15 @@ type keyFacts struct{}
 
 func (keyFacts) Name() string { return "key_facts" }
 
-func (keyFacts) Version() int { return 2 }
+func (keyFacts) Version() int { return 3 }
 
 func (keyFacts) Produces() []facts.Kind {
-	return []facts.Kind{facts.Years, facts.Seniority, facts.CompanyStage}
+	return []facts.Kind{facts.Years, facts.Seniority, facts.CompanyStage, facts.Deadline, facts.ContractLen, facts.Clearance, facts.Relocation, facts.Visa}
 }
 
 func (keyFacts) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 	var out []facts.Fact
-	for _, find := range []func(*Doc) (facts.Fact, bool){yearsAsked, seniorityOf, stageOf} {
+	for _, find := range []func(*Doc) (facts.Fact, bool){yearsAsked, seniorityOf, stageOf, deadlineOf, contractLengthOf, clearanceOf, relocationOf, visaOf} {
 		if f, ok := find(doc); ok {
 			out = append(out, f)
 		}
@@ -109,8 +132,7 @@ func yearsAsked(doc *Doc) (facts.Fact, bool) {
 				if !ok || n <= most || n > 40 || yearsNoiseRe.MatchString(sentence) || loose && !yearsFollowRe.MatchString(sentence) || requirementFact(Line{Text: sentence}, facts.Required).Flag == facts.Preferred {
 					continue
 				}
-				start := max(strings.Index(line.Text, sentence), 0)
-				most, best = n, vocabFact(facts.Years, strconv.Itoa(n), "", line.Start+start, line.Start+start+len(sentence))
+				most, best = n, sentenceFact(facts.Years, strconv.Itoa(n), line, at[0])
 			}
 		}
 		if most > 0 {
@@ -161,8 +183,7 @@ func stageOf(doc *Doc) (facts.Fact, bool) {
 				}
 				sentence := sentenceAround(line.Text, loc[0])
 				if value, ok := stageValue(keyVocab.Stages[i], sentence); ok {
-					start := max(strings.Index(line.Text, sentence), 0)
-					best, rank = vocabFact(facts.CompanyStage, value, "", line.Start+start, line.Start+start+len(sentence)), i
+					best, rank = sentenceFact(facts.CompanyStage, value, line, loc[0]), i
 					break
 				}
 			}

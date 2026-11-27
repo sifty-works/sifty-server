@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/facts"
@@ -27,6 +28,7 @@ type Doc struct {
 	URL, ApplyURL            string
 	Origin                   facts.Origin
 	Original                 string
+	FirstSeen                time.Time
 	Sections                 []Section
 	Headings                 []Span
 	Facts                    []facts.Fact

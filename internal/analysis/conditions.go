@@ -110,7 +110,7 @@ type conditions struct{}
 
 func (conditions) Name() string { return "conditions" }
 
-func (conditions) Version() int { return 11 }
+func (conditions) Version() int { return 12 }
 
 func (conditions) Produces() []facts.Kind {
 	return []facts.Kind{facts.Money, facts.WorkMode, facts.Engagement, facts.Place, facts.TimeZone, facts.Hours, facts.Language}
@@ -619,10 +619,9 @@ func altRe(patterns []string) string { return strings.Join(patterns, "|") }
 func engagementPatterns() (contract, intern, employment, smart, employmentContract *regexp.Regexp) {
 	e := vocab.Engagement
 	internWord := internWordPattern
-	months := `(?:\d+\+?|one|two|three|four|five|six|nine|twelve|eighteen)`
 	contract = regexp.MustCompile(`(?i)\b(?:(?:` + alt(e["contract_heads"]) + `)[\s-]+(?:` + alt(e["contract_nouns"]) + `)|` + alt(e["contract_words"]) +
 		`|as\s+(?:an?\s+)?(?:independent\s+|external\s+)?contractor|b2b\s+(?:` + alt(e["b2b_nouns"]) + `)|b2b\s*(?:or|and|/)\s*(?:employment|permanent|uop|employee|contract)` +
-		`|` + months + `[- ]months?\s+(?:fixed[- ]term\s+)?contract|(?:short|long)[- ]term\s+contract|contract\s*,\s*\d+\+?\s*(?:months?|weeks?|years?))\b`)
+		`|` + lengthSpan + `[- ]\s*(?:months?|years?)\s+(?:fixed[- ]term\s+)?contract|(?:short|long)[- ]term\s+contract|contract\s*,\s*` + lengthSpan + `\s*(?:months?|weeks?|years?))\b`)
 	intern = regexp.MustCompile(`(?i)\b(?:(?:` + internWord + `)\s+(?:` + alt(e["intern_nouns"]) + `)|(?:` + alt(e["intern_leads"]) + `)\s+(?:` + internWord + `)|(?:` + alt(e["intern_hire_cues"]) + `)\s+(?:[\w-]+\s+){0,3}interns?|(?:as|for)\s+an?\s+(?:[\w-]+\s+)?intern)\b|(?:^|[.!?]\s+)(?:[\w-]+\s+){0,3}interns?\s+(?:` + alt(e["intern_verbs"]) + `)\b`)
 	employment = regexp.MustCompile(`(?i)\bpermanent\s+(?:` + alt(e["permanent_nouns"]) + `)\b|(?:^|[,;|•·:]\s*)permanent\s*(?:$|[,;|•·.])|\b(?:full|part)[- ]?time\s+permanent\b|\bw-?2\b|\b(?:full|part)[- ]?time\s+employ(?:ees?|ment)\b|\bemployment\s+contract\b|\bcontract\s+of\s+employment\b|\bemployee\s+(?:position|role|basis|status)\b|\bas\s+an?\s+employee\b`)
 	smart = regexp.MustCompile(`(?i)\bsmart\s+$`)
