@@ -3,16 +3,19 @@ package facts
 type Kind string
 
 const (
-	Money       Kind = "money"
-	WorkMode    Kind = "work_mode"
-	Engagement  Kind = "engagement"
-	Place       Kind = "place"
-	TimeZone    Kind = "time_zone"
-	Hours       Kind = "hours"
-	Language    Kind = "language"
-	Requirement Kind = "requirement"
-	Offer       Kind = "offer"
-	Analysed    Kind = "analysed"
+	Money        Kind = "money"
+	WorkMode     Kind = "work_mode"
+	Engagement   Kind = "engagement"
+	Place        Kind = "place"
+	TimeZone     Kind = "time_zone"
+	Hours        Kind = "hours"
+	Language     Kind = "language"
+	Requirement  Kind = "requirement"
+	Offer        Kind = "offer"
+	Years        Kind = "years"
+	Seniority    Kind = "seniority"
+	CompanyStage Kind = "company_stage"
+	Analysed     Kind = "analysed"
 )
 
 type Flag string

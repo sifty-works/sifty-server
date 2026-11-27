@@ -31,7 +31,13 @@ func Save(ctx context.Context, database *db.DB, vacancy, version int64, worker s
 	return nil
 }
 
-const KeySQL = `(SELECT COALESCE(group_concat(a.value), '') FROM fact a WHERE a.vacancy=v.id AND a.version=v.version AND a.kind='analysed')`
+const keySelect = `(SELECT COALESCE(group_concat(a.value), '') FROM fact a WHERE a.vacancy=v.id AND a.version=v.version AND a.kind='analysed'`
+
+const KeySQL = keySelect + `)`
+
+func KeySQLFor(workers ...string) string {
+	return keySelect + ` AND a.worker IN ('` + strings.Join(workers, `','`) + `'))`
+}
 
 type Set struct {
 	Facts    []Fact

@@ -368,3 +368,38 @@ func TestWorkModeIsNotOnsiteFromALookAlike(t *testing.T) {
 		})
 	}
 }
+
+func TestKeyFactsAreReadOnlyFromWhatTheVacancyStates(t *testing.T) {
+	cases := []struct{ name, title, body, want string }{
+		{"the most years the requirement lines ask count", "", `<h2>Requirements</h2><ul><li>5+ years of backend experience</li><li>3+ years with Go</li></ul>`, "years 5"},
+		{"a range asks its lower end", "", `<h2>Requirements</h2><ul><li>3-5 years of Go</li></ul>`, "years 3"},
+		{"years of the company's history are no requirement", "", `<p>Acme was founded 12 years ago.</p>`, ""},
+		{"years in the company section are no requirement", "", `<h2>About us</h2><p>We have 10 years of experience building robots.</p><h2>Requirements</h2><ul><li>5+ years of backend experience</li></ul>`, "years 5"},
+		{"the title beats the text", "Senior Software Engineer", `<p>You will mentor our junior developers.</p>`, "seniority Senior"},
+		{"a lead of lead generation is no seniority", "Lead Generation Specialist", `<p>Find new customers.</p>`, ""},
+		{"a chief of staff is no seniority", "Chief of Staff", `<p>Support the founders.</p>`, ""},
+		{"a stage in the investors' description is no stage", "", `<h2>Our investors</h2><p>Backed by top investors including a Series C fund.</p>`, ""},
+		{"a stage a customer is at is no stage", "", `<p>Our customers include a Series A startup.</p>`, ""},
+		{"a stage outside the company sections is no stage", "", `<h2>Requirements</h2><ul><li>Experience at a Series B startup</li></ul>`, ""},
+		{"years of the company's history are no requirement outside the requirement sections", "", `<h2>Requirements</h2><ul><li>Go</li></ul><h2>About the role</h2><p>For over 10 years of work in robotics, we have built robots.</p>`, ""},
+		{"years in the company section are not read when the requirement sections state none", "", `<h2>Requirements</h2><ul><li>Go</li></ul><h2>About us</h2><p>Our engineers bring 10+ years of experience.</p>`, ""},
+		{"a customer's backing is no company stage", "", `<p>Our customers are VC-backed startups.</p>`, ""},
+		{"raised without an amount is no raise", "", `<p>Acme raised awareness of the brand.</p>`, ""},
+		{"the valuation is appended to the raise", "", `<p>Acme closed a $1.37B Series D, valued at $7.87B.</p>`, "company_stage Series D, $1.37B, valued at $7.87B"},
+		{"revenue growth is no growth stage", "", `<p>We are growing over 100% a year and have grown 2-3x each year.</p>`, ""},
+		{"revenue next to a stage is no raise", "", `<p>Acme is a Series B company with $5M ARR.</p>`, "company_stage Series B"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			for _, f := range readTitled(t, "Acme", tc.title, tc.body).Facts {
+				if f.Kind == facts.Years || f.Kind == facts.Seniority || f.Kind == facts.CompanyStage {
+					got = append(got, string(f.Kind)+" "+f.Value)
+				}
+			}
+			if joined := strings.Join(got, "; "); joined != tc.want {
+				t.Errorf("key facts = %q, want %q", joined, tc.want)
+			}
+		})
+	}
+}

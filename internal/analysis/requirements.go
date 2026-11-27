@@ -3,6 +3,7 @@ package analysis
 import (
 	"context"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -34,10 +35,7 @@ func (requirements) Version() int { return 2 }
 func (requirements) Produces() []facts.Kind { return []facts.Kind{facts.Requirement} }
 
 func (requirements) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
-	hasSection := false
-	for _, s := range doc.Sections {
-		hasSection = hasSection || s.Name == SectionRequirements || s.Name == SectionNiceToHave
-	}
+	hasSection := hasRequirementSection(doc)
 	var out []facts.Fact
 	for _, line := range textLines(doc.Original) {
 		if doc.isHeading(line) || strings.HasSuffix(line.Text, ":") {
@@ -66,6 +64,10 @@ func (requirements) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 		out = out[:maxRequirementLines]
 	}
 	return out, nil
+}
+
+func hasRequirementSection(doc *Doc) bool {
+	return slices.ContainsFunc(doc.Sections, func(s Section) bool { return s.Name == SectionRequirements || s.Name == SectionNiceToHave })
 }
 
 func splitLong(l Line) []Line {

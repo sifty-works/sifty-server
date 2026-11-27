@@ -416,6 +416,18 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 	}
 }
 
+func TestKeyFactsDoNotChangeFitsYou(t *testing.T) {
+	p := goals(candidate.GoalsView{TargetRoles: []string{"Engineer"}})
+	p.DerivedYears = candidate.DerivedYears{Total: 1}
+	plain := fit.Vacancy{Title: "Engineer", Full: true, Analysed: true}
+	stated := plain
+	stated.Years, stated.Seniority, stated.Stage = 9, "Senior", "Series B"
+	a, b := fit.Score(p, plain, rules()), fit.Score(p, stated, rules())
+	if a.State != fit.Scored || a.Score != b.Score || a.ScoredOn != b.ScoredOn || a.Of != b.Of || len(a.Criteria) != len(b.Criteria) {
+		t.Errorf("Fits you with key facts = %d on %d of %d, without = %d on %d of %d", b.Score, b.ScoredOn, b.Of, a.Score, a.ScoredOn, a.Of)
+	}
+}
+
 func TestRequirementRowIsDecidedByConfirmedFactThenYears(t *testing.T) {
 	p := fit.ProfileView{
 		Goals:        candidate.GoalsView{TargetRoles: []string{"Engineer"}},

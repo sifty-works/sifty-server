@@ -1,0 +1,33 @@
+years_noise: [ago, founded, since, history, in business, years old, we have, we've, we are, we're, our company, our team, our product, our platform, '\d[- ]years?[- ](?:degree|bachelor|master|program)', 'for (?:over|more than|nearly|almost|the (?:past|last))', 'the (?:past|last)']
+years_follow: [of, in, with, as, using, working, building, developing, managing, leading, experience, exp, professional, relevant, hands-on, industry, practical, commercial]
+seniority_noise: [chief of staff, lead generation, lead gen, lead qualification, lead scoring, headcount, head count]
+seniority_leads: [looking for, seeking, hiring, we need, join us as, joining us as]
+levels:
+  - {name: Intern, patterns: ['interns?', 'internship', 'trainee', 'working\s+student']}
+  - {name: Junior, patterns: ['junior', 'jr', 'entry[- ]level', 'graduate']}
+  - {name: Mid, patterns: ['mid', 'mid[- ]level', 'middle', 'intermediate']}
+  - {name: Senior, patterns: ['senior', 'sr']}
+  - {name: Staff, patterns: ['staff']}
+  - {name: Principal, patterns: ['principal']}
+  - {name: Lead, patterns: ['lead', 'team\s+lead', 'tech(?:nical)?\s+lead']}
+  - {name: Head, patterns: ['head']}
+  - {name: Director, patterns: ['director']}
+  - {name: VP, patterns: ['[sea]?vp', 'vice[- ]president']}
+  - {name: C-level, patterns: ['c[a-z]o', 'chief\s+\w+\s+officer', 'c-level']}
+stage_noise: ['investors?', 'backers?', 'funds?', 'portfolio', 'customers?', 'clients?', 'partners?', 'including', 'such as', 'like', 'competitors?', 'acquired']
+amount_noise: [ARR, revenue, users, customers, sales]
+valuation_cues: [valuation, valued]
+stages:
+  - {name: Public, patterns: ['publicly[- ](?:traded|listed)', 'public company', '(?:nasdaq|nyse)[- ](?:listed|traded)', 'listed on (?:the )?(?:nasdaq|nyse)']}
+  - {name: Series E, amount: optional, patterns: ['series\s+e\b']}
+  - {name: Series D, amount: optional, patterns: ['series\s+d\b']}
+  - {name: Series C, amount: optional, patterns: ['series\s+c\b']}
+  - {name: Series B, amount: optional, patterns: ['series\s+b\b']}
+  - {name: Series A, amount: optional, patterns: ['series\s+a\b']}
+  - {name: Seed, amount: optional, patterns: ['seed[- ](?:stage|funded|round|funding|backed)']}
+  - {name: Bootstrapped, patterns: ['bootstrapped', 'self-funded']}
+  - {name: Profitable, patterns: ['profitable', 'cash[- ]flow positive']}
+  - {name: Growth, patterns: ['growth[- ]stage', 'scale-?up']}
+  - {name: Raised, amount: required, patterns: ['raised', 'in (?:total )?funding', 'funding round']}
+  - {name: Early stage, patterns: ['early[- ]stage', 'pre-?seed']}
+  - {name: VC-backed, patterns: ['(?:venture|vc)[- ](?:backed|funded)', 'backed by [^.;]{0,60}\b(?:investors?|vcs?|ventures?|capital)\b']}

@@ -232,6 +232,7 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 		line, verdict, goal, bucket := tileLine(f.Criteria, t.criterion, t.empty)
 		f.Tiles = append(f.Tiles, Tile{t.name, value, converted, full, line, verdict, goal, bucket})
 	}
+	f.Tiles = append(f.Tiles, keyFactTiles(v, p)...)
 	switch {
 	case !v.Full:
 		f.Broken = false

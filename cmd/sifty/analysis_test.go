@@ -65,7 +65,7 @@ func TestAnalysisSavesFactsWithoutModelCall(t *testing.T) {
 	waitFor(t, 5*time.Second, func() bool {
 		var n int
 		d.QueryRow(`SELECT count(*) FROM fact WHERE vacancy=? AND kind=?`, full, facts.Analysed).Scan(&n)
-		return n == 4
+		return n == 5
 	})
 
 	sets, err := facts.Load(ctx, d, full)

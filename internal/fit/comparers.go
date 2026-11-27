@@ -3,6 +3,7 @@ package fit
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/sifty-works/sifty-server/internal/candidate"
@@ -321,4 +322,37 @@ func hoursTile(v Vacancy, _ geo, _ map[string]float64) (string, string, string) 
 
 func languagesTile(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
 	return list(v.Languages, "Not stated"), "", ""
+}
+
+const shortfallYears = 2
+
+func keyFactTiles(v Vacancy, p ProfileView) []Tile {
+	var out []Tile
+	if v.Years > 0 {
+		out = append(out, experienceTile(v, p))
+	}
+	for _, t := range []Tile{{Name: "Seniority", Value: v.Seniority}, {Name: "Company stage", Value: v.Stage}} {
+		if t.Value != "" {
+			t.Verdict = "?"
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func experienceTile(v Vacancy, p ProfileView) Tile {
+	t := Tile{Name: "Experience", Value: strconv.Itoa(v.Years) + "+ years", Verdict: "?"}
+	have := p.DerivedYears.Total
+	if have <= 0 {
+		t.Line = "No experience in your data"
+		return t
+	}
+	t.Line = "You have " + yearsEvidence("", p.DerivedYears)
+	switch {
+	case have >= v.Years:
+		t.Verdict = "✓"
+	case v.Years-have > shortfallYears:
+		t.Verdict = "✕"
+	}
+	return t
 }

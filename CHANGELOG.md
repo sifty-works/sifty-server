@@ -4,6 +4,10 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- The Key facts table adds Experience (the years the vacancy asks, ✓ when your years reach them, ✕ when you fall short by more than two), Seniority (from the title) and Company stage (Seed, Series A–E, a raise and valuation, early stage, VC-backed, bootstrapped, profitable or public), each shown only when the vacancy states it. They do not change Fits you. Years are read in more forms ("five years", "5-year"), which also sharpens the level a skill line asks for. Every vacancy is analysed again once.
+
+- A restricted remote vacancy's Work mode card reads "Remote — see Work authorization" instead of "Not stated in the vacancy".
+
 ## 0.10.0
 
 - What they ask shows the vacancy's skills as chips in Required and Nice to have. Each chip shows the level the vacancy asks for, read from its words and years ("familiarity" Beginner, "strong" or "3+ years" Proficient, "deep" or "5+ years" Expert), and a mark against your level: ✓ when yours is at or above it, ≈ one level below, ✕ two below or none, ? when you have not stated it. Click a chip to read its line and set your level; it is saved to your skills at once. A line listing alternatives ("Rust, TypeScript or Python") is one chip met by the best of them. Lines without a known skill stay below as other requirements. The counter adds ≈, and a borderline skill counts half in Fits you. Every result is recomputed once.

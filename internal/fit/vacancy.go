@@ -3,6 +3,7 @@ package fit
 import (
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/sifty-works/sifty-server/internal/facts"
@@ -43,6 +44,9 @@ type Vacancy struct {
 	Locations    []string                    `json:"locations,omitempty"`
 	TimeZone     string                      `json:"timeZone,omitempty"`
 	Languages    []string                    `json:"languages,omitempty"`
+	Years        int                         `json:"-"`
+	Seniority    string                      `json:"-"`
+	Stage        string                      `json:"-"`
 	Requirements []Requirement               `json:"-"`
 	Sources      map[facts.Kind]facts.Source `json:"-"`
 	Judged       []Judged                    `json:"-"`
@@ -81,6 +85,18 @@ func FromFacts(title string, full bool, set facts.Set) Vacancy {
 		case facts.Language:
 			if f.Flag == facts.Required {
 				add(&v.Languages, f.Value)
+			}
+		case facts.Years:
+			if v.Years == 0 {
+				v.Years, _ = strconv.Atoi(f.Value)
+			}
+		case facts.Seniority:
+			if v.Seniority == "" {
+				v.Seniority = f.Value
+			}
+		case facts.CompanyStage:
+			if v.Stage == "" {
+				v.Stage = f.Value
 			}
 		case facts.TimeZone:
 			if v.TimeZone == "" {

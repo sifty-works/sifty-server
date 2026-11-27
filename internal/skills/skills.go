@@ -18,6 +18,7 @@ var VocabBytes []byte
 
 type vocabData struct {
 	TechnologyContext []string    `yaml:"technology_context"`
+	NumberWords       []string    `yaml:"number_words"`
 	Levels            levelsData  `yaml:"levels"`
 	Groups            []groupData `yaml:"groups"`
 }
@@ -44,12 +45,13 @@ type termInfo struct {
 }
 
 type vocab struct {
-	terms    map[string]termInfo
-	maxWords int
-	context  map[string]bool
-	order    []string
-	years    []yearRule
-	words    []wordRule
+	terms       map[string]termInfo
+	maxWords    int
+	context     map[string]bool
+	order       []string
+	numberWords []string
+	years       []yearRule
+	words       []wordRule
 }
 
 type yearRule struct {
@@ -68,7 +70,7 @@ var defaultVocab = func() *vocab {
 	if err := yaml.Unmarshal(VocabBytes, &d); err != nil {
 		panic("skills: load vocab.yaml: " + err.Error())
 	}
-	v := &vocab{terms: map[string]termInfo{}, context: map[string]bool{}, order: d.Levels.Order, maxWords: 1}
+	v := &vocab{terms: map[string]termInfo{}, context: map[string]bool{}, order: d.Levels.Order, numberWords: d.NumberWords, maxWords: 1}
 	for _, w := range d.TechnologyContext {
 		v.context[strings.ToLower(strings.TrimSpace(w))] = true
 	}
@@ -345,15 +347,18 @@ type Entry struct {
 	Index    int
 }
 
-var yearsRe = regexp.MustCompile(`(?i)\b(\d+)(?:\s*(?:-|–|to)\s*\d+)?\s*\+?\s*(?:years?|yrs?)\b`)
+var yearsRe = regexp.MustCompile(`(?i)\b(\d+|` + strings.Join(defaultVocab.numberWords, "|") + `)(?:\s*(?:-|–|to)\s*\d+)?\s*\+?[\s-]*(?:years?|yrs?)\b`)
 
 func YearsIn(text string) (int, bool) {
-	m := yearsRe.FindStringSubmatch(text)
-	if m == nil {
-		return 0, false
+	most := 0
+	for _, m := range yearsRe.FindAllStringSubmatch(text, -1) {
+		years, err := strconv.Atoi(m[1])
+		if err != nil {
+			years = slices.Index(defaultVocab.numberWords, strings.ToLower(m[1])) + 1
+		}
+		most = max(most, years)
 	}
-	years, _ := strconv.Atoi(m[1])
-	return years, true
+	return most, most > 0
 }
 
 func Levels() []string { return slices.Clone(defaultVocab.order) }

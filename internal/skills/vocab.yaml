@@ -1,5 +1,7 @@
 version: 1
 
+number_words: [one, two, three, four, five, six, seven, eight, nine, ten]
+
 technology_context:
   - language
   - languages
