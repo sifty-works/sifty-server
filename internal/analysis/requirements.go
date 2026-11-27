@@ -11,6 +11,7 @@ import (
 	"golang.org/x/net/html/atom"
 
 	"github.com/sifty-works/sifty-server/internal/facts"
+	"github.com/sifty-works/sifty-server/internal/skills"
 )
 
 const (
@@ -41,7 +42,7 @@ type requirements struct{}
 
 func (requirements) Name() string { return "requirement_lines" }
 
-func (requirements) Version() int { return 5 }
+func (requirements) Version() int { return 6 }
 
 func (requirements) Produces() []facts.Kind { return []facts.Kind{facts.Requirement} }
 
@@ -102,7 +103,8 @@ func requirementLines(doc *Doc, items []Span, hasSection bool) []facts.Fact {
 		}
 		for _, l := range lines {
 			for _, piece := range splitLong(l, fallback) {
-				if (fallback || later) && !fallbackRe.MatchString(piece.Text) {
+				reads := fallbackRe.MatchString(piece.Text) || later && len(skills.Groups(piece.Text)) > 0
+				if (fallback || later) && !reads {
 					continue
 				}
 				if !nonRequirementRe.MatchString(piece.Text) && !eeoRe.MatchString(piece.Text) && !hashtagRe.MatchString(piece.Text) && !aboutCompany(piece.Text, fallback) {
