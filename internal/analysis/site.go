@@ -61,6 +61,7 @@ var (
 	markerRe                                            = regexp.MustCompile(`(?i)` + alt(currencyMarkers))
 	internTitleRe                                       = regexp.MustCompile(`(?i)\b(?:` + internWordPattern + `)s?\b\s*(?:$|[-–(,:|])`)
 	internRe                                            = regexp.MustCompile(`(?i)\b(?:` + internWordPattern + `)s?\b`)
+	gluedLabelRe                                        = regexp.MustCompile(`[\p{Ll})\]](\p{Lu}[\p{L} ]*?):`)
 )
 
 func ReadSite(doc *Doc) Site {
@@ -82,7 +83,15 @@ func ReadSite(doc *Doc) Site {
 		}
 	}
 	s.AddPlaces(doc.Location)
-	for _, line := range textLines(doc.Original) {
+	lines := textLines(doc.Original)
+	for k, line := range lines {
+		next := ""
+		if k+1 < len(lines) {
+			next, _, _ = strings.Cut(lines[k+1].Text, ". ")
+		}
+		if labels[labelKey(line.Text)] == "location" && placeList(next) {
+			line = Line{Text: line.Text + ": " + next, Start: line.Start, End: lines[k+1].Start + len(next)}
+		}
 		i, width := strings.Index(line.Text, ":"), 1
 		if j := strings.Index(line.Text, " - "); j >= 0 && (i < 0 || j < i) {
 			i, width = j, 3
@@ -92,7 +101,13 @@ func ReadSite(doc *Doc) Site {
 		}
 		value := strings.TrimSpace(line.Text[i+width:])
 		span := Span{line.Start, line.End}
-		switch labels[strings.ToLower(strings.Join(strings.Fields(line.Text[:i]), " "))] {
+		key := labelKey(line.Text[:i])
+		for _, m := range gluedLabelRe.FindAllStringSubmatchIndex(line.Text, -1) {
+			if glued := labelKey(line.Text[m[2]:m[3]]); labels[key] == "" && labels[glued] != "" {
+				key, value = glued, strings.TrimSpace(line.Text[m[3]+1:])
+			}
+		}
+		switch labels[key] {
 		case "money":
 			if s.Money == nil {
 				if s.Money = ParseMoney(value, line.Text); s.Money != nil {
@@ -154,6 +169,16 @@ func ReadSite(doc *Doc) Site {
 	}
 	return s
 }
+
+func placeList(text string) bool {
+	covered := 0
+	for _, it := range placeItems(text) {
+		covered += it.end - it.start
+	}
+	return covered > 0 && covered*2 >= len(text)
+}
+
+func labelKey(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
 
 func (s *Site) AddPlaces(value string) []string {
 	var parts []string

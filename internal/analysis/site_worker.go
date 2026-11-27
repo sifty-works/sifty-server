@@ -13,7 +13,7 @@ type siteFields struct{}
 
 func (siteFields) Name() string { return "site_fields" }
 
-func (siteFields) Version() int { return 8 }
+func (siteFields) Version() int { return 9 }
 
 func (siteFields) Produces() []facts.Kind {
 	return []facts.Kind{facts.Money, facts.WorkMode, facts.Engagement, facts.Place, facts.TimeZone, facts.Hours}

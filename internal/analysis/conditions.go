@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
@@ -18,6 +19,8 @@ import (
 
 //go:embed conditions.yaml
 var conditionsYAML []byte
+
+const fullPart = `\b(?:full[- ]?time|part[- ]?time)\b`
 
 var plusExtra = `(?:\+|\bplus\b)\s*(?:[\d.,%–-]+\s*(?:of\s+)?)?(?:` + alt(vocab.Money["plus_extras"]) + `)\b`
 
@@ -33,7 +36,8 @@ var (
 	onsiteNoiseRe                                                                                   = regexp.MustCompile(`(?i)^\s*(?:\w+\s+)?(?:` + altRe(vocab.Mode["onsite_noise"]) + `)\b`)
 	daysAfterRe, daysBeforeRe, shareBeforeRe, shareAfterRe, willingRe, cityOrRemoteRe, remoteDaysRe = daysPatterns()
 	contractRe, internRe2, employmentRe, smartRe, employmentContractRe                              = engagementPatterns()
-	hoursCueRe                                                                                      = regexp.MustCompile(`(?i)\b(?:full[- ]?time|part[- ]?time)\b|` + weeklyPattern)
+	hoursCueRe                                                                                      = regexp.MustCompile(`(?i)` + fullPart + `|` + weeklyPattern)
+	hoursNoiseRe                                                                                    = regexp.MustCompile(`(?i)` + fullPart + `\s+(?:[\w-]+\s+){0,2}?(?:` + alt(vocab.Hours["noise_after"]) + `)\b|\b(?:` + alt(vocab.Hours["noise_before"]) + `)\s+(?:[\w-]+\s+){0,4}?` + fullPart)
 	zoneCueRe                                                                                       = regexp.MustCompile(`(?i)time ?zones?|±|overlap|working hours|business hours|aligned|hours of|standup|stand-up|meetings`)
 	zoneOffsetRe                                                                                    = regexp.MustCompile(`(?i)\b(?:UTC|GMT)\s*[+\-]`)
 	placeCueRes, eligibilityRe, citizenRe, worldwideRe                                              = placePatterns()
@@ -64,7 +68,7 @@ var (
 	perkRe                                                                                          = regexp.MustCompile(`(?i)\b(?:` + alt(vocab.Mode["perk_words"]) + `)\b[^.;]{0,40}$`)
 	shareRemoteRe                                                                                   = regexp.MustCompile(`(?i)(\d{1,3})\s?%\s+(?:of\s+(?:the\s+)?time\s+)?(?:telecommut\w*|remote\w*|work(?:ing)?\s+from\s+home|wfh)`)
 	officeBasedRe                                                                                   = regexp.MustCompile(`(?i)\b(?:role|position|job|team)\s+is\s+(?:based|located)\s+(?:in|at)\s+(?:our|the)\s+[^.;]{0,40}?\b(?:hq|headquarters|offices?|campus)\b`)
-	hybridNounRe                                                                                    = regexp.MustCompile(`(?i)^\s+(?:` + alt(vocab.Mode["hybrid_nouns"]) + `)\b`)
+	hybridNextRe                                                                                    = regexp.MustCompile(`^\s+(\p{Ll}\p{L}*)`)
 	workplaceRe                                                                                     = regexp.MustCompile(`(?i)\b(?:` + alt(vocab.Mode["workplace_words"]) + `)\b`)
 	softZoneRe                                                                                      = regexp.MustCompile(`(?i)\b(?:` + alt(vocab.Place["soft_zone"]) + `)\b`)
 	companyContractorRe                                                                             = regexp.MustCompile(`(?i)\b(?:(?:` + alt(vocab.Engagement["employer_adjectives"]) + `)\s+contractors?|` + altRe(vocab.Engagement["employer_phrases"]) + `|(?:` + alt(vocab.Engagement["employer_leads"]) + `)\s+(?:an?\s+)?(?:[\w-]+\s+){0,3}contractors?)\b`)
@@ -87,14 +91,21 @@ func loadLanguages() (*regexp.Regexp, map[string]string, *regexp.Regexp) {
 	for name, aliases := range v.Languages {
 		for _, w := range append([]string{name}, aliases...) {
 			names[w] = name
-			words = append(words, regexp.QuoteMeta(w))
+			words = append(words, regexp.QuoteMeta(w)+wordEnd(w))
 		}
 	}
 	sort.Strings(words)
 	for _, p := range v.Proficiency {
 		prof = append(prof, regexp.QuoteMeta(p))
 	}
-	return regexp.MustCompile(`\b(` + strings.Join(words, "|") + `)\b`), names, regexp.MustCompile(`(?i)\b(?:` + strings.Join(prof, "|") + `)\b`)
+	return regexp.MustCompile(`\b(` + strings.Join(words, "|") + `)`), names, regexp.MustCompile(`(?i)\b(?:` + strings.Join(prof, "|") + `)\b`)
+}
+
+func wordEnd(w string) string {
+	if r, _ := utf8.DecodeLastRuneInString(w); r < utf8.RuneSelf {
+		return `\b`
+	}
+	return ""
 }
 
 func moneyPattern() *regexp.Regexp {
@@ -110,7 +121,7 @@ type conditions struct{}
 
 func (conditions) Name() string { return "conditions" }
 
-func (conditions) Version() int { return 14 + sectionsVersion }
+func (conditions) Version() int { return 15 + sectionsVersion }
 
 func (conditions) Produces() []facts.Kind {
 	return []facts.Kind{facts.Money, facts.WorkMode, facts.Engagement, facts.Place, facts.TimeZone, facts.Hours, facts.Language}
@@ -174,8 +185,9 @@ func (conditions) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 			}
 		}
 		if !skip[facts.Hours] {
-			if loc := hoursCueRe.FindStringIndex(line.Text); loc != nil {
-				if h := ParseHours(line.Text); h != nil {
+			text := blank(hoursNoiseRe, line.Text)
+			if loc := hoursCueRe.FindStringIndex(text); loc != nil {
+				if h := ParseHours(text); h != nil {
 					b, _ := json.Marshal(h)
 					out, skip[facts.Hours] = append(out, vocabFact(facts.Hours, string(b), "", line.Start+loc[0], line.Start+loc[1])), true
 				}
@@ -397,7 +409,7 @@ func workHybrids(text string) [][]int {
 		if hybridNoiseRe.MatchString(text[loc[0]:loc[1]]) || remoteNotRe.MatchString(text[:loc[0]]) {
 			continue
 		}
-		if hybridNounRe.MatchString(text[loc[1]:]) && !workplaceRe.MatchString(sentenceAround(text, loc[0])) {
+		if m := hybridNextRe.FindStringSubmatch(text[loc[1]:]); m != nil && !slices.Contains(vocab.Mode["hybrid_follow"], m[1]) && !workplaceRe.MatchString(sentenceAround(text, loc[0])) {
 			continue
 		}
 		out = append(out, loc)
@@ -584,10 +596,10 @@ func languagesIn(line Line, section string) []facts.Fact {
 }
 
 type vocabulary struct {
-	Engagement, Place, Mode, Money map[string][]string
-	Currencies                     map[string][]string
-	Floors                         map[string]float64
-	FloorWithoutPeriod             float64 `yaml:"floor_without_period"`
+	Engagement, Place, Mode, Money, Hours map[string][]string
+	Currencies                            map[string][]string
+	Floors                                map[string]float64
+	FloorWithoutPeriod                    float64 `yaml:"floor_without_period"`
 }
 
 var vocab = loadVocabulary()
@@ -627,7 +639,7 @@ func daysPatterns() (after, before, shareBefore, shareAfter, willing, cityOrRemo
 	n := `(\d|one|two|three|four|five)`
 	office := `(?:office|in[- ]person|on-?site)`
 	perWeek := `\s*(?:a|per|each|every|/)\s*week`
-	after = regexp.MustCompile(`(?i)\b` + n + `\s+days?(?:` + perWeek + `)?\s+(?:(?:in|at|from)\s+(?:the\s+|our\s+|an?\s+)?)?` + office + `\b`)
+	after = regexp.MustCompile(`(?i)\b` + n + `\+?\s+days?(?:` + perWeek + `)?\s+(?:(?:in|at|from)\s+(?:the\s+|our\s+|an?\s+)?)?` + office + `\b`)
 	before = regexp.MustCompile(`(?i)\b` + office + `\b([^.;]{0,40}?)\b` + n + `\s+days?` + perWeek + `\b`)
 	shareBefore = regexp.MustCompile(`(?i)(\d{1,3})\s?%\s+(?:of\s+(?:the\s+|your\s+|their\s+|each\s+)?(?:time|week|working time|working hours|workweek|work week))?[^.;]{0,25}?\b` + office + `\b`)
 	shareAfter = regexp.MustCompile(`(?i)\b` + office + `\b[^.;]{0,40}?(\d{1,3})\s?%`)

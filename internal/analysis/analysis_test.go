@@ -314,6 +314,7 @@ func TestPlaceFieldsOfASiteSayOnlyWhatTheSiteStates(t *testing.T) {
 		{"a placeholder is no place", facts.Employer, "LOCATION", "", "", ""},
 		{"a country code becomes its country name", facts.Aggregator, "PL", "", "Poland", ""},
 		{"a worldwide field beside a time-zone restriction is no place", facts.Employer, "Worldwide", "Time zone: CET (+/- 3 hours). We cannot consider other time zones.", "", ""},
+		{"a bare Location heading before a sentence is no place", facts.Employer, "", "Location\nOur offices are in Lisbon, Portugal and Porto.", "", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -367,6 +368,8 @@ func TestWorkModeIsNotOnsiteFromALookAlike(t *testing.T) {
 		{"a business hybrid model is no work mode", `<p>Our hybrid model out-performs brokered contracts or other “compute markets”</p>`, ""},
 		{"a city or remote in a pipe header is remote and onsite", `<p>Acme | Staff Engineers (Elixir) | NYC or REMOTE (US, Europe, South America) | Full-Time | $200K-$250K + equity | https://jobs.example.com/x</p>`, "remote; onsite"},
 		{"a remote place restriction is remote only", `<p>Remote, US-based</p>`, "remote"},
+		{"hybrid financing in company prose is no work mode", `<p>We provide structured or hybrid financing to growing firms.</p>`, ""},
+		{"days in the office with a plus sign are hybrid only", `<p>HYBRID, 2+ days in office</p>`, "hybrid"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -429,6 +432,8 @@ func TestConditionFactsAreReadFromWhatTheVacancyStates(t *testing.T) {
 		{"weeks are shown as weeks", "<p>Duration: 16 weeks</p>", "contract_length 16 weeks"},
 		{"a commitment range keeps both ends", "<p>Commitment of 4 to 8 months.</p>", "contract_length 4–8 months"},
 		{"a probation period is no contract length", "<p>Permanent contract, 6 months probation.</p>", ""},
+		{"full-time before experience is no hours", "<p>3+ years of full-time experience in accounting.</p>", ""},
+		{"part-time in a benefits list is no hours", "<h2>Benefits</h2><ul><li>Parental leave with a gradual return part-time.</li></ul>", ""},
 		{"a smart contract has no length", "<p>We audit a smart contract for 3 months.</p>", ""},
 		{"contract management experience is no contract length", "<p>Minimum 6 months contract management experience</p>", ""},
 		{"contracts our customers sign are no contract length", "<p>Our customers sign 12-month contracts.</p>", ""},
@@ -452,7 +457,7 @@ func TestConditionFactsAreReadFromWhatTheVacancyStates(t *testing.T) {
 		{"visa sponsorship that is not available is visa refused", "<p>Visa sponsorship is not available.</p>", "visa refused"},
 		{"sponsoring events is no visa", "<p>We sponsor open source projects and events.</p>", ""},
 	}
-	kinds := map[facts.Kind]bool{facts.Deadline: true, facts.ContractLen: true, facts.Clearance: true, facts.Relocation: true, facts.Visa: true}
+	kinds := map[facts.Kind]bool{facts.Deadline: true, facts.ContractLen: true, facts.Clearance: true, facts.Relocation: true, facts.Visa: true, facts.Hours: true}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var got []string
