@@ -2,6 +2,7 @@ package source_test
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -596,7 +597,7 @@ func TestLever_keeps_every_location(t *testing.T) {
 }
 
 func TestHN_list(t *testing.T) {
-	searchURL := "https://hn.algolia.com/api/v1/search_by_date?tags=story,author_whoishiring&hitsPerPage=5"
+	searchURL := "https://hn.algolia.com/api/v1/search_by_date?tags=story,author_whoishiring&hitsPerPage=10"
 	storyURL := "https://hn.algolia.com/api/v1/items/42"
 	searchBody := `{"hits":[{"objectID":"99","title":"Ask HN: Who wants to be hired? (Jan 2026)"},{"objectID":"42","title":"Ask HN: Who is hiring? (Jan 2026)"}]}`
 	storyBody := `{"id":42,"children":[
@@ -634,7 +635,7 @@ func TestHN_list(t *testing.T) {
 }
 
 func TestHN_fields_from_tokens(t *testing.T) {
-	searchURL := "https://hn.algolia.com/api/v1/search_by_date?tags=story,author_whoishiring&hitsPerPage=5"
+	searchURL := "https://hn.algolia.com/api/v1/search_by_date?tags=story,author_whoishiring&hitsPerPage=10"
 	storyURL := "https://hn.algolia.com/api/v1/items/55"
 	searchBody := `{"hits":[{"objectID":"55","title":"Ask HN: Who is hiring? (Feb 2026)"}]}`
 	storyBody := `{"id":55,"children":[
@@ -669,29 +670,71 @@ func TestHN_fields_from_tokens(t *testing.T) {
 	}
 }
 
-func TestHN_no_title_falls_back_to_first_token(t *testing.T) {
-	searchURL := "https://hn.algolia.com/api/v1/search_by_date?tags=story,author_whoishiring&hitsPerPage=5"
-	storyURL := "https://hn.algolia.com/api/v1/items/70"
-	searchBody := `{"hits":[{"objectID":"70","title":"Ask HN: Who is hiring? (Mar 2026)"}]}`
-	storyBody := `{"id":70,"children":[
-		{"id":301,"text":"Acme Co | Remote (EU) | https://acme.example","created_at":"2026-03-01T00:00:00Z","children":[]}
-	]}`
+func hnFixture(t *testing.T, stories map[string]string, search string) []listing.Posting {
+	t.Helper()
 	m := fetchtest.NewMap()
-	m.Set(searchURL, fetchtest.MapEntry{Response: fetch.Response{URL: searchURL, Status: 200, Body: []byte(searchBody)}})
-	m.Set(storyURL, fetchtest.MapEntry{Response: fetch.Response{URL: storyURL, Status: 200, Body: []byte(storyBody)}})
+	searchURL := "https://hn.algolia.com/api/v1/search_by_date?tags=story,author_whoishiring&hitsPerPage=10"
+	m.Set(searchURL, fetchtest.MapEntry{Response: fetch.Response{URL: searchURL, Status: 200, Body: []byte(search)}})
+	for id, body := range stories {
+		u := "https://hn.algolia.com/api/v1/items/" + id
+		m.Set(u, fetchtest.MapEntry{Response: fetch.Response{URL: u, Status: 200, Body: []byte(body)}})
+	}
 	mod, site := source.For(mustParseURL(t, "https://news.ycombinator.com/"))
 	ps, err := mod.List(context.Background(), m, site)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(ps) != 1 {
-		t.Fatalf("got %d postings, want 1 (posting should not be dropped when only mode/url tokens follow company)", len(ps))
+	return ps
+}
+
+func TestHN_header_shapes(t *testing.T) {
+	cases := []struct {
+		name, header                         string
+		company, title, location, work, empl string
+	}{
+		{"place and mode parts are not the role", "ACME | Springfield, IL and Berlin, Germany | Full-time / Remote | ONSITE | https://acme.example/", "ACME", "Open roles", "Springfield, IL and Berlin, Germany", "Remote", "Full-time"},
+		{"work mode combination is not the role", "Beta Inc | REMOTE or HYBRID | Python developer", "Beta Inc", "Python developer", "", "REMOTE / HYBRID", ""},
+		{"place without a comma is not the role", "Foo Labs | Berlin | Product Engineer", "Foo Labs", "Product Engineer", "Berlin", "", ""},
+		{"work mode in the role part is still read", "Gamma | Remote Backend Engineer | https://gamma.example", "Gamma", "Remote Backend Engineer", "", "Remote", ""},
+		{"a plain part after the company is the location, not the role", "Pond AI | San Francisco", "Pond AI", "Open roles", "San Francisco", "", ""},
+		{"a part starting with a work mode gives mode and place", "Delta | ONSITE in SF | Software Engineer", "Delta", "Software Engineer", "SF", "ONSITE", ""},
+		{"a parenthetical work mode gives mode and place", "Echo | San Francisco (Onsite) | Sales", "Echo", "Sales", "San Francisco", "Onsite", ""},
+		{"an address after a dash does not hide the employment type", "Foxtrot | Full time + Internships \u2013 https://f.example | Software Engineer", "Foxtrot", "Software Engineer", "", "", "Full time / Internships"},
+		{"short role nouns name the role", "Hotel | Berlin | SWE", "Hotel", "SWE", "Berlin", "", ""},
+		{"no role is titled open roles", "Acme Co | Remote (EU) | https://acme.example", "Acme Co", "Open roles", "EU", "Remote", ""},
 	}
-	if ps[0].Company != "Acme Co" {
-		t.Errorf("company = %q, want Acme Co", ps[0].Company)
+	var children []string
+	for i, tc := range cases {
+		children = append(children, fmt.Sprintf(`{"id":%d,"text":%q,"created_at":"2026-03-01T00:00:00Z","children":[]}`, 500+i, tc.header))
 	}
-	if ps[0].Title == "" {
-		t.Errorf("title empty, want fallback to first token")
+	ps := hnFixture(t, map[string]string{"90": `{"id":90,"children":[` + strings.Join(children, ",") + `]}`},
+		`{"hits":[{"objectID":"90","title":"Ask HN: Who is hiring? (Mar 2026)"}]}`)
+	if len(ps) != len(cases) {
+		t.Fatalf("got %d postings, want %d", len(ps), len(cases))
+	}
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := ps[i]
+			if p.Company != tc.company || p.Title != tc.title || p.Location != tc.location ||
+				p.Fields["workplace_type"] != tc.work || p.Fields["employment_type"] != tc.empl {
+				t.Errorf("got company=%q title=%q location=%q work=%q employment=%q", p.Company, p.Title, p.Location, p.Fields["workplace_type"], p.Fields["employment_type"])
+			}
+		})
+	}
+}
+
+func TestHN_lists_previous_thread(t *testing.T) {
+	search := `{"hits":[
+		{"objectID":"2","title":"Ask HN: Who is hiring? (Apr 2026)"},
+		{"objectID":"3","title":"Ask HN: Who wants to be hired? (Mar 2026)"},
+		{"objectID":"1","title":"Ask HN: Who is hiring? (Mar 2026)"},
+		{"objectID":"0","title":"Ask HN: Who is hiring? (Feb 2026)"}]}`
+	ps := hnFixture(t, map[string]string{
+		"2": `{"id":2,"children":[{"id":601,"text":"New Co | Engineer","created_at":"2026-04-01T00:00:00Z","children":[]}]}`,
+		"1": `{"id":1,"children":[{"id":602,"text":"Old Co | Engineer","created_at":"2026-03-01T00:00:00Z","children":[]}]}`,
+	}, search)
+	if len(ps) != 2 || !strings.Contains(ps[0].URL, "601") || !strings.Contains(ps[1].URL, "602") {
+		t.Fatalf("postings = %+v, want the newest and the previous thread only", ps)
 	}
 }
 
@@ -705,7 +748,7 @@ func TestHN_spaced_engagement_tokens(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			searchURL := "https://hn.algolia.com/api/v1/search_by_date?tags=story,author_whoishiring&hitsPerPage=5"
+			searchURL := "https://hn.algolia.com/api/v1/search_by_date?tags=story,author_whoishiring&hitsPerPage=10"
 			storyURL := "https://hn.algolia.com/api/v1/items/80"
 			searchBody := `{"hits":[{"objectID":"80","title":"Ask HN: Who is hiring? (Apr 2026)"}]}`
 			storyBody := `{"id":80,"children":[

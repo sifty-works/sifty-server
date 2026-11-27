@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Hacker News "Who is hiring?": the role is read from the header part that names one ("Remote Backend Engineer" stays a role), work mode, employment type and place parts no longer become the role, a header that names no role gives "Open roles"; the two newest threads are read, so last month's postings are corrected on the next collection.
+
 ## 0.18.0
 
 - Key facts marks: green ✓ when a value matches your goal, red ✕ when it is against it, a grey ✓ when the vacancy states it but there is nothing to compare it with (no goal, a value in none of your lists, a fact that is no criterion), and ? only when the vacancy does not state it. Work mode is compared by its lists also for restricted remote work.
