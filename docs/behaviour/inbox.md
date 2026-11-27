@@ -5,6 +5,7 @@ What the user gets: for the chosen profile, the vacancies that fit its search, i
 ## Layout
 
 - The header carries the stage tabs "Inbox N", "Shortlist N" and "Archive N", the profile switcher, the Settings button. Archive counts Applied and Dismissed together.
+- The Sifty logo in the header animates while jobs are collected or a model works; hovering it names what runs, and a click plays one sweep.
 - The Inbox header also shows "N sources need attention" (see `collection.md`).
 - A status bar along the bottom of every page shows what runs, what waits and why (see `application.md`).
 - Archive has two tabs, Applied and Dismissed.
@@ -13,7 +14,7 @@ What the user gets: for the chosen profile, the vacancies that fit its search, i
 - The list width is changed by dragging its edge within limits; a double click resets it; the width is remembered in the browser.
 - When the server does not answer, a banner reads "Sifty server is not responding. Retrying…".
 - A list that cannot be loaded shows an error, not an empty list: when the server answers with an error, the list and the detail area show its sentence; Saved answers and the excluded words of a profile say that they could not be loaded.
-- Every message the client shows is of one of two kinds. A notice reporting something done disappears by itself after five seconds; a failure stays until it is dismissed or the action is tried again. Both close with a cross, and Escape closes the newest message on the page. A new message in the same place replaces the one standing there, so messages never stack up. An action the user asked for that fails always says so; a background load or refresh that fails stays silent.
+- An action the user asked for that fails shows a message over the page, at the bottom right, that stays until it is closed with its cross or Escape, or the action is tried again; a new failure of the same action replaces it, so messages never stack up. An action whose result shows in place (a decision, a skill answer, a saved field) shows no message when it succeeds. A value a field refuses, and a page or list that cannot load, are said in place, not over the page. A background load or refresh that fails stays silent.
 - While a local model loads, a strip reads "Loading model <name> · m:ss", or "Model load failed: …".
 
 ## Which vacancies a profile sees
@@ -136,7 +137,7 @@ Then the dialog "Did you submit your application?" asks for the outcome: Not yet
 - "Listing expired", the publication date, each source by name as a link to the source address (hover shows "Found on <name>"), "Original listing ↗", and "Applied <date> from <profile>" when there is an application;
 - the actions of the current stage.
 
-**Tabs** Overview and Application. Application is unavailable in Inbox with the hint "Shortlist this role to open Application".
+**Tabs** Overview and Application, on the Shortlist stage only; on the other stages the page shows the overview without tabs.
 
 **Overview, from top to bottom:**
 

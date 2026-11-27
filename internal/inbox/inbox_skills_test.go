@@ -61,22 +61,6 @@ func row(index int, have bool) map[string]any {
 	return map[string]any{"requirementIndex": index, "have": have}
 }
 
-func TestSkillsDecision_levelRepeatedChangesNothing(t *testing.T) {
-	d := openTestDB(t)
-	id := addVacancyWithRequirements(t, d, "https://example.com/jobs/sk5", "DevOps",
-		[]fit.Requirement{{Text: "Docker", Level: "required"}})
-	ts := newSkillsServer(t, d, nil)
-
-	postSkills(t, ts, id, level("Docker", "Expert"))
-	resp, status := postSkills(t, ts, id, level("Docker", "Expert"))
-	if status != http.StatusOK {
-		t.Fatalf("second answer: status %d", status)
-	}
-	if notice, _ := resp["notice"].(string); notice != "Nothing new to add; your data is already up to date." {
-		t.Errorf("second answer notice: %q", notice)
-	}
-}
-
 func TestSkillsDecision_unknownRequirementConfirmationIsSaved(t *testing.T) {
 	d := openTestDB(t)
 	id := addVacancyWithRequirements(t, d, "https://example.com/jobs/sk10", "Role",
@@ -182,28 +166,23 @@ func TestSkillsDecision_levelWritesMyData(t *testing.T) {
 		skills     []candidate.Skill
 		absent     []candidate.AbsentSkill
 		answer     map[string]any
-		notice     string
 		wantHave   []string
 		wantAbsent []string
 	}{
 		{name: "a skill not in My data is added at its level", text: "Kafka is a plus",
 			answer:   level("Kafka", "Expert"),
-			notice:   "Set Kafka to Expert in your skills (change in your profile).",
 			wantHave: []string{"Kafka:Expert"}},
 		{name: "a skill held under another name is changed in place", text: "Go",
 			skills:   []candidate.Skill{{Name: "Golang", Level: "Beginner"}},
 			answer:   level("Go", "Expert"),
-			notice:   "Set Go to Expert in your skills (change in your profile).",
 			wantHave: []string{"Golang:Expert"}},
 		{name: "a level moves the skill out of the skills not had", text: "Go",
 			absent:   []candidate.AbsentSkill{{Name: "Go"}},
 			answer:   level("Go", "Proficient"),
-			notice:   "Set Go to Proficient in your skills (change in your profile).",
 			wantHave: []string{"Go:Proficient"}},
 		{name: "No moves the skill to the skills not had", text: "SQL",
 			skills:     []candidate.Skill{{Name: "SQL", Level: "Expert"}},
 			answer:     level("SQL", "No"),
-			notice:     "Set SQL to skills you do not have (change in your profile).",
 			wantAbsent: []string{"SQL"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -216,9 +195,6 @@ func TestSkillsDecision_levelWritesMyData(t *testing.T) {
 			resp, status := postSkills(t, ts, id, tc.answer)
 			if status != http.StatusOK {
 				t.Fatalf("status %d: %v", status, resp)
-			}
-			if got, _ := resp["notice"].(string); got != tc.notice {
-				t.Errorf("notice: got %q, want %q", got, tc.notice)
 			}
 			me, _ := candidate.LoadMe(context.Background(), d)
 			have, absent := skillNames(me)

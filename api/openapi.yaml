@@ -1444,12 +1444,9 @@ components:
             type: object
         SkillsDecisionResp:
             properties:
-                notice:
-                    type: string
                 vacancyView:
                     $ref: '#/components/schemas/VacancyView'
             required:
-                - notice
                 - vacancyView
             type: object
         Source:

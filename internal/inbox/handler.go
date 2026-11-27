@@ -96,7 +96,6 @@ type SkillsDecisionReq struct {
 }
 
 type SkillsDecisionResp struct {
-	Notice      string      `json:"notice"`
 	VacancyView VacancyView `json:"vacancyView"`
 }
 
@@ -136,7 +135,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		if err != nil {
 			return SkillsDecisionResp{}, err
 		}
-		return SkillsDecisionResp{Notice: res.notice, VacancyView: view}, nil
+		return SkillsDecisionResp{VacancyView: view}, nil
 	})
 
 	server.Handle(mux, "GET /api/vacancies", logger, func(r *http.Request, req ListReq) (ListResp, error) {
