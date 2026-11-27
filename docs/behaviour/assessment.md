@@ -70,7 +70,7 @@ A fact says only what the vacancy says; when the vacancy does not say it, the fa
 
 From top to bottom:
 
-1. **Fits you band.** "Fits you 82 /100", the bucket, "scored on 3 of 6", the reasons (broken musts first) and the requirements counter, and the "Refresh source" button (see `collection.md`). On the right, four tiles, each showing the vacancy's value, a line comparing it with the user's goal, and a verdict ✓, ✕ or ?:
+1. **Fits you band.** "Fits you" above one large number coloured by its bucket (Strong, Partial, Weak; no colour for Not scored), the reason in place of the number when the vacancy is not scored, the requirements counter below it, and the "Refresh source" button (see `collection.md`). On the right, four tiles as cards, in the order Money, Location, Work mode, Contract: each shows the tile's icon and name, a verdict mark ✓ (green), ✕ (red) or ? (grey), the vacancy's value or "Not stated", the conversion when there is one, and a line comparing the value with the user's goal:
 
    | Tile | Criteria behind it |
    |---|---|
