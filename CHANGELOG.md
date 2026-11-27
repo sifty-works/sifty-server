@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.21.0
+
 - Key facts: Work mode no longer reads "hybrid" from unrelated words ("hybrid financing", "hybrid cloud architectures"), and "Hybrid, 2+ days in office" is hybrid only; Hours no longer comes from "full-time experience", "benefits for full-time employees" or a part-time return after leave; a place under a bare "Location" line, or after a label glued to the previous word, is read; German and Spanish language requirements ("Deutschkenntnisse", "inglés avanzado") are read. Stored postings are read again.
 - Skills: more skills are recognised (ISO 27001, DeFi, macOS, iOS, vector databases, Laravel, scikit-learn, CrowdStrike, Jamf, Workday, Consul, Appian); product and company names no longer count as skills ("Unity Catalog" is not Unity, "Azure Key Vault" not Vault, a company called "<Skill> Labs" not the skill); "JavaScript/TypeScript" is met by either.
 
