@@ -105,12 +105,14 @@ func EvidenceText(me MeData, p ProfileData, documents []string) string {
 	}
 	wants = append(wants, labelled("headline", p.Headline)...)
 	wants = append(wants, labelled("target role", p.TargetRoles...)...)
-	wants = append(wants, labelled("engagement", p.Engagement...)...)
-	wants = append(wants, labelled("work mode", p.WorkModes...)...)
-	wants = append(wants, labelled("time zone", p.TimeZones...)...)
-	for _, l := range p.PreferredLocations {
-		wants = append(wants, labelled("preferred location", join(", ", l.City, l.Country))...)
+	for i, name := range BucketNames {
+		wants = append(wants, labelled("engagement, "+name, p.EngagementType.Lists()[i]...)...)
+		wants = append(wants, labelled("work mode, "+name, p.WorkMode.Lists()[i]...)...)
+		for _, l := range p.Locations.Lists()[i] {
+			wants = append(wants, labelled("location, "+name, join(", ", l.City, l.Country))...)
+		}
 	}
+	wants = append(wants, labelled("time zone", p.TimeZones...)...)
 	wants = append(wants, labelled("relocation", p.Relocation)...)
 	wants = append(wants, labelled("other requirements", p.OtherRequirements)...)
 	section("WHAT THE CANDIDATE LOOKS FOR", wants...)

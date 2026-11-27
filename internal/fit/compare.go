@@ -24,7 +24,7 @@ type Verdict struct {
 	Utility float64
 	Source  facts.Source
 	Reason  string
-	Soft    bool
+	Bucket  string
 }
 
 type Comparer interface {

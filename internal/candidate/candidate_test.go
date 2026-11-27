@@ -698,20 +698,29 @@ func TestInheritanceUnchangedInheritedFieldRemainsInherited(t *testing.T) {
 	ts := newServer(t, d)
 
 	send(t, ts, http.MethodPatch, "/api/profiles/1", map[string]any{
-		"engagement": []string{"employment"},
+		"workMode": map[string]any{"preferred": []string{"remote"}, "never": []string{"onsite"}},
 	})
 
 	out, _ := send(t, ts, http.MethodPost, "/api/profiles", map[string]any{"name": "Second"})
 	secondID := int64(out["id"].(float64))
 
 	send(t, ts, http.MethodPatch, fmt.Sprintf("/api/profiles/%d", secondID), map[string]any{
-		"name": "Second Updated",
+		"name":           "Second Updated",
+		"engagementType": map[string]any{"preferred": []string{"contract"}},
 	})
 
 	detail, _ := get(t, ts, fmt.Sprintf("/api/profiles/%d", secondID))
 	inherited, _ := detail["inherited"].(map[string]any)
-	if _, ok := inherited["engagement"]; !ok {
-		t.Error("engagement should still be inherited after an unrelated patch")
+	if _, ok := inherited["workMode"]; !ok {
+		t.Error("work mode should still be inherited after an unrelated patch")
+	}
+	if _, ok := inherited["engagementType"]; ok {
+		t.Error("engagement is the profile's own and must not be inherited")
+	}
+	effective, _ := detail["effective"].(map[string]any)
+	workMode, _ := effective["workMode"].(map[string]any)
+	if never, _ := workMode["never"].([]any); len(never) != 1 || never[0] != "onsite" {
+		t.Errorf("effective work mode = %v, want the first profile's lists", workMode)
 	}
 }
 

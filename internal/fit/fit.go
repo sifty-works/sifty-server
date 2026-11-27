@@ -16,7 +16,6 @@ type ProfileView struct {
 	Goals          candidate.GoalsView
 	Authorizations []candidate.WorkAuthorization
 	Languages      []candidate.Language
-	Relocation     string
 	Rates          map[string]float64 `json:"-"`
 	Skills         []candidate.Skill
 	AbsentSkills   []candidate.AbsentSkill
@@ -78,6 +77,7 @@ type Tile struct {
 	Line      string `json:"line"`
 	Verdict   string `json:"verdict"`
 	Goal      bool   `json:"goal"`
+	Bucket    string `json:"bucket,omitempty"`
 }
 
 type Fit struct {
@@ -143,7 +143,7 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 			continue
 		case cr.Outcome == Unknown:
 			unknown = append(unknown, cr.Reason)
-		case cr.Outcome == Mismatch && s == Must && !cr.Soft:
+		case cr.Outcome == Mismatch && (s == Must || cr.Bucket == candidate.Never):
 			if weakSource(cr.Source) {
 				capAt, weak = min(capAt, CapWeak), append(weak, cr.Reason)
 			} else {
@@ -172,8 +172,8 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 	g := geoOf(v)
 	for _, t := range tiles {
 		value, converted, full := t.value(v, g, r.Rates)
-		line, verdict, goal := tileLine(f.Criteria, t.criterion, t.empty)
-		f.Tiles = append(f.Tiles, Tile{t.name, value, converted, full, line, verdict, goal})
+		line, verdict, goal, bucket := tileLine(f.Criteria, t.criterion, t.empty)
+		f.Tiles = append(f.Tiles, Tile{t.name, value, converted, full, line, verdict, goal, bucket})
 	}
 	switch {
 	case !v.Full:
@@ -195,13 +195,13 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 }
 
 func noGoals(g candidate.GoalsView) bool {
-	return len(g.TargetRoles)+len(g.Engagement)+len(g.WorkModes)+len(g.TimeZones)+len(g.PreferredLocations) == 0 &&
-		(g.Hours == nil || g.Hours.Mode == "") && (g.Compensation == nil || g.Compensation.CashMin == nil || *g.Compensation.CashMin <= 0)
+	return len(g.TargetRoles)+len(g.TimeZones) == 0 && g.EngagementType.IsZero() && g.WorkingTime.IsZero() && g.WorkMode.IsZero() && g.Locations.IsZero() &&
+		(g.Compensation == nil || g.Compensation.CashMin == nil || *g.Compensation.CashMin <= 0)
 }
 
-func tileLine(cs []Criterion, name, empty string) (string, string, bool) {
+func tileLine(cs []Criterion, name, empty string) (string, string, bool, string) {
 	for _, c := range cs {
-		if c.Name != name || c.Outcome == Skipped {
+		if c.Name != name || c.Outcome == Skipped && c.Reason == "" {
 			continue
 		}
 		verdict := map[Outcome]string{Match: "✓", Mismatch: "✕"}[c.Outcome]
@@ -211,9 +211,9 @@ func tileLine(cs []Criterion, name, empty string) (string, string, bool) {
 		if c.Reason == "" {
 			c.Reason = "Not stated in the vacancy"
 		}
-		return c.Reason, verdict, true
+		return c.Reason, verdict, true, c.Bucket
 	}
-	return empty, "?", false
+	return empty, "?", false, ""
 }
 
 func Bucket(score int) string {
@@ -299,31 +299,6 @@ func perYear(period string) float64 {
 	return 1
 }
 
-func location(prefs []candidate.Location, ps []places.Place, open bool) float64 {
-	if len(prefs) == 0 {
-		return na
-	}
-	if open {
-		return 1
-	}
-	decided := len(ps) > 0
-	for _, pref := range prefs {
-		cs := places.Codes(pref.Country)
-		decided = decided && cs != nil
-		for _, pl := range ps {
-			decided = decided && pl.Known() && !pl.Worldwide
-			sameCity := pref.City == "" || len(pl.Cities) == 0 || has(pl.Cities, pref.City)
-			if (cs != nil && overlap(cs, pl.Countries) == 1 && sameCity) || (cs == nil && pref.City != "" && has(pl.Cities, pref.City)) {
-				return 1
-			}
-		}
-	}
-	if decided {
-		return 0
-	}
-	return na
-}
-
 func restriction(auths []candidate.WorkAuthorization, ps []places.Place, remote, open, known bool) float64 {
 	switch {
 	case !remote:
@@ -347,28 +322,6 @@ func restriction(auths []candidate.WorkAuthorization, ps []places.Place, remote,
 		}
 	}
 	return out
-}
-
-func hours(h *candidate.Hours, vh *Hours) float64 {
-	if h == nil || h.Mode == "" || vh == nil || vh.Mode == "" {
-		return na
-	}
-	if h.Mode != vh.Mode {
-		return 0
-	}
-	lo, hi := h.WeeklyMin, h.WeeklyMax
-	if h.Weekly != nil {
-		lo, hi = h.Weekly, h.Weekly
-	}
-	switch {
-	case h.Mode != "part_time" || lo == nil && hi == nil:
-		return 1
-	case vh.Min == 0 && vh.Max == 0:
-		return na
-	case hi != nil && vh.Min > *hi || lo != nil && vh.Max > 0 && *lo > vh.Max:
-		return 0
-	}
-	return 1
 }
 
 func overlap(a, b []string) float64 {

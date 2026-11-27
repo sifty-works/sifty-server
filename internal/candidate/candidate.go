@@ -15,19 +15,20 @@ import (
 )
 
 type ProfileData struct {
-	Name               string        `json:"name"`
-	Headline           string        `json:"headline,omitempty"`
-	TargetRoles        []string      `json:"targetRoles,omitempty"`
-	Keywords           []string      `json:"keywords,omitempty"`
-	AllOf              []string      `json:"allOf,omitempty"`
-	Compensation       *Compensation `json:"compensation,omitempty"`
-	Engagement         []string      `json:"engagement,omitempty"`
-	Hours              *Hours        `json:"hours,omitempty"`
-	WorkModes          []string      `json:"workModes,omitempty"`
-	PreferredLocations []Location    `json:"preferredLocations,omitempty"`
-	Relocation         string        `json:"relocation,omitempty"`
-	TimeZones          []string      `json:"timeZones,omitempty"`
-	OtherRequirements  string        `json:"otherRequirements,omitempty"`
+	Name              string        `json:"name"`
+	Headline          string        `json:"headline,omitempty"`
+	TargetRoles       []string      `json:"targetRoles,omitempty"`
+	Keywords          []string      `json:"keywords,omitempty"`
+	AllOf             []string      `json:"allOf,omitempty"`
+	Compensation      *Compensation `json:"compensation,omitempty"`
+	EngagementType    Buckets       `json:"engagementType"`
+	WorkingTime       Buckets       `json:"workingTime"`
+	Hours             *Hours        `json:"hours,omitempty"`
+	WorkMode          Buckets       `json:"workMode"`
+	Locations         PlaceBuckets  `json:"locations"`
+	Relocation        string        `json:"relocation,omitempty"`
+	TimeZones         []string      `json:"timeZones,omitempty"`
+	OtherRequirements string        `json:"otherRequirements,omitempty"`
 }
 
 func Effective(p, base ProfileData) ProfileData {
@@ -35,50 +36,52 @@ func Effective(p, base ProfileData) ProfileData {
 	if out.Compensation == nil {
 		out.Compensation = base.Compensation
 	}
-	if len(out.Engagement) == 0 {
-		out.Engagement = base.Engagement
+	if out.EngagementType.IsZero() {
+		out.EngagementType = base.EngagementType
+	}
+	if out.WorkingTime.IsZero() {
+		out.WorkingTime = base.WorkingTime
 	}
 	if out.Hours == nil {
 		out.Hours = base.Hours
 	}
-	if len(out.WorkModes) == 0 {
-		out.WorkModes = base.WorkModes
+	if out.WorkMode.IsZero() {
+		out.WorkMode = base.WorkMode
 	}
-	if len(out.PreferredLocations) == 0 {
-		out.PreferredLocations = base.PreferredLocations
+	if out.Locations.IsZero() {
+		out.Locations = base.Locations
 	}
 	return out
 }
 
 type GoalsView struct {
-	TargetRoles                      []string
-	Compensation                     *Compensation
-	Engagement, WorkModes, TimeZones []string
-	Hours                            *Hours
-	PreferredLocations               []Location
+	TargetRoles    []string
+	Compensation   *Compensation
+	EngagementType Buckets
+	WorkingTime    Buckets
+	WorkMode       Buckets
+	TimeZones      []string
+	Hours          *Hours
+	Locations      PlaceBuckets
 }
 
 func Goals(p ProfileData) GoalsView {
-	return GoalsView{p.TargetRoles, p.Compensation, p.Engagement, p.WorkModes, p.TimeZones, p.Hours, p.PreferredLocations}
+	return GoalsView{p.TargetRoles, p.Compensation, p.EngagementType, p.WorkingTime, p.WorkMode, p.TimeZones, p.Hours, p.Locations}
 }
 
 func InheritedFields(p, base ProfileData) []string {
 	var out []string
-	if p.Compensation == nil && base.Compensation != nil {
-		out = append(out, "compensation")
+	add := func(own, inherited bool, name string) {
+		if own && inherited {
+			out = append(out, name)
+		}
 	}
-	if len(p.Engagement) == 0 && len(base.Engagement) > 0 {
-		out = append(out, "engagement")
-	}
-	if p.Hours == nil && base.Hours != nil {
-		out = append(out, "hours")
-	}
-	if len(p.WorkModes) == 0 && len(base.WorkModes) > 0 {
-		out = append(out, "workModes")
-	}
-	if len(p.PreferredLocations) == 0 && len(base.PreferredLocations) > 0 {
-		out = append(out, "preferredLocations")
-	}
+	add(p.Compensation == nil, base.Compensation != nil, "compensation")
+	add(p.EngagementType.IsZero(), !base.EngagementType.IsZero(), "engagementType")
+	add(p.WorkingTime.IsZero(), !base.WorkingTime.IsZero(), "workingTime")
+	add(p.Hours == nil, base.Hours != nil, "hours")
+	add(p.WorkMode.IsZero(), !base.WorkMode.IsZero(), "workMode")
+	add(p.Locations.IsZero(), !base.Locations.IsZero(), "locations")
 	return out
 }
 
@@ -189,7 +192,7 @@ func normalizeHours(h *Hours) *Hours {
 	if h == nil {
 		return nil
 	}
-	if h.Mode == "" && h.Weekly == nil && h.WeeklyMin == nil && h.WeeklyMax == nil {
+	if h.Weekly == nil && h.WeeklyMin == nil && h.WeeklyMax == nil {
 		return nil
 	}
 	return h

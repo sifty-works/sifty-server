@@ -95,7 +95,6 @@ type DayRates struct {
 }
 
 type Hours struct {
-	Mode      string   `json:"mode,omitempty"`
 	Weekly    *float64 `json:"weekly,omitempty"`
 	WeeklyMin *float64 `json:"weeklyMin,omitempty"`
 	WeeklyMax *float64 `json:"weeklyMax,omitempty"`

@@ -57,7 +57,12 @@ func serveWithVacancies(t *testing.T, profile, me string, vs []mustVacancy) (str
 
 func bandOf(t *testing.T, base string, id int64) map[string]any {
 	t.Helper()
-	view, status := apiGet(t, base, fmt.Sprintf("/api/vacancies/%d?profile=1", id))
+	return bandOfProfile(t, base, 1, id)
+}
+
+func bandOfProfile(t *testing.T, base string, profile, id int64) map[string]any {
+	t.Helper()
+	view, status := apiGet(t, base, fmt.Sprintf("/api/vacancies/%d?profile=%d", id, profile))
 	band, _ := view["band"].(map[string]any)
 	if status != 200 || band == nil {
 		t.Fatalf("vacancy %d: status %d, view %v", id, status, view)
@@ -77,7 +82,7 @@ func reasonsOf(band map[string]any) []string {
 func TestOnsiteOnlyVacancyAgainstRemoteContractProfileIsCappedAndListedLast(t *testing.T) {
 	salary := "<p>Salary: EUR 250,000 per year</p>"
 	base, ids := serveWithVacancies(t,
-		`{"name":"Tester","targetRoles":["Engineer"],"workModes":["remote"],"engagement":["contract"],"compensation":{"cashMin":200000,"currency":"EUR","period":"year"}}`, `{}`,
+		`{"name":"Tester","targetRoles":["Engineer"],"workMode":{"preferred":["remote"],"never":["onsite"]},"engagementType":{"preferred":["contract"]},"compensation":{"cashMin":200000,"currency":"EUR","period":"year"}}`, `{}`,
 		[]mustVacancy{
 			{"Platform Engineer", "<p>Work mode: Onsite</p><p>Employment type: Contract</p>" + salary},
 			{"Staff Principal Distinguished Platform Infrastructure Reliability Software Cloud Data Security Applications Systems Engineer", "<p>Employment type: Employment</p><p>Salary: EUR 20,000 per year</p>"},
@@ -86,8 +91,15 @@ func TestOnsiteOnlyVacancyAgainstRemoteContractProfileIsCappedAndListedLast(t *t
 	onsite, poor, good := ids[0], ids[1], ids[2]
 	band := bandOf(t, base, onsite)
 	reasons := reasonsOf(band)
-	if score, _ := band["score"].(float64); score > 15 || band["brokenMust"] != true || len(reasons) == 0 || reasons[0] != "Onsite only — you want remote" {
+	if score, _ := band["score"].(float64); score > 15 || band["brokenMust"] != true || len(reasons) == 0 || reasons[0] != "Onsite — in your Never list" {
 		t.Errorf("onsite vacancy: score %v, brokenMust %v, reasons %q; want at most 15, broken, the onsite reason first", band["score"], band["brokenMust"], reasons)
+	}
+	if _, status := apiSend(t, "POST", base, "/api/profiles", map[string]any{"name": "Second"}); status != 200 {
+		t.Fatalf("create second profile: status %d", status)
+	}
+	second := bandOfProfile(t, base, 2, onsite)
+	if score, _ := second["score"].(float64); score > 15 || second["brokenMust"] != true {
+		t.Errorf("empty second profile: score %v, brokenMust %v; want the first profile's Never list to break the onsite vacancy", second["score"], second["brokenMust"])
 	}
 	if poorScore, _ := bandOf(t, base, poor)["score"].(float64); poorScore >= 15 || poorScore == 0 {
 		t.Fatalf("the vacancy without a broken must scores %v, want a number below 15", poorScore)

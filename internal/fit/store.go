@@ -111,7 +111,6 @@ func LoadProfile(ctx context.Context, database *db.DB, id int64, r Rules) (Profi
 		Goals:          candidate.Goals(pd),
 		Authorizations: me.WorkAuthorizations,
 		Languages:      me.Languages,
-		Relocation:     pd.Relocation,
 		Skills:         me.Skills,
 		AbsentSkills:   me.AbsentSkills,
 		Confirmed:      me.ConfirmedFacts,

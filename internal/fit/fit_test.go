@@ -15,6 +15,12 @@ import (
 
 func num(x float64) *float64 { return &x }
 
+func preferredPlaces(values ...candidate.Location) candidate.PlaceBuckets {
+	return candidate.PlaceBuckets{Preferred: values}
+}
+
+func preferred(values ...string) candidate.Buckets { return candidate.Buckets{Preferred: values} }
+
 func rules() fit.Rules {
 	d := config.Defaults()
 	return fit.Rules{Weights: d.Weights, Rates: d.Rates}
@@ -72,7 +78,7 @@ func TestEachCriterionMatchesMismatchesOrCannotBeCompared(t *testing.T) {
 	}{
 		{"role overlap", "role", goals(candidate.GoalsView{TargetRoles: []string{"Backend Engineer"}}), vacancy{Title: "Senior Backend Engineer"}, 0.8},
 		{"role disjoint", "role", goals(candidate.GoalsView{TargetRoles: []string{"Designer"}}), vacancy{Title: "Go Engineer"}, 0},
-		{"role without targets", "role", goals(candidate.GoalsView{WorkModes: []string{"remote"}}), vacancy{Title: "Go Engineer"}, -1},
+		{"role without targets", "role", goals(candidate.GoalsView{WorkMode: preferred("remote")}), vacancy{Title: "Go Engineer"}, -1},
 		{"money range above minimum", "money", goals(candidate.GoalsView{Compensation: eur}), vacancy{Text: "Salary: €95,000 - €110,000 per year"}, 1},
 		{"money top below minimum", "money", goals(candidate.GoalsView{Compensation: eur}), vacancy{Text: "Salary: EUR 60k - 72k per year"}, 0.8},
 		{"top at or above the minimum", "money", goals(candidate.GoalsView{Compensation: eur}), vacancy{Text: "Salary: EUR 80k - 100k per year"}, 1},
@@ -83,33 +89,44 @@ func TestEachCriterionMatchesMismatchesOrCannotBeCompared(t *testing.T) {
 		{"net against gross", "money", goals(candidate.GoalsView{Compensation: eur}), vacancy{Text: "Salary: EUR 100,000 per year net"}, -1},
 		{"floor only", "money", goals(candidate.GoalsView{Compensation: eur}), vacancy{Text: "Salary: from EUR 100,000 per year"}, -1},
 		{"source field salary", "money", goals(candidate.GoalsView{Compensation: eur}), vacancy{Fields: map[string]string{"salary": "95000–120000 EUR per year"}}, 1},
-		{"preferred country", "location", goals(candidate.GoalsView{PreferredLocations: []candidate.Location{{Country: "DE"}}}), vacancy{Location: "Berlin, Germany"}, 1},
-		{"preferred city elsewhere", "location", goals(candidate.GoalsView{PreferredLocations: []candidate.Location{{Country: "DE", City: "Munich"}}}), vacancy{Location: "Berlin, Germany"}, 0},
-		{"region covers country", "location", goals(candidate.GoalsView{PreferredLocations: []candidate.Location{{Country: "EU"}}}), vacancy{Location: "Lisbon, Portugal"}, 1},
-		{"other country", "location", goals(candidate.GoalsView{PreferredLocations: []candidate.Location{{Country: "FR"}}}), vacancy{Location: "Austin, Texas"}, 0},
-		{"city only", "location", goals(candidate.GoalsView{PreferredLocations: []candidate.Location{{Country: "FR"}}}), vacancy{Location: "Springfield"}, -1},
+		{"preferred country", "location", goals(candidate.GoalsView{Locations: preferredPlaces(candidate.Location{Country: "DE"})}), vacancy{Location: "Berlin, Germany"}, 1},
+		{"a city of another name is in no list", "location", goals(candidate.GoalsView{Locations: preferredPlaces(candidate.Location{Country: "DE", City: "Munich"})}), vacancy{Location: "Berlin, Germany"}, -1},
+		{"a country without a city meets a preferred city", "location", goals(candidate.GoalsView{Locations: preferredPlaces(candidate.Location{Country: "DE", City: "Munich"})}), vacancy{Location: "Germany"}, 1},
+		{"a country without a city does not meet an unwanted city", "location", goals(candidate.GoalsView{Locations: candidate.PlaceBuckets{Unwanted: []candidate.Location{{Country: "DE", City: "Munich"}}}}), vacancy{Location: "Germany"}, -1},
+		{"possible place", "location", goals(candidate.GoalsView{Locations: candidate.PlaceBuckets{Possible: []candidate.Location{{Country: "DE"}}}}), vacancy{Location: "Berlin, Germany"}, 0.75},
+		{"unwanted place", "location", goals(candidate.GoalsView{Locations: candidate.PlaceBuckets{Unwanted: []candidate.Location{{Country: "US"}}}}), vacancy{Location: "Austin, Texas"}, 0.25},
+		{"never place", "location", goals(candidate.GoalsView{Locations: candidate.PlaceBuckets{Never: []candidate.Location{{Country: "US"}}}}), vacancy{Location: "Austin, Texas"}, 0},
+		{"the stricter entry holds for one place", "location", goals(candidate.GoalsView{Locations: candidate.PlaceBuckets{Preferred: []candidate.Location{{Country: "EU"}}, Never: []candidate.Location{{Country: "DE"}}}}), vacancy{Location: "Berlin, Germany"}, 0},
+		{"region covers country", "location", goals(candidate.GoalsView{Locations: preferredPlaces(candidate.Location{Country: "EU"})}), vacancy{Location: "Lisbon, Portugal"}, 1},
+		{"a place in no list is left out", "location", goals(candidate.GoalsView{Locations: preferredPlaces(candidate.Location{Country: "FR"})}), vacancy{Location: "Austin, Texas"}, -1},
+		{"city only", "location", goals(candidate.GoalsView{Locations: preferredPlaces(candidate.Location{Country: "FR"})}), vacancy{Location: "Springfield"}, -1},
 		{"no preferred locations", "location", goals(candidate.GoalsView{TargetRoles: []string{"x"}}), vacancy{Location: "Remote"}, -1},
-		{"remote without a place cannot be compared", "location", goals(candidate.GoalsView{PreferredLocations: []candidate.Location{{Country: "FR"}}}), vacancy{Location: "Remote"}, -1},
-		{"remote with only a time zone cannot be compared", "location", goals(candidate.GoalsView{PreferredLocations: []candidate.Location{{Country: "FR"}}}), vacancy{Location: "Remote", Text: "Time zone: CET (+/- 3 hours)"}, -1},
-		{"unrestricted remote", "location", goals(candidate.GoalsView{PreferredLocations: []candidate.Location{{Country: "FR"}}}), vacancy{Location: "Remote · Anywhere"}, 1},
+		{"remote without a place cannot be compared", "location", goals(candidate.GoalsView{Locations: preferredPlaces(candidate.Location{Country: "FR"})}), vacancy{Location: "Remote"}, -1},
+		{"remote with only a time zone cannot be compared", "location", goals(candidate.GoalsView{Locations: preferredPlaces(candidate.Location{Country: "FR"})}), vacancy{Location: "Remote", Text: "Time zone: CET (+/- 3 hours)"}, -1},
+		{"unrestricted remote", "location", goals(candidate.GoalsView{Locations: preferredPlaces(candidate.Location{Country: "FR"})}), vacancy{Location: "Remote · Anywhere"}, 1},
 		{"telecommute is unrestricted remote", "remote_restriction", goals(candidate.GoalsView{TargetRoles: []string{"x"}}), vacancy{Location: "TELECOMMUTE · Anywhere"}, 1},
-		{"work mode shared", "work_mode", goals(candidate.GoalsView{WorkModes: []string{"remote", "hybrid"}}), vacancy{Text: "Work mode: Hybrid"}, 1},
-		{"work mode disjoint", "work_mode", goals(candidate.GoalsView{WorkModes: []string{"remote"}}), vacancy{Location: "Onsite"}, 0},
-		{"work mode not stated", "work_mode", goals(candidate.GoalsView{WorkModes: []string{"remote"}}), vacancy{}, -1},
-		{"restricted remote leaves work mode to the restriction", "work_mode", goals(candidate.GoalsView{WorkModes: []string{"remote"}}), vacancy{Location: "Remote (US only) · Remote"}, -1},
-		{"engagement from tag", "engagement", goals(candidate.GoalsView{Engagement: []string{"contract"}}), vacancy{Tags: []string{"Contract"}}, 1},
-		{"engagement disjoint", "engagement", goals(candidate.GoalsView{Engagement: []string{"contract"}}), vacancy{Fields: map[string]string{"employment_type": "PERMANENT"}}, 0},
-		{"internship against a contract goal", "engagement", goals(candidate.GoalsView{Engagement: []string{"contract"}}), vacancy{Fields: map[string]string{"employment_type": "INTERN"}}, 0},
-		{"internship against an employment goal", "engagement", goals(candidate.GoalsView{Engagement: []string{"employment"}}), vacancy{Fields: map[string]string{"employment_type": "INTERN"}}, 0},
-		{"no engagement stated cannot be compared with an employment goal", "engagement", goals(candidate.GoalsView{Engagement: []string{"employment"}}), vacancy{Title: "Builder"}, -1},
-		{"no engagement stated cannot be compared with a contract goal", "engagement", goals(candidate.GoalsView{Engagement: []string{"contract"}}), vacancy{Title: "Builder"}, -1},
-		{"no engagement goal leaves criterion not comparable", "engagement", goals(candidate.GoalsView{WorkModes: []string{"remote"}}), vacancy{Title: "Builder"}, -1},
-		{"hours mode", "hours", goals(candidate.GoalsView{Hours: &candidate.Hours{Mode: "part_time"}}), vacancy{Text: "Hours: part-time"}, 1},
-		{"hours other mode", "hours", goals(candidate.GoalsView{Hours: &candidate.Hours{Mode: "part_time"}}), vacancy{Tags: []string{"Full-time"}}, 0},
-		{"weekly range meets", "hours", goals(candidate.GoalsView{Hours: &candidate.Hours{Mode: "part_time", Weekly: num(25)}}), vacancy{Text: "Hours: part-time, 20-30 hours per week"}, 1},
-		{"weekly range above", "hours", goals(candidate.GoalsView{Hours: &candidate.Hours{Mode: "part_time", WeeklyMax: num(15)}}), vacancy{Text: "Hours: part-time, 20 to 30 h/week"}, 0},
-		{"weekly hours of a full-time goal not compared", "hours", goals(candidate.GoalsView{Hours: &candidate.Hours{Mode: "full_time", Weekly: num(10)}}), vacancy{Text: "Hours: full-time, 40 hours per week"}, 1},
-		{"weekly hours not stated", "hours", goals(candidate.GoalsView{Hours: &candidate.Hours{Mode: "part_time", Weekly: num(25)}}), vacancy{Text: "Hours: part-time"}, -1},
+		{"work mode shared", "work_mode", goals(candidate.GoalsView{WorkMode: preferred("remote", "hybrid")}), vacancy{Text: "Work mode: Hybrid"}, 1},
+		{"work mode in no list is left out", "work_mode", goals(candidate.GoalsView{WorkMode: preferred("remote")}), vacancy{Location: "Onsite"}, -1},
+		{"possible work mode", "work_mode", goals(candidate.GoalsView{WorkMode: candidate.Buckets{Preferred: []string{"remote"}, Possible: []string{"hybrid"}}}), vacancy{Text: "Work mode: Hybrid"}, 0.75},
+		{"unwanted work mode", "work_mode", goals(candidate.GoalsView{WorkMode: candidate.Buckets{Unwanted: []string{"hybrid"}}}), vacancy{Text: "Work mode: Hybrid"}, 0.25},
+		{"never work mode", "work_mode", goals(candidate.GoalsView{WorkMode: candidate.Buckets{Preferred: []string{"remote"}, Never: []string{"onsite"}}}), vacancy{Location: "Onsite"}, 0},
+		{"the best of several work modes counts", "work_mode", goals(candidate.GoalsView{WorkMode: candidate.Buckets{Preferred: []string{"hybrid"}, Never: []string{"onsite"}}}), vacancy{Text: "Work mode: Hybrid or Onsite"}, 1},
+		{"work mode not stated", "work_mode", goals(candidate.GoalsView{WorkMode: preferred("remote")}), vacancy{}, -1},
+		{"restricted remote leaves work mode to the restriction", "work_mode", goals(candidate.GoalsView{WorkMode: preferred("remote")}), vacancy{Location: "Remote (US only) · Remote"}, -1},
+		{"engagement from tag", "engagement", goals(candidate.GoalsView{EngagementType: preferred("contract")}), vacancy{Tags: []string{"Contract"}}, 1},
+		{"unwanted engagement", "engagement", goals(candidate.GoalsView{EngagementType: candidate.Buckets{Preferred: []string{"contract"}, Unwanted: []string{"employment"}}}), vacancy{Fields: map[string]string{"employment_type": "PERMANENT"}}, 0.25},
+		{"engagement in no list is left out", "engagement", goals(candidate.GoalsView{EngagementType: preferred("contract")}), vacancy{Fields: map[string]string{"employment_type": "PERMANENT"}}, -1},
+		{"internship in the unwanted list", "engagement", goals(candidate.GoalsView{EngagementType: candidate.Buckets{Preferred: []string{"contract"}, Unwanted: []string{"internship"}}}), vacancy{Fields: map[string]string{"employment_type": "INTERN"}}, 0.25},
+		{"internship in the never list", "engagement", goals(candidate.GoalsView{EngagementType: candidate.Buckets{Preferred: []string{"employment"}, Never: []string{"internship"}}}), vacancy{Fields: map[string]string{"employment_type": "INTERN"}}, 0},
+		{"no engagement stated cannot be compared with an employment goal", "engagement", goals(candidate.GoalsView{EngagementType: preferred("employment")}), vacancy{Title: "Builder"}, -1},
+		{"no engagement stated cannot be compared with a contract goal", "engagement", goals(candidate.GoalsView{EngagementType: preferred("contract")}), vacancy{Title: "Builder"}, -1},
+		{"no engagement goal leaves criterion not comparable", "engagement", goals(candidate.GoalsView{WorkMode: preferred("remote")}), vacancy{Title: "Builder"}, -1},
+		{"hours mode", "hours", goals(candidate.GoalsView{WorkingTime: preferred("part_time")}), vacancy{Text: "Hours: part-time"}, 1},
+		{"unwanted working time", "hours", goals(candidate.GoalsView{WorkingTime: candidate.Buckets{Preferred: []string{"part_time"}, Unwanted: []string{"full_time"}}}), vacancy{Tags: []string{"Full-time"}}, 0.25},
+		{"weekly range meets", "hours", goals(candidate.GoalsView{WorkingTime: preferred("part_time"), Hours: &candidate.Hours{Weekly: num(25)}}), vacancy{Text: "Hours: part-time, 20-30 hours per week"}, 1},
+		{"weekly range above", "hours", goals(candidate.GoalsView{WorkingTime: preferred("part_time"), Hours: &candidate.Hours{WeeklyMax: num(15)}}), vacancy{Text: "Hours: part-time, 20 to 30 h/week"}, 0},
+		{"weekly hours of a full-time goal not compared", "hours", goals(candidate.GoalsView{WorkingTime: preferred("full_time"), Hours: &candidate.Hours{Weekly: num(10)}}), vacancy{Text: "Hours: full-time, 40 hours per week"}, 1},
+		{"weekly hours not stated", "hours", goals(candidate.GoalsView{WorkingTime: preferred("part_time"), Hours: &candidate.Hours{Weekly: num(25)}}), vacancy{Text: "Hours: part-time"}, 1},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -209,9 +226,13 @@ func TestNumberIsWeightedMeanOfKnownCriteriaAndSaysHowManyWereScored(t *testing.
 		if f.State != fit.Scored || f.Score != 100 || f.ScoredOn != 2 || f.Of != 2 {
 			t.Errorf("got %s %d on %d of %d, want scored 100 on 2 of 2", f.State, f.Score, f.ScoredOn, f.Of)
 		}
-		pw := goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, WorkModes: []string{"remote"}, Compensation: eur})
+		pw := goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, WorkMode: preferred("remote"), Compensation: eur})
 		if f = fit.Score(pw, fromCode(v), r); f.Score != 98 || f.ScoredOn != 2 || f.Of != 3 {
 			t.Errorf("an unknown work mode: got %d on %d of %d, want 98 on 2 of 3", f.Score, f.ScoredOn, f.Of)
+		}
+		hybrid := fromCode(vacancy{Title: "Go Engineer", Text: "Salary: EUR 100,000 per year\nThis is a hybrid role."})
+		if f = fit.Score(pw, hybrid, r); f.Score != 100 || f.ScoredOn != 2 || f.Of != 2 {
+			t.Errorf("a work mode in none of the lists: got %d on %d of %d, want 100 on 2 of 2", f.Score, f.ScoredOn, f.Of)
 		}
 	})
 	t.Run("a criterion of weight 0 is left out", func(t *testing.T) {
@@ -222,7 +243,7 @@ func TestNumberIsWeightedMeanOfKnownCriteriaAndSaysHowManyWereScored(t *testing.
 		}
 	})
 	t.Run("nothing known gives no number", func(t *testing.T) {
-		pw := goals(candidate.GoalsView{WorkModes: []string{"remote"}, Hours: &candidate.Hours{Mode: "part_time"}})
+		pw := goals(candidate.GoalsView{WorkMode: preferred("remote"), WorkingTime: preferred("part_time")})
 		f := fit.Score(pw, fit.Vacancy{Title: "Builder", Full: true, Analysed: true}, rules())
 		if f.State != fit.NoFacts || f.Score != 0 || f.ScoredOn != 0 || f.Bucket != "Not scored" || f.Broken {
 			t.Errorf("got %+v, want no number scored on 0", f)
@@ -243,7 +264,7 @@ func TestBrokenMustCapsByItsSourceAndUnknownMustCostsHalfItsWeight(t *testing.T)
 		}
 		return f
 	}
-	remote := goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Compensation: eur, WorkModes: []string{"remote"}})
+	remote := goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Compensation: eur, WorkMode: candidate.Buckets{Preferred: []string{"remote"}, Never: []string{"onsite"}}})
 	cases := []struct {
 		name     string
 		p        fit.ProfileView
@@ -253,14 +274,16 @@ func TestBrokenMustCapsByItsSourceAndUnknownMustCostsHalfItsWeight(t *testing.T)
 		reason   string
 		scoredOn int
 	}{
-		{"work mode broken by the text", remote, []facts.Fact{money(120000, inText), fact(facts.WorkMode, "onsite", inText)}, 15, true, "Onsite only — you want remote", 3},
-		{"engagement mismatch from the text caps nothing", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Engagement: []string{"contract"}}),
-			[]facts.Fact{fact(facts.Engagement, "employment", inText)}, 89, false, "Employment only — you want contract", 2},
+		{"work mode broken by the text", remote, []facts.Fact{money(120000, inText), fact(facts.WorkMode, "onsite", inText)}, 15, true, "Onsite — in your Never list", 3},
+		{"an unwanted engagement from the text caps nothing", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, EngagementType: candidate.Buckets{Preferred: []string{"contract"}, Unwanted: []string{"employment"}}}),
+			[]facts.Fact{fact(facts.Engagement, "employment", inText)}, 92, false, "Employment — unwanted", 2},
+		{"an unwanted work mode from the text caps nothing", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, WorkMode: candidate.Buckets{Preferred: []string{"remote"}, Unwanted: []string{"onsite"}}}),
+			[]facts.Fact{fact(facts.WorkMode, "onsite", inText)}, 90, false, "Onsite — unwanted", 2},
 		{"required language missing from My data", fit.ProfileView{Goals: candidate.GoalsView{TargetRoles: []string{"Go Engineer"}}, Languages: []candidate.Language{{Name: "English"}}},
 			[]facts.Fact{fact(facts.Language, "Mandarin", inText)}, 15, true, "Requires Mandarin — not in your languages", 1},
 		{"work authorization broken by the text", fit.ProfileView{Goals: candidate.GoalsView{TargetRoles: []string{"Go Engineer"}}, Authorizations: []candidate.WorkAuthorization{{Country: "US", Status: "need_visa"}}},
 			[]facts.Fact{fact(facts.WorkMode, "remote", inText), fact(facts.Place, "US", inText)}, 15, true, "Remote only in", 2},
-		{"work mode broken only by an aggregator field", remote, []facts.Fact{money(120000, inText), fact(facts.WorkMode, "onsite", field)}, 40, false, "Onsite only — you want remote", 3},
+		{"work mode broken only by an aggregator field", remote, []facts.Fact{money(120000, inText), fact(facts.WorkMode, "onsite", field)}, 40, false, "Onsite — in your Never list", 3},
 		{"unknown must counts half-way and says why", remote, []facts.Fact{money(120000, inText)}, 98, false, "Work mode not stated", 2},
 		{"required language and no language in My data", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}}),
 			[]facts.Fact{fact(facts.Language, "Mandarin", inText)}, 100, false, "Requires Mandarin — your languages are not listed", 1},
@@ -337,19 +360,19 @@ func TestMoneyTileIsCompactAndKeepsItsConversionApart(t *testing.T) {
 }
 
 func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
-	p := goals(candidate.GoalsView{Compensation: eur, WorkModes: []string{"onsite"}, Engagement: []string{"employment"},
-		Hours: &candidate.Hours{Mode: "full_time"}, TimeZones: []string{"europe_africa"}, PreferredLocations: []candidate.Location{{Country: "PT"}}},
+	p := goals(candidate.GoalsView{Compensation: eur, WorkMode: candidate.Buckets{Preferred: []string{"onsite"}, Never: []string{"remote"}}, EngagementType: preferred("employment"),
+		WorkingTime: candidate.Buckets{Possible: []string{"full_time"}}, TimeZones: []string{"europe_africa"}, Locations: preferredPlaces(candidate.Location{Country: "PT"})},
 		candidate.WorkAuthorization{Country: "EU", Status: "eligible"})
 	p.Languages = []candidate.Language{{Name: "English"}}
 	f := score(p, vacancy{Location: "Remote (EU only) · Remote", Text: "Salary: EUR 120,000 per year\nEmployment type: Permanent, full-time"})
 	want := []fit.Tile{
 		{Name: "Money", Value: "€120k a year", Converted: "≈ €120,000", Line: "Pays €120k a year — meets your minimum", Verdict: "✓", Goal: true},
-		{Name: "Location", Value: "Remote (EU only)", Line: "Remote (EU only) — you prefer PT", Verdict: "✓", Goal: true},
-		{Name: "Work mode", Value: "remote", Line: "Remote only — you want onsite", Verdict: "✕", Goal: true},
-		{Name: "Contract", Value: "employment", Line: "Employment — you want employment", Verdict: "✓", Goal: true},
+		{Name: "Location", Value: "Remote (EU only)", Line: "Remote (EU only) — preferred", Verdict: "✓", Goal: true, Bucket: "preferred"},
+		{Name: "Work mode", Value: "remote", Line: "Remote — in your Never list", Verdict: "✕", Goal: true, Bucket: "never"},
+		{Name: "Contract", Value: "employment", Line: "Employment — preferred", Verdict: "✓", Goal: true, Bucket: "preferred"},
 		{Name: "Time zone", Value: "Europe & Africa", Line: "Time zone fits Europe & Africa", Verdict: "✓", Goal: true},
 		{Name: "Languages", Value: "Not stated", Line: "Not stated in the vacancy", Verdict: "?"},
-		{Name: "Hours", Value: "full-time", Line: "Full-time — you want full-time", Verdict: "✓", Goal: true},
+		{Name: "Hours", Value: "full-time", Line: "Full-time — possible", Verdict: "✓", Goal: true, Bucket: "possible"},
 		{Name: "Work authorization", Value: "Remote (EU only)", Line: "Remote work is open to you there", Verdict: "✓", Goal: true},
 	}
 	if len(f.Tiles) != len(want) {
@@ -361,8 +384,13 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 		}
 	}
 	for i, name := range []string{"money", "location", "work_mode", "engagement", "time_zone", "languages", "hours", "remote_restriction"} {
-		u := criterion(t, f, name)
-		if got := f.Tiles[i].Verdict; (got == "✕") != (u >= 0 && u < 1) || (got == "✓") != (u == 1) {
+		var c fit.Criterion
+		for _, cr := range f.Criteria {
+			if cr.Name == name {
+				c = cr
+			}
+		}
+		if got := f.Tiles[i].Verdict; (got == "✕") != (c.Outcome == fit.Mismatch) || (got == "✓") != (c.Outcome == fit.Match) {
 			t.Errorf("%s tile %s disagrees with its criterion %s", f.Tiles[i].Name, got, name)
 		}
 	}
@@ -379,11 +407,11 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 	if lang.Value != "Mandarin" || lang.Verdict != "✕" || !lang.Goal || lang.Line != "Requires Mandarin — not in your languages" {
 		t.Errorf("a language the user lacks: Languages tile = %+v", lang)
 	}
-	noZone := tile(score(goals(candidate.GoalsView{Engagement: []string{"employment"}}), vacancy{Title: "Builder"}), "Time zone")
+	noZone := tile(score(goals(candidate.GoalsView{EngagementType: preferred("employment")}), vacancy{Title: "Builder"}), "Time zone")
 	if noZone.Value != "Not stated" || noZone.Verdict != "?" || noZone.Goal {
 		t.Errorf("no time zone stated, no time zone goal: Time zone tile = %+v", noZone)
 	}
-	if c := tile(score(goals(candidate.GoalsView{Engagement: []string{"employment"}}), vacancy{Title: "Builder"}), "Contract"); c.Value != "Not stated" || c.Verdict != "?" {
+	if c := tile(score(goals(candidate.GoalsView{EngagementType: preferred("employment")}), vacancy{Title: "Builder"}), "Contract"); c.Value != "Not stated" || c.Verdict != "?" {
 		t.Errorf("no engagement stated: Contract tile = %+v", c)
 	}
 }

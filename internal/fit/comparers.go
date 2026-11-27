@@ -34,7 +34,7 @@ var Comparers = []Comparer{
 	comparer{"requirements", compareRequirements},
 }
 
-var musts = []string{"work_mode", "languages", "remote_restriction"}
+var musts = []string{"languages", "remote_restriction"}
 
 func strictnessOf(name string) Strictness {
 	if slices.Contains(musts, name) {
@@ -123,25 +123,19 @@ func compareMoney(v Vacancy, p ProfileView, s Strictness) Verdict {
 }
 
 func compareLocation(v Vacancy, p ProfileView, s Strictness) Verdict {
-	prefs := p.Goals.PreferredLocations
-	if len(prefs) == 0 {
+	b := p.Goals.Locations
+	if b.IsZero() {
 		return skipped()
 	}
 	g := geoOf(v)
-	where, _ := places.Short(v.Locations)
-	if g.anywhere {
-		where = "Remote, anywhere"
+	var hits []hit
+	for i, pl := range g.places {
+		hits = append(hits, hit{v.Locations[i], placeBucket(b, pl)})
 	}
-	line := sentence(where) + " — you prefer " + wanted(prefs)
-	return result(location(prefs, g.places, g.anywhere), v.Sources[facts.Place], s, line, line, "")
-}
-
-func wanted(prefs []candidate.Location) string {
-	var want []string
-	for _, l := range prefs {
-		want = append(want, strings.Trim(l.City+", "+l.Country, ", "))
+	if g.anywhere && len(b.Preferred) > 0 {
+		hits = []hit{{"Remote, anywhere", candidate.Preferred}}
 	}
-	return strings.Join(want, " · ")
+	return bucketVerdict(hits, v.Sources[facts.Place], "")
 }
 
 func compareAuthorization(v Vacancy, p ProfileView, s Strictness) Verdict {
@@ -173,48 +167,40 @@ func compareTimeZone(v Vacancy, p ProfileView, s Strictness) Verdict {
 }
 
 func compareWorkMode(v Vacancy, p ProfileView, s Strictness) Verdict {
-	want := p.Goals.WorkModes
-	if len(want) == 0 {
+	b := p.Goals.WorkMode
+	if b.IsZero() {
 		return skipped()
 	}
-	g := geoOf(v)
-	u := overlap(want, v.WorkModes)
-	if u == 1 && g.remote && !g.open && has(want, "remote") {
+	hits := valueHits(b, v.WorkModes)
+	r := bucketVerdict(hits, v.Sources[facts.WorkMode], "Work mode not stated")
+	if g := geoOf(v); len(hits) > 0 && bestHit(hits).label == "Remote" && !g.open && (r.Bucket == candidate.Preferred || r.Bucket == candidate.Possible) {
 		return Verdict{Outcome: Unknown}
-	}
-	r := result(u, v.Sources[facts.WorkMode], s,
-		sentence(either(v.WorkModes))+" — you want "+either(want),
-		sentence(either(v.WorkModes))+" only — you want "+either(want), "Work mode not stated")
-	if r.Outcome == Mismatch && p.Relocation == "yes" && !g.remote {
-		r.Soft, r.Reason = true, r.Reason+", open to relocation"
 	}
 	return r
 }
 
 func compareEngagement(v Vacancy, p ProfileView, s Strictness) Verdict {
-	want := p.Goals.Engagement
-	if len(want) == 0 {
+	b := p.Goals.EngagementType
+	if b.IsZero() {
 		return skipped()
 	}
-	stated := sentence(either(strings.Fields(v.Engagement)))
-	return result(overlap(want, strings.Fields(v.Engagement)), v.Sources[facts.Engagement], s,
-		stated+" — you want "+either(want), stated+" only — you want "+either(want), "Engagement not stated")
+	return bucketVerdict(valueHits(b, strings.Fields(v.Engagement)), v.Sources[facts.Engagement], "Engagement not stated")
 }
 
 func compareHours(v Vacancy, p ProfileView, s Strictness) Verdict {
-	h := p.Goals.Hours
-	if h == nil || h.Mode == "" {
+	b := p.Goals.WorkingTime
+	if b.IsZero() {
 		return skipped()
 	}
-	u := hours(h, v.Hours)
-	if u == 0 && v.Hours.Mode == h.Mode {
-		return result(u, v.Sources[facts.Hours], s, "", "Weekly hours do not overlap yours", "")
+	var modes []string
+	if v.Hours != nil && v.Hours.Mode != "" {
+		modes = []string{v.Hours.Mode}
 	}
-	line := "Not stated"
-	if v.Hours != nil {
-		line = sentence(list([]string{v.Hours.Mode}, "")) + " — you want " + list([]string{h.Mode}, "")
+	r := bucketVerdict(valueHits(b, modes), v.Sources[facts.Hours], "")
+	if (r.Bucket == candidate.Preferred || r.Bucket == candidate.Possible) && weekly(p.Goals.Hours, v.Hours) == 0 {
+		return Verdict{Outcome: Mismatch, Source: r.Source, Reason: "Weekly hours do not overlap yours"}
 	}
-	return result(u, v.Sources[facts.Hours], s, line, line, "")
+	return r
 }
 
 func compareLanguages(v Vacancy, p ProfileView, s Strictness) Verdict {

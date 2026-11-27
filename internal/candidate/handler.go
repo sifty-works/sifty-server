@@ -78,19 +78,20 @@ type CreateProfileReq struct {
 }
 
 type ProfilePatchReq struct {
-	Name               *string       `json:"name,omitempty"`
-	Headline           *string       `json:"headline,omitempty"`
-	TargetRoles        *[]string     `json:"targetRoles,omitempty"`
-	Keywords           *[]string     `json:"keywords,omitempty"`
-	AllOf              *[]string     `json:"allOf,omitempty"`
-	Compensation       *Compensation `json:"compensation,omitempty"`
-	Engagement         *[]string     `json:"engagement,omitempty"`
-	Hours              *Hours        `json:"hours,omitempty"`
-	WorkModes          *[]string     `json:"workModes,omitempty"`
-	PreferredLocations *[]Location   `json:"preferredLocations,omitempty"`
-	Relocation         *string       `json:"relocation,omitempty"`
-	TimeZones          *[]string     `json:"timeZones,omitempty"`
-	OtherRequirements  *string       `json:"otherRequirements,omitempty"`
+	Name              *string       `json:"name,omitempty"`
+	Headline          *string       `json:"headline,omitempty"`
+	TargetRoles       *[]string     `json:"targetRoles,omitempty"`
+	Keywords          *[]string     `json:"keywords,omitempty"`
+	AllOf             *[]string     `json:"allOf,omitempty"`
+	Compensation      *Compensation `json:"compensation,omitempty"`
+	EngagementType    *Buckets      `json:"engagementType,omitempty"`
+	WorkingTime       *Buckets      `json:"workingTime,omitempty"`
+	Hours             *Hours        `json:"hours,omitempty"`
+	WorkMode          *Buckets      `json:"workMode,omitempty"`
+	Locations         *PlaceBuckets `json:"locations,omitempty"`
+	Relocation        *string       `json:"relocation,omitempty"`
+	TimeZones         *[]string     `json:"timeZones,omitempty"`
+	OtherRequirements *string       `json:"otherRequirements,omitempty"`
 
 	named map[string]json.RawMessage `json:"-"`
 }
@@ -182,17 +183,22 @@ func clearInheritedUnchanged(patch *ProfilePatchReq, own, first ProfileData) {
 	if patch.Compensation != nil && own.Compensation == nil && jsonEqual(patch.Compensation, first.Compensation) {
 		delete(patch.named, "compensation")
 	}
-	if patch.Engagement != nil && len(own.Engagement) == 0 && jsonEqual(*patch.Engagement, first.Engagement) {
-		delete(patch.named, "engagement")
-	}
 	if patch.Hours != nil && own.Hours == nil && jsonEqual(patch.Hours, first.Hours) {
 		delete(patch.named, "hours")
 	}
-	if patch.WorkModes != nil && len(own.WorkModes) == 0 && jsonEqual(*patch.WorkModes, first.WorkModes) {
-		delete(patch.named, "workModes")
-	}
-	if patch.PreferredLocations != nil && len(own.PreferredLocations) == 0 && jsonEqual(*patch.PreferredLocations, first.PreferredLocations) {
-		delete(patch.named, "preferredLocations")
+	for _, g := range []struct {
+		name         string
+		sent, first  any
+		inheritsHere bool
+	}{
+		{"engagementType", patch.EngagementType, first.EngagementType, own.EngagementType.IsZero()},
+		{"workingTime", patch.WorkingTime, first.WorkingTime, own.WorkingTime.IsZero()},
+		{"workMode", patch.WorkMode, first.WorkMode, own.WorkMode.IsZero()},
+		{"locations", patch.Locations, first.Locations, own.Locations.IsZero()},
+	} {
+		if _, sent := patch.named[g.name]; sent && g.inheritsHere && jsonEqual(g.sent, g.first) {
+			delete(patch.named, g.name)
+		}
 	}
 }
 

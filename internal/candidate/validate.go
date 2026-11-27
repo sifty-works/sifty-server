@@ -24,10 +24,11 @@ func ValidateProfileData(p ProfileData) []string {
 		errs = append(errs, "Headline must be a single line.")
 	}
 	errs = append(errs, validateCompensation(p.Compensation)...)
-	errs = append(errs, validateEngagement(p.Engagement)...)
+	errs = append(errs, validateOptions("Engagement", "Employment, Contract or Internship", p.EngagementType, "employment", "contract", "internship")...)
+	errs = append(errs, validateOptions("Working time", "Full-time or Part-time", p.WorkingTime, "full_time", "part_time")...)
 	errs = append(errs, validateHours(p.Hours)...)
-	errs = append(errs, validateWorkModes(p.WorkModes)...)
-	errs = append(errs, validatePreferredLocations(p.PreferredLocations)...)
+	errs = append(errs, validateOptions("Work mode", "Remote, Hybrid or Onsite", p.WorkMode, "remote", "hybrid", "onsite")...)
+	errs = append(errs, validatePlaces(p.Locations)...)
 	return errs
 }
 
@@ -140,46 +141,13 @@ func validateCompensation(c *Compensation) []string {
 	return errs
 }
 
-func validateEngagement(types []string) []string {
-	var errs []string
-	for i, t := range types {
-		if t != "employment" && t != "contract" {
-			errs = append(errs, fmt.Sprintf("Contract type: choose Employment or Contract. (got %q at index %d)", t, i+1))
-		}
-	}
-	return errs
-}
-
 func validateHours(h *Hours) []string {
 	if h == nil {
 		return nil
 	}
 	var errs []string
-	if h.Mode != "" && h.Mode != "full_time" && h.Mode != "part_time" {
-		errs = append(errs, "Working time: choose Full-time or Part-time.")
-	}
 	if h.WeeklyMin != nil && h.WeeklyMax != nil && *h.WeeklyMax < *h.WeeklyMin {
 		errs = append(errs, "Hours per week: the maximum must be at least the minimum.")
-	}
-	return errs
-}
-
-func validateWorkModes(modes []string) []string {
-	var errs []string
-	for i, m := range modes {
-		if m != "remote" && m != "hybrid" && m != "onsite" {
-			errs = append(errs, fmt.Sprintf("Work mode: choose Remote, Hybrid or Onsite. (got %q at index %d)", m, i+1))
-		}
-	}
-	return errs
-}
-
-func validatePreferredLocations(locs []Location) []string {
-	var errs []string
-	for i, l := range locs {
-		if strings.TrimSpace(l.Country) == "" {
-			errs = append(errs, fmt.Sprintf("Preferred work location %d: choose a country.", i+1))
-		}
 	}
 	return errs
 }

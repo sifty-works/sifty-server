@@ -90,6 +90,10 @@
       {
         "value": "contract",
         "label": "Contract"
+      },
+      {
+        "value": "internship",
+        "label": "Internship"
       }
     ],
     "workingTime": [
