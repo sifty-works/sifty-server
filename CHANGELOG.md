@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.15.0
+
 - The model set for Reading can now read each company's main domain (Exchange, DeFi, Infrastructure, Gambling and 18 more) from its newest vacancy, once per company. It shows as a Domain row in Key facts, marked "Read by the model", and does not change Fit yet. Settings → Models has a "Precise reading" switch, off by default: on, every new vacancy's company is read in the background, newest first, waiting two minutes after you last used a model; off, only the company of a vacancy you open is read. On a paid provider background reading also needs "Allow paid bulk work". A local model takes about 1.5 seconds per company.
 
 ## 0.14.0
