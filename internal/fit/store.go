@@ -18,13 +18,13 @@ import (
 	"github.com/sifty-works/sifty-server/internal/skills"
 )
 
-const ScoringVersion = 7
+const ScoringVersion = 8
 
 const current = `(f.inputs IS ? AND f.version IS v.version)`
 
 const Join = `LEFT JOIN fit f ON f.profile=? AND f.vacancy=v.id`
 
-const Columns = `f.state, f.score, f.inputs, f.version IS v.version, f.req_ok, f.req_no, f.req_maybe, f.broken`
+const Columns = `f.state, f.score, f.inputs, f.version IS v.version, f.req_ok, f.req_no, f.req_maybe, f.broken, f.req_near`
 
 const OrderBestFit = `ORDER BY CASE WHEN ` + current + ` AND f.state IS 'scored' THEN f.score - 1000*f.broken ELSE -1 END DESC, v.id ASC`
 
@@ -34,10 +34,11 @@ type Stored struct {
 	SameVacancyVersion     bool
 	ReqOK, ReqNo, ReqMaybe sql.NullInt64
 	Broken                 sql.NullBool
+	ReqNear                sql.NullInt64
 }
 
 func (s *Stored) Dest() []any {
-	return []any{&s.State, &s.Score, &s.Inputs, &s.SameVacancyVersion, &s.ReqOK, &s.ReqNo, &s.ReqMaybe, &s.Broken}
+	return []any{&s.State, &s.Score, &s.Inputs, &s.SameVacancyVersion, &s.ReqOK, &s.ReqNo, &s.ReqMaybe, &s.Broken, &s.ReqNear}
 }
 
 func (s Stored) Current(inputs int64) bool {
@@ -298,19 +299,19 @@ func writeBatch(ctx context.Context, database *db.DB, batch []listed, sets map[i
 		read := FromFacts(l.title, l.full(), sets[l.id])
 		for _, p := range stale[l.id] {
 			f := Score(p.View, read, r)
-			var score, reqOK, reqNo, reqMaybe any
+			var score, reqOK, reqNear, reqNo, reqMaybe any
 			if f.State == Scored {
 				score = f.Score
 			}
 			if f.ReqRead {
-				reqOK, reqNo, reqMaybe = f.ReqOK, f.ReqNo, f.ReqMaybe
+				reqOK, reqNear, reqNo, reqMaybe = f.ReqOK, f.ReqNear, f.ReqNo, f.ReqMaybe
 			}
-			res, err := tx.ExecContext(ctx, `INSERT INTO fit (profile, vacancy, version, inputs, listing, state, score, req_ok, req_no, req_maybe, broken)
-				SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM profile WHERE id=?) AND EXISTS (SELECT 1 FROM vacancy WHERE id=?)
+			res, err := tx.ExecContext(ctx, `INSERT INTO fit (profile, vacancy, version, inputs, listing, state, score, req_ok, req_no, req_maybe, broken, req_near)
+				SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM profile WHERE id=?) AND EXISTS (SELECT 1 FROM vacancy WHERE id=?)
 				ON CONFLICT (profile, vacancy) DO UPDATE SET version=excluded.version, inputs=excluded.inputs,
 				listing=excluded.listing, state=excluded.state, score=excluded.score,
-				req_ok=excluded.req_ok, req_no=excluded.req_no, req_maybe=excluded.req_maybe, broken=excluded.broken`,
-				p.ID, l.id, l.version, p.Inputs, l.key(), f.State, score, reqOK, reqNo, reqMaybe, f.Broken, p.ID, l.id)
+				req_ok=excluded.req_ok, req_no=excluded.req_no, req_maybe=excluded.req_maybe, broken=excluded.broken, req_near=excluded.req_near`,
+				p.ID, l.id, l.version, p.Inputs, l.key(), f.State, score, reqOK, reqNo, reqMaybe, f.Broken, reqNear, p.ID, l.id)
 			if err != nil {
 				return 0, fmt.Errorf("fit: write %d: %w", l.id, err)
 			}

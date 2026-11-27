@@ -35,6 +35,7 @@ func queueAnalysis(t *testing.T, d *db.DB, id int64) {
 func TestRequirementsCounter_RowText(t *testing.T) {
 	for i, tc := range []struct {
 		name, fitRow string
+		near         int
 		queued       bool
 		want         string
 	}{
@@ -45,6 +46,7 @@ func TestRequirementsCounter_RowText(t *testing.T) {
 		{name: "with no requirements stated", fitRow: "0,'scored',75,0,0,0", want: "No requirements stated"},
 		{name: "with every requirement unchecked", fitRow: "0,'scored',75,0,0,4", want: "Not checked yet"},
 		{name: "with checked requirements", fitRow: "0,'scored',75,3,1,2", want: "✓ 3 · ✕ 1 · ? 2"},
+		{name: "with a borderline requirement", fitRow: "0,'scored',75,3,1,2", near: 1, want: "✓ 3 · ≈ 1 · ✕ 1 · ? 2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := openTestDB(t)
@@ -54,6 +56,9 @@ func TestRequirementsCounter_RowText(t *testing.T) {
 				p, _ := fit.LoadProfile(context.Background(), d, 1, defaultRules())
 				d.Exec(fmt.Sprintf(`INSERT INTO fit (profile,vacancy,version,inputs,listing,state,score,req_ok,req_no,req_maybe)
 					VALUES (1,%d,1,%d,%s)`, id, p.Inputs, tc.fitRow))
+				if tc.near > 0 {
+					d.Exec(`UPDATE fit SET req_near=? WHERE vacancy=?`, tc.near, id)
+				}
 			}
 			if tc.queued {
 				queueAnalysis(t, d, id)

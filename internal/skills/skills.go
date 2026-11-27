@@ -2,6 +2,10 @@ package skills
 
 import (
 	_ "embed"
+	"regexp"
+	"slices"
+	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -14,8 +18,17 @@ var VocabBytes []byte
 
 type vocabData struct {
 	TechnologyContext []string    `yaml:"technology_context"`
-	GenericWords      []string    `yaml:"generic_words"`
+	Levels            levelsData  `yaml:"levels"`
 	Groups            []groupData `yaml:"groups"`
+}
+
+type levelsData struct {
+	Order []string `yaml:"order"`
+	Years []struct {
+		From  int    `yaml:"from"`
+		Level string `yaml:"level"`
+	} `yaml:"years"`
+	Words map[string][]string `yaml:"words"`
 }
 
 type groupData struct {
@@ -34,7 +47,20 @@ type vocab struct {
 	terms    map[string]termInfo
 	maxWords int
 	context  map[string]bool
-	generic  map[string]bool
+	order    []string
+	years    []yearRule
+	words    []wordRule
+}
+
+type yearRule struct {
+	from  int
+	level string
+}
+
+type wordRule struct {
+	phrase string
+	words  int
+	level  string
 }
 
 var defaultVocab = func() *vocab {
@@ -42,12 +68,21 @@ var defaultVocab = func() *vocab {
 	if err := yaml.Unmarshal(VocabBytes, &d); err != nil {
 		panic("skills: load vocab.yaml: " + err.Error())
 	}
-	v := &vocab{terms: map[string]termInfo{}, context: map[string]bool{}, generic: map[string]bool{}, maxWords: 1}
+	v := &vocab{terms: map[string]termInfo{}, context: map[string]bool{}, order: d.Levels.Order, maxWords: 1}
 	for _, w := range d.TechnologyContext {
 		v.context[strings.ToLower(strings.TrimSpace(w))] = true
 	}
-	for _, w := range d.GenericWords {
-		v.generic[strings.ToLower(strings.TrimSpace(w))] = true
+	for _, y := range d.Levels.Years {
+		v.years = append(v.years, yearRule{y.From, y.Level})
+	}
+	for level, words := range d.Levels.Words {
+		for _, w := range words {
+			toks := tokenize(w)
+			v.words = append(v.words, wordRule{joinLower(toks), len(toks), level})
+			for _, t := range toks {
+				v.context[t.lower] = true
+			}
+		}
 	}
 	add := func(group, term string, ambiguous bool) {
 		toks := tokenize(term)
@@ -127,9 +162,9 @@ func joinLower(toks []token) string {
 	return strings.Join(parts, " ")
 }
 
-func (v *vocab) scan(text string) (hits []hit, rejected []int, toks []token, covered []bool) {
+func (v *vocab) scan(text string) (hits []hit, toks []token) {
 	toks = tokenize(text)
-	covered = make([]bool, len(toks))
+	covered := make([]bool, len(toks))
 	var cands []hit
 	for i := 0; i < len(toks); i++ {
 		for n := v.maxWords; n >= 1; n-- {
@@ -176,11 +211,10 @@ func (v *vocab) scan(text string) (hits []hit, rejected []int, toks []token, cov
 		}
 		if accepted {
 			hits = append(hits, h)
-		} else {
-			rejected = append(rejected, h.from)
 		}
 	}
-	return
+	sort.Slice(hits, func(a, b int) bool { return hits[a].from < hits[b].from })
+	return hits, toks
 }
 
 func joinedByHyphen(text string, start, end int) bool {
@@ -195,7 +229,7 @@ func (v *vocab) scanName(name string) []hit {
 	if info, ok := v.terms[joinLower(toks)]; ok {
 		return []hit{{info.group, 0, len(toks)}}
 	}
-	hits, _, _, _ := v.scan(name)
+	hits, _ := v.scan(name)
 	return hits
 }
 
@@ -211,112 +245,214 @@ func groupsOf(hits []hit) []string {
 	return out
 }
 
-type Index struct {
-	byGroup     map[string]bool
-	absentGroup map[string]bool
-	skillNames  map[string][]string
-	absentNames map[string][]string
+func Groups(name string) []string { return groupsOf(defaultVocab.scanName(name)) }
+
+const (
+	Any    = "Any"
+	No     = "No"
+	Listed = "Listed"
+)
+
+func (v *vocab) rank(level string) int {
+	return slices.Index(v.order, level) + 1
 }
 
-func NewIndex(held, absent []string) *Index {
-	idx := &Index{
-		byGroup: map[string]bool{}, absentGroup: map[string]bool{},
-		skillNames: map[string][]string{}, absentNames: map[string][]string{},
-	}
-	for _, name := range held {
-		for _, g := range groupsOf(defaultVocab.scanName(name)) {
-			idx.byGroup[g] = true
-			idx.skillNames[g] = append(idx.skillNames[g], name)
+type Held struct{ Name, Level string }
+
+type Index struct {
+	level  map[string]string
+	absent map[string]bool
+}
+
+func NewIndex(held []Held, absent []string) *Index {
+	idx := &Index{level: map[string]string{}, absent: map[string]bool{}}
+	for _, h := range held {
+		level := h.Level
+		if defaultVocab.rank(level) == 0 {
+			level = Listed
+		}
+		for _, g := range Groups(h.Name) {
+			if defaultVocab.rank(level) >= defaultVocab.rank(idx.level[g]) {
+				idx.level[g] = level
+			}
 		}
 	}
 	for _, name := range absent {
-		for _, g := range groupsOf(defaultVocab.scanName(name)) {
-			idx.absentGroup[g] = true
-			idx.absentNames[g] = append(idx.absentNames[g], name)
+		for _, g := range Groups(name) {
+			idx.absent[g] = true
 		}
 	}
 	return idx
 }
 
-type DecisionResult struct {
-	Verdict     string
-	Evidence    string
-	NamedSkills []string
+func (idx *Index) Have(group string) string {
+	switch {
+	case idx.level[group] != "":
+		return idx.level[group]
+	case idx.absent[group]:
+		return No
+	}
+	return ""
 }
 
-func groups(text string) (named []string, anyOf bool, canDecide bool) {
-	hits, rejected, toks, covered := defaultVocab.scan(text)
-	named = groupsOf(hits)
-	orPresent := false
-	leftover := len(rejected) > 0
-	for k, t := range toks {
-		if covered[k] {
-			continue
-		}
-		if t.lower == "or" {
-			orPresent = true
-			continue
-		}
-		if len([]rune(t.lower)) < 3 || defaultVocab.generic[t.lower] || defaultVocab.context[t.lower] {
-			continue
-		}
-		leftover = true
-	}
-	return named, orPresent, !(leftover && !orPresent)
-}
-
-func Decide(text string, idx *Index) DecisionResult {
-	named, anyOf, canDecide := groups(text)
-	if !canDecide || len(named) == 0 {
-		return DecisionResult{Verdict: "?", NamedSkills: named}
-	}
-	v := verdictForGroups(named, anyOf, idx)
-	var ev []string
-	switch v {
-	case "✓":
-		for _, g := range named {
-			ev = append(ev, idx.skillNames[g]...)
-		}
-	case "✕":
-		for _, g := range named {
-			ev = append(ev, idx.absentNames[g]...)
+func (idx *Index) Verdict(e Entry) string {
+	best, bestRank, unknown, allNo := "", 0, false, true
+	for _, name := range e.Names {
+		switch h := idx.Have(name); h {
+		case "":
+			unknown, allNo = true, false
+		case No:
+		default:
+			allNo = false
+			if best == "" || defaultVocab.rank(h) > bestRank {
+				best, bestRank = h, defaultVocab.rank(h)
+			}
 		}
 	}
-	return DecisionResult{Verdict: v, Evidence: joinEvidence(ev), NamedSkills: named}
-}
-
-func NamedSkills(text string) []string {
-	named, _, _ := groups(text)
-	return named
-}
-
-func joinEvidence(names []string) string {
-	seen := map[string]bool{}
-	var out []string
-	for _, n := range names {
-		if !seen[n] {
-			seen[n] = true
-			out = append(out, n)
-		}
-	}
-	return strings.Join(out, " · ")
-}
-
-func verdictForGroups(gs []string, anyOf bool, idx *Index) string {
-	nHave, nAbsent := 0, 0
-	for _, g := range gs {
-		if idx.byGroup[g] {
-			nHave++
-		}
-		if idx.absentGroup[g] {
-			nAbsent++
-		}
-	}
-	if (anyOf && nHave > 0) || (!anyOf && nHave == len(gs)) {
-		return "✓"
-	}
-	if nAbsent == len(gs) {
+	need, diff := defaultVocab.rank(e.Demand), 0
+	switch {
+	case best == "" && allNo:
 		return "✕"
+	case best == "":
+		return "?"
+	case need == 0:
+		return "✓"
+	case bestRank == 0:
+		return "?"
 	}
-	return "?"
+	diff = need - bestRank
+	switch {
+	case diff <= 0:
+		return "✓"
+	case unknown:
+		return "?"
+	case diff == 1:
+		return "≈"
+	}
+	return "✕"
+}
+
+type Line struct {
+	Text     string
+	Required bool
+}
+
+type Entry struct {
+	Names    []string
+	Demand   string
+	Required bool
+	Line     string
+	Index    int
+}
+
+var yearsRe = regexp.MustCompile(`(?i)\b(\d+)(?:\s*(?:-|–|to)\s*\d+)?\s*\+?\s*(?:years?|yrs?)\b`)
+
+func YearsIn(text string) (int, bool) {
+	m := yearsRe.FindStringSubmatch(text)
+	if m == nil {
+		return 0, false
+	}
+	years, _ := strconv.Atoi(m[1])
+	return years, true
+}
+
+func Levels() []string { return slices.Clone(defaultVocab.order) }
+
+func (v *vocab) demand(text string, toks []token, covered []bool) string {
+	best := 0
+	raise := func(level string) { best = max(best, v.rank(level)) }
+	if years, ok := YearsIn(text); ok {
+		if len(v.years) > 0 {
+			raise(v.years[0].level)
+		}
+		for _, y := range v.years {
+			if years >= y.from {
+				raise(y.level)
+			}
+		}
+	}
+	for _, w := range v.words {
+		for i := 0; i+w.words <= len(toks); i++ {
+			if joinLower(toks[i:i+w.words]) == w.phrase && !slices.Contains(covered[i:i+w.words], true) {
+				raise(w.level)
+			}
+		}
+	}
+	if best == 0 {
+		return Any
+	}
+	return v.order[best-1]
+}
+
+func (v *vocab) chains(text string, hits []hit, toks []token) [][]string {
+	var out [][]string
+	var chain []string
+	seenOr, hasOr := false, false
+	last := -1
+	flush := func() {
+		if last >= 0 && last+1 < len(toks) && toks[last+1].lower == "or" {
+			hasOr = true
+		}
+		switch {
+		case len(chain) == 0:
+		case hasOr:
+			out = append(out, chain)
+		default:
+			for _, name := range chain {
+				out = append(out, []string{name})
+			}
+		}
+		chain, seenOr, hasOr = nil, false, false
+	}
+	for k, h := range hits {
+		if k > 0 {
+			gap := strings.ToLower(strings.Join(strings.Fields(text[toks[hits[k-1].to-1].end:toks[h.from].start]), ""))
+			switch {
+			case gap == "or" || gap == ",or" || gap == "and/or" || gap == "/":
+				seenOr, hasOr = true, true
+			case gap == "," && !seenOr:
+			default:
+				flush()
+			}
+		}
+		if !slices.Contains(chain, h.group) {
+			chain = append(chain, h.group)
+		}
+		last = h.to - 1
+	}
+	flush()
+	return out
+}
+
+func Entries(lines []Line) (entries []Entry, rest []int) {
+	byKey := map[string]int{}
+	for i, line := range lines {
+		hits, toks := defaultVocab.scan(line.Text)
+		if len(hits) == 0 {
+			rest = append(rest, i)
+			continue
+		}
+		covered := make([]bool, len(toks))
+		for _, h := range hits {
+			for k := h.from; k < h.to; k++ {
+				covered[k] = true
+			}
+		}
+		demand := defaultVocab.demand(line.Text, toks, covered)
+		for _, names := range defaultVocab.chains(line.Text, hits, toks) {
+			key := strings.Join(names, "|")
+			at, ok := byKey[key]
+			if !ok {
+				byKey[key] = len(entries)
+				entries = append(entries, Entry{Names: names, Demand: demand, Required: line.Required, Line: line.Text, Index: i})
+				continue
+			}
+			e := &entries[at]
+			e.Required = e.Required || line.Required
+			if defaultVocab.rank(demand) > defaultVocab.rank(e.Demand) {
+				e.Demand, e.Line, e.Index = demand, line.Text, i
+			}
+		}
+	}
+	return entries, rest
 }

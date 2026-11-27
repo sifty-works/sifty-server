@@ -16,11 +16,12 @@ import (
 )
 
 type CheckAnswer struct {
-	Index       int    `json:"index"`
-	Requirement string `json:"requirement"`
-	Verdict     string `json:"verdict"`
-	Reason      string `json:"reason"`
-	Excerpt     string `json:"excerpt"`
+	Index       int      `json:"index"`
+	Requirement string   `json:"requirement"`
+	Skills      []string `json:"skills,omitempty"`
+	Verdict     string   `json:"verdict"`
+	Reason      string   `json:"reason"`
+	Excerpt     string   `json:"excerpt"`
 }
 
 type CheckView struct {
@@ -90,20 +91,14 @@ func loadCheck(ctx context.Context, database *db.DB, enqueue func(kind, subject 
 	return cs, nil
 }
 
-func (cs checkState) view(lines []fit.RequirementLine, queue []int64, now time.Time) *CheckView {
+func (cs checkState) view(open []fit.Open, queue []int64, now time.Time) *CheckView {
 	if !cs.shown {
 		return nil
 	}
 	v := &CheckView{Answers: []CheckAnswer{}}
-	var open []fit.RequirementLine
-	for _, l := range lines {
-		if l.Verdict == "?" {
-			open = append(open, l)
-		}
-	}
 	for _, a := range cs.stored.Check.Answers {
 		if l, ok := shortlistcheck.FindLine(open, a.Requirement); ok {
-			v.Answers = append(v.Answers, CheckAnswer{l.Index, l.Text, a.Verdict, a.Reason, a.Excerpt})
+			v.Answers = append(v.Answers, CheckAnswer{l.Index, l.Text, l.Skills, a.Verdict, a.Reason, a.Excerpt})
 		}
 	}
 	if cs.have {

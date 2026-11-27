@@ -2,6 +2,7 @@ package fit
 
 import (
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -24,13 +25,33 @@ type ProfileView struct {
 }
 
 type RequirementLine struct {
-	Index       int      `json:"index"`
-	Text        string   `json:"text"`
-	Alts        []string `json:"alts,omitempty"`
-	Level       string   `json:"level"`
-	Verdict     string   `json:"verdict"`
-	Evidence    string   `json:"evidence,omitempty"`
-	NamedSkills []string `json:"namedSkills,omitempty"`
+	Index    int      `json:"index"`
+	Text     string   `json:"text"`
+	Alts     []string `json:"alts,omitempty"`
+	Level    string   `json:"level"`
+	Verdict  string   `json:"verdict"`
+	Evidence string   `json:"evidence,omitempty"`
+}
+
+type SkillHave struct {
+	Name string `json:"name"`
+	Have string `json:"have,omitempty"`
+}
+
+type SkillEntry struct {
+	Skills   []SkillHave `json:"skills"`
+	Demand   string      `json:"demand"`
+	Line     string      `json:"line"`
+	Verdict  string      `json:"verdict"`
+	Required bool        `json:"-"`
+	Index    int         `json:"-"`
+}
+
+type Open struct {
+	Index  int
+	Text   string
+	Level  string
+	Skills []string
 }
 
 type Rules struct{ Weights, Rates map[string]float64 }
@@ -81,18 +102,47 @@ type Tile struct {
 }
 
 type Fit struct {
-	State                  string
-	Score                  int
-	Bucket                 string
-	Text                   string
-	Criteria               []Criterion
-	ScoredOn, Of           int
-	Reasons                []string
-	Broken                 bool
-	Tiles                  []Tile
-	ReqRead                bool
-	ReqOK, ReqNo, ReqMaybe int
-	Requirements           []RequirementLine
+	State                 string
+	Score                 int
+	Bucket                string
+	Text                  string
+	Criteria              []Criterion
+	ScoredOn, Of          int
+	Reasons               []string
+	Broken                bool
+	Tiles                 []Tile
+	ReqRead               bool
+	ReqOK, ReqNear, ReqNo int
+	ReqMaybe              int
+	Requirements          []RequirementLine
+	Skills                []SkillEntry
+}
+
+func (f Fit) Open() []Open {
+	var out []Open
+	for _, l := range f.Requirements {
+		if l.Verdict == "?" {
+			out = append(out, Open{Index: l.Index, Text: l.Text, Level: l.Level})
+		}
+	}
+	for _, e := range f.Skills {
+		if e.Verdict != "?" {
+			continue
+		}
+		at := slices.IndexFunc(out, func(o Open) bool { return o.Text == e.Line })
+		if at < 0 {
+			level := "preferred"
+			if e.Required {
+				level = "required"
+			}
+			out = append(out, Open{Index: e.Index, Text: e.Line, Level: level})
+			at = len(out) - 1
+		}
+		for _, s := range e.Skills {
+			out[at].Skills = append(out[at].Skills, s.Name)
+		}
+	}
+	return out
 }
 
 var tiles = []struct {
@@ -118,12 +168,19 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 	p.Rates = r.Rates
 	if v.Analysed {
 		f.ReqRead = true
-		f.Requirements = requirementLines(p, v)
-		v.Decided = f.Requirements
+		f.Skills, f.Requirements = readRequirements(p, v)
+		for _, e := range f.Skills {
+			v.Judged = append(v.Judged, Judged{e.Required, e.Verdict})
+		}
 		for _, l := range f.Requirements {
-			switch l.Verdict {
+			v.Judged = append(v.Judged, Judged{l.Level == "required", l.Verdict})
+		}
+		for _, j := range v.Judged {
+			switch j.Verdict {
 			case "✓":
 				f.ReqOK++
+			case "≈":
+				f.ReqNear++
 			case "✕":
 				f.ReqNo++
 			default:

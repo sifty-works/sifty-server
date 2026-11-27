@@ -87,10 +87,11 @@ type PreviewResp struct {
 }
 
 type SkillsDecisionReq struct {
-	VacancyID   int64  `json:"vacancyId"`
-	ReqIndex    int    `json:"requirementIndex"`
-	Have        bool   `json:"have"`
-	ChosenSkill string `json:"chosenSkill,omitempty"`
+	VacancyID int64  `json:"vacancyId"`
+	Skill     string `json:"skill,omitempty"`
+	Level     string `json:"level,omitempty"`
+	ReqIndex  *int   `json:"requirementIndex,omitempty"`
+	Have      *bool  `json:"have,omitempty"`
 }
 
 type SkillsDecisionResp struct {
@@ -123,7 +124,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		if err != nil {
 			return SkillsDecisionResp{}, err
 		}
-		res, err := applySkillsDecision(ctx, database, vacancyID, body.ReqIndex, body.Have, body.ChosenSkill, rules())
+		res, err := applySkillsDecision(ctx, database, vacancyID, pid, body, rules())
 		if err != nil {
 			return SkillsDecisionResp{}, err
 		}

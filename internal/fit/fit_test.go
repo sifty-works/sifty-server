@@ -416,10 +416,9 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 	}
 }
 
-func TestRequirementLineIsDecidedByConfirmedFactThenYearsThenSkills(t *testing.T) {
+func TestRequirementRowIsDecidedByConfirmedFactThenYears(t *testing.T) {
 	p := fit.ProfileView{
 		Goals:        candidate.GoalsView{TargetRoles: []string{"Engineer"}},
-		Skills:       []candidate.Skill{{Name: "Go"}},
 		Confirmed:    []candidate.ConfirmedFact{{Text: "Security clearance", Have: true}, {Text: "Driving licence", Have: false}},
 		DerivedYears: candidate.DerivedYears{Total: 8, Engineering: 5},
 	}
@@ -429,7 +428,6 @@ func TestRequirementLineIsDecidedByConfirmedFactThenYearsThenSkills(t *testing.T
 		{"Security clearance", "✓", "Confirmed by you"},
 		{"Driving licence", "✕", "Confirmed by you"},
 		{"5+ years of software engineering", "?", "5 years"},
-		{"Golang expertise", "✓", "Go"},
 	}
 	var reqs []fit.Requirement
 	for _, c := range cases {
@@ -445,5 +443,28 @@ func TestRequirementLineIsDecidedByConfirmedFactThenYearsThenSkills(t *testing.T
 				t.Errorf("verdict %q evidence %q, want %q %q", got.Verdict, got.Evidence, c.verdict, c.evidence)
 			}
 		})
+	}
+}
+
+func TestRequirementsCriterionAveragesSkillsAndOtherRequirements(t *testing.T) {
+	p := fit.ProfileView{
+		Goals:        candidate.GoalsView{TargetRoles: []string{"Engineer"}},
+		Skills:       []candidate.Skill{{Name: "Go", Level: "Beginner"}, {Name: "Rust", Level: "Proficient"}},
+		AbsentSkills: []candidate.AbsentSkill{{Name: "Kafka"}},
+		Confirmed:    []candidate.ConfirmedFact{{Text: "Driving licence", Have: false}},
+	}
+	reqs := []fit.Requirement{
+		{Text: "Go", Level: "required"},
+		{Text: "5+ years of Rust", Level: "required"},
+		{Text: "Kafka is a plus", Level: "preferred"},
+		{Text: "Driving licence", Level: "required"},
+		{Text: "Redis is a plus", Level: "preferred"},
+	}
+	f := fit.Score(p, fit.Vacancy{Title: "Engineer", Full: true, Analysed: true, Requirements: reqs}, rules())
+	if f.ReqOK != 1 || f.ReqNear != 1 || f.ReqNo != 2 || f.ReqMaybe != 1 {
+		t.Errorf("counts ✓ %d ≈ %d ✕ %d ? %d, want 1 1 2 1", f.ReqOK, f.ReqNear, f.ReqNo, f.ReqMaybe)
+	}
+	if got, want := criterion(t, f, "requirements"), 3.0/7; math.Abs(got-want) > 1e-9 {
+		t.Errorf("requirements utility = %v, want %v", got, want)
 	}
 }

@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- What they ask shows the vacancy's skills as chips in Required and Nice to have. Each chip shows the level the vacancy asks for, read from its words and years ("familiarity" Beginner, "strong" or "3+ years" Proficient, "deep" or "5+ years" Expert), and a mark against your level: ✓ when yours is at or above it, ≈ one level below, ✕ two below or none, ? when you have not stated it. Click a chip to read its line and set your level; it is saved to your skills at once. A line listing alternatives ("Rust, TypeScript or Python") is one chip met by the best of them. Lines without a known skill stay below as other requirements. The counter adds ≈, and a borderline skill counts half in Fits you. Every result is recomputed once.
+
 ## 0.9.0
 
 - The skills vocabulary knows about 200 more skills (tools such as Excel, Salesforce, Figma, Databricks, Datadog, Airflow, security standards and blockchain platforms), so more requirement lines are matched against your skills. A requirement naming a skill you have not stated stays ?; state it in your profile.

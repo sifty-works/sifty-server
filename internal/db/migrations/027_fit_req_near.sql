@@ -1,0 +1,1 @@
+ALTER TABLE fit ADD COLUMN req_near INTEGER;

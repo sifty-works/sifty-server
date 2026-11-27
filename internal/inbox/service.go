@@ -71,8 +71,9 @@ type FitMark struct {
 }
 
 type RequirementGroup struct {
-	Label string                `json:"label"`
-	Items []fit.RequirementLine `json:"items"`
+	Label  string                `json:"label"`
+	Skills []fit.SkillEntry      `json:"skills"`
+	Items  []fit.RequirementLine `json:"items"`
 }
 
 type Band struct {
@@ -89,7 +90,7 @@ type Band struct {
 	BrokenMust       bool               `json:"brokenMust"`
 }
 
-func reqText(state string, reqRead bool, reqOK, reqNo, reqMaybe int, inAnalysisSet bool) string {
+func reqText(state string, reqRead bool, reqOK, reqNear, reqNo, reqMaybe int, inAnalysisSet bool) string {
 	if state == fit.NoText {
 		return "Full job description is unavailable"
 	}
@@ -99,14 +100,17 @@ func reqText(state string, reqRead bool, reqOK, reqNo, reqMaybe int, inAnalysisS
 		}
 		return "Not analysed yet"
 	}
-	total := reqOK + reqNo + reqMaybe
-	if total == 0 {
+	if reqOK+reqNear+reqNo+reqMaybe == 0 {
 		return "No requirements stated"
 	}
-	if reqOK == 0 && reqNo == 0 {
+	if reqOK == 0 && reqNear == 0 && reqNo == 0 {
 		return "Not checked yet"
 	}
-	return fmt.Sprintf("✓ %d · ✕ %d · ? %d", reqOK, reqNo, reqMaybe)
+	near := ""
+	if reqNear > 0 {
+		near = fmt.Sprintf(" · ≈ %d", reqNear)
+	}
+	return fmt.Sprintf("✓ %d%s · ✕ %d · ? %d", reqOK, near, reqNo, reqMaybe)
 }
 
 func queryAnalysisSet(ctx context.Context, database *db.DB) (map[int64]bool, []int64, error) {
@@ -146,7 +150,7 @@ func fitMark(s fit.Stored, inputs int64, vacancyID int64, analysisSet map[int64]
 		m.BrokenMust = s.Broken.Bool && !m.Dimmed
 	}
 	m.RequirementsText = reqText(s.State.String, s.ReqOK.Valid,
-		int(s.ReqOK.Int64), int(s.ReqNo.Int64), int(s.ReqMaybe.Int64),
+		int(s.ReqOK.Int64), int(s.ReqNear.Int64), int(s.ReqNo.Int64), int(s.ReqMaybe.Int64),
 		analysisSet[vacancyID])
 	return m
 }
@@ -686,26 +690,28 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enq
 		return VacancyView{}, err
 	}
 	groups := []RequirementGroup{}
-	if f.ReqRead && len(f.Requirements) > 0 {
-		var req, nice []fit.RequirementLine
-		for _, r := range f.Requirements {
-			if r.Level == "required" {
-				req = append(req, r)
-			} else {
-				nice = append(nice, r)
+	if f.ReqRead {
+		for _, label := range []string{"Required", "Nice to have"} {
+			g := RequirementGroup{Label: label, Skills: []fit.SkillEntry{}, Items: []fit.RequirementLine{}}
+			for _, e := range f.Skills {
+				if e.Required == (label == "Required") {
+					g.Skills = append(g.Skills, e)
+				}
 			}
-		}
-		if len(req) > 0 {
-			groups = append(groups, RequirementGroup{"Required", req})
-		}
-		if len(nice) > 0 {
-			groups = append(groups, RequirementGroup{"Nice to have", nice})
+			for _, r := range f.Requirements {
+				if (r.Level == "required") == (label == "Required") {
+					g.Items = append(g.Items, r)
+				}
+			}
+			if len(g.Skills)+len(g.Items) > 0 {
+				groups = append(groups, g)
+			}
 		}
 	}
 	band := Band{
 		Bucket: f.Bucket, Text: f.Text, Tiles: f.Tiles,
-		RequirementsText: reqText(f.State, f.ReqRead, f.ReqOK, f.ReqNo, f.ReqMaybe, rs[vacancyID]),
-		RequirementCount: len(f.Requirements),
+		RequirementsText: reqText(f.State, f.ReqRead, f.ReqOK, f.ReqNear, f.ReqNo, f.ReqMaybe, rs[vacancyID]),
+		RequirementCount: len(f.Skills) + len(f.Requirements),
 		Groups:           groups,
 		ScoredOn:         f.ScoredOn, ScoredOf: f.Of, Reasons: f.Reasons, BrokenMust: f.Broken,
 	}
@@ -722,6 +728,6 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enq
 		Listing:  lv,
 		Band:     band,
 		Offer:    offerView(vf[vacancyID].Facts, f.Tiles),
-		Check:    cs.view(f.Requirements, queue, t),
+		Check:    cs.view(f.Open(), queue, t),
 	}, nil
 }

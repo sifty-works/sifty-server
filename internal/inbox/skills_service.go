@@ -3,6 +3,7 @@ package inbox
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/sifty-works/sifty-server/internal/apperr"
@@ -16,59 +17,71 @@ type skillsResult struct {
 	added  bool
 }
 
-func applySkillsDecision(ctx context.Context, database *db.DB, vacancyID int64, reqIndex int, have bool, chosenSkill string, r fit.Rules) (skillsResult, error) {
-	vr, _, _, ok, err := fit.LoadVacancy(ctx, database, vacancyID)
+const noChange = "Nothing new to add; your data is already up to date."
+
+func applySkillsDecision(ctx context.Context, database *db.DB, vacancyID, profileID int64, body SkillsDecisionReq, r fit.Rules) (skillsResult, error) {
+	f, err := fit.Band(ctx, database, profileID, vacancyID, r)
 	if err != nil {
 		return skillsResult{}, err
-	}
-	if !ok {
-		return skillsResult{}, apperr.NotFound{Message: "Role not found."}
-	}
-	if reqIndex < 0 || reqIndex >= len(vr.Requirements) {
-		return skillsResult{}, apperr.Invalid{Message: "Requirement index out of range."}
 	}
 	me, err := candidate.LoadMe(ctx, database)
 	if err != nil {
 		return skillsResult{}, err
 	}
-	ans := fit.Answer(vr.Requirements[reqIndex].Text, have, chosenSkill, me)
-	changed := len(ans.AddedSkills)+len(ans.MovedSkills)+len(ans.AddedConfirmed) > 0
-	if changed {
-		if err := candidate.SaveMe(ctx, database, ans.Me); err != nil {
+	var notice string
+	var changed bool
+	if body.Level != "" {
+		skill, err := namedSkill(f, body)
+		if err != nil {
 			return skillsResult{}, err
 		}
-		if err := fit.RecomputeVacancy(ctx, database, vacancyID, r); err != nil {
-			return skillsResult{}, err
+		me, changed = fit.SetLevel(skill, body.Level, me)
+		notice = levelNotice(skill, body.Level)
+	} else {
+		if body.ReqIndex == nil || body.Have == nil {
+			return skillsResult{}, apperr.Invalid{Message: "Give a skill with a level, or a requirement with have."}
 		}
+		i := slices.IndexFunc(f.Requirements, func(l fit.RequirementLine) bool { return l.Index == *body.ReqIndex })
+		if i < 0 {
+			return skillsResult{}, apperr.Invalid{Message: "No such requirement row; the skills of a line are answered by level."}
+		}
+		text := f.Requirements[i].Text
+		me, changed = fit.ConfirmRow(text, *body.Have, me)
+		statement := "something you do not have"
+		if *body.Have {
+			statement = "something you have"
+		}
+		notice = fmt.Sprintf("Added %q to Confirmed by you as %s (change in your profile).", text, statement)
 	}
-	return skillsResult{notice: buildNotice(ans.AddedSkills, ans.MovedSkills, ans.AddedConfirmed, have), added: changed}, nil
+	if !changed {
+		return skillsResult{notice: noChange}, nil
+	}
+	if err := candidate.SaveMe(ctx, database, me); err != nil {
+		return skillsResult{}, err
+	}
+	if err := fit.RecomputeVacancy(ctx, database, vacancyID, r); err != nil {
+		return skillsResult{}, err
+	}
+	return skillsResult{notice: notice, added: true}, nil
 }
 
-func buildNotice(addedSkills, movedSkills, confirmedItems []string, have bool) string {
-	if len(addedSkills)+len(movedSkills)+len(confirmedItems) == 0 {
-		return "Nothing new to add; your data is already up to date."
+func namedSkill(f fit.Fit, body SkillsDecisionReq) (string, error) {
+	if !fit.IsLevel(body.Level) {
+		return "", apperr.Invalid{Message: "Level must be one of the skill levels or No."}
 	}
-	var parts []string
-	for _, item := range addedSkills {
-		if have {
-			parts = append(parts, fmt.Sprintf("Added %q to your skills (level Proficient; change in your profile).", item))
-		} else {
-			parts = append(parts, fmt.Sprintf("Added %q to skills you do not have (change in your profile).", item))
+	for _, e := range f.Skills {
+		for _, s := range e.Skills {
+			if strings.EqualFold(s.Name, body.Skill) {
+				return s.Name, nil
+			}
 		}
 	}
-	for _, item := range movedSkills {
-		if have {
-			parts = append(parts, fmt.Sprintf("Moved %q from skills you do not have to your skills (level Proficient; change in your profile).", item))
-		} else {
-			parts = append(parts, fmt.Sprintf("Moved %q from your skills to skills you do not have (change in your profile).", item))
-		}
+	return "", apperr.Invalid{Message: "The vacancy does not name that skill."}
+}
+
+func levelNotice(skill, level string) string {
+	if level == "No" {
+		return fmt.Sprintf("Set %s to skills you do not have (change in your profile).", skill)
 	}
-	statement := "something you do not have"
-	if have {
-		statement = "something you have"
-	}
-	for _, item := range confirmedItems {
-		parts = append(parts, fmt.Sprintf("Added %q to Confirmed by you as %s (change in your profile).", item, statement))
-	}
-	return strings.Join(parts, " ")
+	return fmt.Sprintf("Set %s to %s in your skills (change in your profile).", skill, level)
 }

@@ -52,12 +52,7 @@ type Checker struct {
 var verdicts = map[string]string{"met": "✓", "not_met": "✕"}
 
 func (c Checker) Check(ctx context.Context, f ProfileFacts, evidence string, v fit.Vacancy) (Check, error) {
-	var open []fit.RequirementLine
-	for _, line := range fit.Score(f, v, fit.Rules{}).Requirements {
-		if line.Verdict == "?" {
-			open = append(open, line)
-		}
-	}
+	open := fit.Score(f, v, fit.Rules{}).Open()
 	if len(open) == 0 {
 		return Check{Answers: []Answer{}}, nil
 	}
@@ -69,7 +64,7 @@ func (c Checker) Check(ctx context.Context, f ProfileFacts, evidence string, v f
 	return Check{Answers: answers}, nil
 }
 
-func (c Checker) ask(ctx context.Context, prompt string, open []fit.RequirementLine, evidence string) ([]Answer, error) {
+func (c Checker) ask(ctx context.Context, prompt string, open []fit.Open, evidence string) ([]Answer, error) {
 	var out Check
 	used, err := task.Ask(ctx, c.Model, prompt, models.Asks, &out)
 	if err != nil {
@@ -85,7 +80,7 @@ func (c Checker) ask(ctx context.Context, prompt string, open []fit.RequirementL
 	return answers, nil
 }
 
-func buildPrompt(v fit.Vacancy, open []fit.RequirementLine, text, evidence string) string {
+func buildPrompt(v fit.Vacancy, open []fit.Open, text, evidence string) string {
 	var sb strings.Builder
 	sb.WriteString(task.Prompt)
 	sb.WriteString("\nSCHEMA\n")
@@ -102,7 +97,7 @@ func buildPrompt(v fit.Vacancy, open []fit.RequirementLine, text, evidence strin
 	return sb.String()
 }
 
-func validate(in []Answer, open []fit.RequirementLine, evidence string) []Answer {
+func validate(in []Answer, open []fit.Open, evidence string) []Answer {
 	out := []Answer{}
 	seen := map[string]bool{}
 	for _, a := range in {
@@ -126,7 +121,7 @@ func validate(in []Answer, open []fit.RequirementLine, evidence string) []Answer
 	return out
 }
 
-func FindLine(lines []fit.RequirementLine, name string) (fit.RequirementLine, bool) {
+func FindLine(lines []fit.Open, name string) (fit.Open, bool) {
 	for range 4 {
 		want := text.Fold(name)
 		for _, l := range lines {
@@ -140,7 +135,7 @@ func FindLine(lines []fit.RequirementLine, name string) (fit.RequirementLine, bo
 		}
 		name = shorter
 	}
-	return fit.RequirementLine{}, false
+	return fit.Open{}, false
 }
 
 func withoutLastGroup(s string) string {

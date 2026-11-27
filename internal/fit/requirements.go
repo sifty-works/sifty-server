@@ -13,11 +13,10 @@ import (
 var (
 	leadKeyRe = regexp.MustCompile(`(?i)\b(lead|leading|manage|managing|management|head|director|vp|cto|ceo|coo|president)\b`)
 	engKeyRe  = regexp.MustCompile(`(?i)\b(engineer|engineering|developer|architect|programmer|technical|backend|frontend|software)\b`)
-	yearsInRe = regexp.MustCompile(`(?i)\b\d+\+?\s+years?\b`)
 )
 
-func names[T any](xs []T, name func(T) string) []string {
-	out := make([]string, len(xs))
+func names[T, R any](xs []T, name func(T) R) []R {
+	out := make([]R, len(xs))
 	for i, x := range xs {
 		out[i] = name(x)
 	}
@@ -29,37 +28,53 @@ func normalizeKey(s string) string {
 	return strings.Trim(s, ".,;:!?–—-'\"()")
 }
 
-func decide(text string, idx *skills.Index, confirmed []candidate.ConfirmedFact, dy candidate.DerivedYears) skills.DecisionResult {
+func decide(text string, confirmed []candidate.ConfirmedFact, dy candidate.DerivedYears) (verdict, evidence string) {
 	key := normalizeKey(text)
 	for _, c := range confirmed {
 		if normalizeKey(c.Text) == key {
-			v := "✓"
-			if !c.Have {
-				v = "✕"
+			if c.Have {
+				return "✓", "Confirmed by you"
 			}
-			return skills.DecisionResult{Verdict: v, Evidence: "Confirmed by you"}
+			return "✕", "Confirmed by you"
 		}
 	}
-	if yearsInRe.MatchString(text) {
-		return skills.DecisionResult{Verdict: "?", Evidence: yearsEvidence(text, dy)}
+	if _, ok := skills.YearsIn(text); ok {
+		return "?", yearsEvidence(text, dy)
 	}
-	return skills.Decide(text, idx)
+	return "?", ""
 }
 
-func requirementLines(p ProfileView, v Vacancy) []RequirementLine {
+func readRequirements(p ProfileView, v Vacancy) ([]SkillEntry, []RequirementLine) {
 	if !v.Analysed {
-		return nil
+		return nil, nil
 	}
-	idx := skills.NewIndex(names(p.Skills, func(s candidate.Skill) string { return s.Name }), names(p.AbsentSkills, func(s candidate.AbsentSkill) string { return s.Name }))
-	var out []RequirementLine
-	for i, req := range v.Requirements {
-		dr := decide(req.Text, idx, p.Confirmed, p.DerivedYears)
-		out = append(out, RequirementLine{
-			Index: i, Text: req.Text, Level: req.Level,
-			Verdict: dr.Verdict, Evidence: dr.Evidence, NamedSkills: dr.NamedSkills,
-		})
+	lines := make([]skills.Line, len(v.Requirements))
+	for i, r := range v.Requirements {
+		lines[i] = skills.Line{Text: r.Text, Required: r.Level == "required"}
 	}
-	return out
+	entries, rest := skills.Entries(lines)
+	idx := skills.NewIndex(
+		names(p.Skills, func(s candidate.Skill) skills.Held { return skills.Held{Name: s.Name, Level: s.Level} }),
+		names(p.AbsentSkills, func(s candidate.AbsentSkill) string { return s.Name }))
+	var entriesOut []SkillEntry
+	for _, e := range entries {
+		out := SkillEntry{Demand: e.Demand, Line: e.Line, Verdict: idx.Verdict(e), Required: e.Required, Index: e.Index}
+		for _, name := range e.Names {
+			have := idx.Have(name)
+			if have == skills.Listed {
+				have = ""
+			}
+			out.Skills = append(out.Skills, SkillHave{Name: name, Have: have})
+		}
+		entriesOut = append(entriesOut, out)
+	}
+	var rows []RequirementLine
+	for _, i := range rest {
+		req := v.Requirements[i]
+		verdict, evidence := decide(req.Text, p.Confirmed, p.DerivedYears)
+		rows = append(rows, RequirementLine{Index: i, Text: req.Text, Level: req.Level, Verdict: verdict, Evidence: evidence})
+	}
+	return entriesOut, rows
 }
 
 func yearsEvidence(text string, dy candidate.DerivedYears) string {
@@ -78,75 +93,48 @@ func yearsEvidence(text string, dy candidate.DerivedYears) string {
 	return fmt.Sprintf("%d years", years)
 }
 
-type AnswerResult struct {
-	Me             candidate.MeData
-	AddedSkills    []string
-	MovedSkills    []string
-	AddedConfirmed []string
+func IsLevel(level string) bool {
+	return level == skills.No || slices.Contains(skills.Levels(), level)
 }
 
-func Answer(text string, have bool, chosenSkill string, me candidate.MeData) AnswerResult {
-	named := skills.NamedSkills(text)
-	toAct := named
-	if chosenSkill != "" {
-		toAct = []string{chosenSkill}
+func ConfirmRow(text string, have bool, me candidate.MeData) (candidate.MeData, bool) {
+	if slices.ContainsFunc(me.ConfirmedFacts, func(f candidate.ConfirmedFact) bool { return f.Text == text }) {
+		return me, false
 	}
-	eqName := func(n string) func(candidate.Skill) bool {
-		return func(s candidate.Skill) bool { return strings.EqualFold(s.Name, n) }
+	me.ConfirmedFacts = append(me.ConfirmedFacts, candidate.ConfirmedFact{Text: text, Have: have})
+	return me, true
+}
+
+func SetLevel(skill, level string, me candidate.MeData) (candidate.MeData, bool) {
+	sameSkill := func(name string) bool {
+		return strings.EqualFold(name, skill) || slices.ContainsFunc(skills.Groups(name), func(g string) bool { return strings.EqualFold(g, skill) })
 	}
-	eqAbsent := func(n string) func(candidate.AbsentSkill) bool {
-		return func(a candidate.AbsentSkill) bool { return strings.EqualFold(a.Name, n) }
+	if level == skills.No {
+		held := len(me.Skills)
+		me.Skills = slices.DeleteFunc(me.Skills, func(s candidate.Skill) bool { return sameSkill(s.Name) })
+		changed := len(me.Skills) != held
+		if !slices.ContainsFunc(me.AbsentSkills, func(a candidate.AbsentSkill) bool { return sameSkill(a.Name) }) {
+			me.AbsentSkills = append(me.AbsentSkills, candidate.AbsentSkill{Name: skill})
+			changed = true
+		}
+		return me, changed
 	}
-	var addedSkills, movedSkills, addedConfirmed []string
-	addConfirmed := func() {
-		eqText := func(f candidate.ConfirmedFact) bool { return f.Text == text }
-		if !slices.ContainsFunc(me.ConfirmedFacts, eqText) {
-			me.ConfirmedFacts = append(me.ConfirmedFacts, candidate.ConfirmedFact{Text: text, Have: have})
-			addedConfirmed = append(addedConfirmed, text)
+	absent := len(me.AbsentSkills)
+	me.AbsentSkills = slices.DeleteFunc(me.AbsentSkills, func(a candidate.AbsentSkill) bool { return sameSkill(a.Name) })
+	changed := len(me.AbsentSkills) != absent
+	held := false
+	for i, s := range me.Skills {
+		if !sameSkill(s.Name) {
+			continue
+		}
+		held = true
+		if s.Level != level {
+			me.Skills[i].Level, changed = level, true
 		}
 	}
-	if len(toAct) > 0 {
-		for _, name := range toAct {
-			if have {
-				alreadyHeld := slices.ContainsFunc(me.Skills, eqName(name))
-				if !alreadyHeld {
-					me.Skills = append(me.Skills, candidate.Skill{Name: name, Level: "Proficient"})
-				}
-				before := len(me.AbsentSkills)
-				me.AbsentSkills = slices.DeleteFunc(me.AbsentSkills, eqAbsent(name))
-				switch {
-				case len(me.AbsentSkills) < before:
-					movedSkills = append(movedSkills, name)
-				case !alreadyHeld:
-					addedSkills = append(addedSkills, name)
-				}
-			} else {
-				alreadyAbsent := slices.ContainsFunc(me.AbsentSkills, eqAbsent(name))
-				if !alreadyAbsent {
-					me.AbsentSkills = append(me.AbsentSkills, candidate.AbsentSkill{Name: name})
-				}
-				before := len(me.Skills)
-				me.Skills = slices.DeleteFunc(me.Skills, eqName(name))
-				switch {
-				case len(me.Skills) < before:
-					movedSkills = append(movedSkills, name)
-				case !alreadyAbsent:
-					addedSkills = append(addedSkills, name)
-				}
-			}
-		}
-		if chosenSkill == "" || len(named) <= 1 {
-			want := "✓"
-			if !have {
-				want = "✕"
-			}
-			idx := skills.NewIndex(names(me.Skills, func(s candidate.Skill) string { return s.Name }), names(me.AbsentSkills, func(s candidate.AbsentSkill) string { return s.Name }))
-			if decide(text, idx, me.ConfirmedFacts, candidate.DerivedYears{}).Verdict != want {
-				addConfirmed()
-			}
-		}
-	} else {
-		addConfirmed()
+	if !held {
+		me.Skills = append(me.Skills, candidate.Skill{Name: skill, Level: level})
+		changed = true
 	}
-	return AnswerResult{Me: me, AddedSkills: addedSkills, MovedSkills: movedSkills, AddedConfirmed: addedConfirmed}
+	return me, changed
 }

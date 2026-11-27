@@ -182,6 +182,33 @@ func TestShortlistingQueuesOneCheckWhoseAnswerStandsBesideTheOpenRequirement(t *
 	}
 }
 
+func TestShortlistCheckAnswerStandsBesideTheSkillItDecides(t *testing.T) {
+	f := newCheckFix(t, checkOpts{})
+	seedFacts(t, f.d, f.vacancy, "2026-01-01T00:00:00Z", "Kafka is a plus")
+	f.fm.AddReply(checkReply(map[string]string{"requirement": "Kafka is a plus", "verdict": "met", "reason": "The candidate lists Kafka at C1.", "excerpt": "German (C1)"}))
+	bandBefore := f.view(t)["band"]
+
+	f.move(t, "inbox", "shortlist")
+	waitFor(t, 5*time.Second, func() bool { return len(f.answers(t)) == 1 })
+	f.idle(t)
+
+	calls := f.fm.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("model calls = %d, want 1", len(calls))
+	}
+	asked := calls[0].Prompt[strings.Index(calls[0].Prompt, "\nREQUIREMENTS TO DECIDE\n"):strings.Index(calls[0].Prompt, "\nVACANCY FACTS")]
+	if !strings.Contains(asked, "- Kafka is a plus\n") || strings.Contains(asked, "- Go\n") {
+		t.Errorf("the check must be asked about the skill left at ? and not about the decided one: %q", asked)
+	}
+	a := f.answers(t)[0].(map[string]any)
+	if a["requirement"] != "Kafka is a plus" || a["verdict"] != "✓" || !reflect.DeepEqual(a["skills"], []any{"Kafka"}) {
+		t.Errorf("answer = %v, want it stated beside the skill Kafka", a)
+	}
+	if band := f.view(t)["band"]; !reflect.DeepEqual(band, bandBefore) {
+		t.Errorf("Fits you or the requirements counter changed:\n%v\n%v", bandBefore, band)
+	}
+}
+
 func TestTextHandedToTheModelHoldsSkillsAndEvidenceButNoContactsLegalNameOrFormAnswers(t *testing.T) {
 	f := newCheckFix(t, checkOpts{})
 	f.fm.AddReply(germanReply())

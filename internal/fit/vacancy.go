@@ -27,6 +27,11 @@ type Requirement struct {
 	Level string
 }
 
+type Judged struct {
+	Required bool
+	Verdict  string
+}
+
 type Vacancy struct {
 	Title        string                      `json:"title"`
 	Full         bool                        `json:"-"`
@@ -40,7 +45,7 @@ type Vacancy struct {
 	Languages    []string                    `json:"languages,omitempty"`
 	Requirements []Requirement               `json:"-"`
 	Sources      map[facts.Kind]facts.Source `json:"-"`
-	Decided      []RequirementLine           `json:"-"`
+	Judged       []Judged                    `json:"-"`
 }
 
 func FromFacts(title string, full bool, set facts.Set) Vacancy {

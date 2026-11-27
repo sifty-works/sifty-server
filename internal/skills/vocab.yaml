@@ -29,90 +29,43 @@ technology_context:
   - expert
   - experience
   - experienced
-
-generic_words:
-  - experience
-  - experienced
-  - years
   - year
-  - strong
-  - solid
-  - proven
-  - track
-  - record
-  - ability
-  - able
-  - knowledge
-  - understanding
-  - skills
-  - skill
-  - proficiency
-  - proficient
-  - working
-  - work
-  - hands
-  - hands-on
-  - deep
-  - good
-  - excellent
-  - preferred
-  - required
-  - plus
-  - bonus
-  - familiarity
-  - fluency
-  - familiar
-  - mastery
-  - background
-  - demonstrated
-  - practical
-  - professional
-  - including
-  - related
-  - similar
-  - ideally
-  - least
-  - using
-  - within
-  - across
-  - role
-  - roles
-  - team
-  - teams
-  - company
-  - business
-  - level
-  - senior
-  - junior
-  - expertise
-  - expert
-  - advanced
-  - seasoned
-  - extensive
-  - the
-  - and
-  - for
-  - with
-  - that
-  - this
-  - are
-  - you
-  - our
-  - your
-  - have
-  - has
-  - from
-  - such
-  - other
-  - any
-  - all
-  - not
-  - can
-  - will
-  - who
-  - into
-  - how
-  - about
+  - years
+
+levels:
+  order:
+    - Beginner
+    - Proficient
+    - Expert
+  years:
+    - from: 1
+      level: Beginner
+    - from: 2
+      level: Proficient
+    - from: 4
+      level: Expert
+  words:
+    Beginner:
+      - familiarity
+      - familiar
+      - exposure
+      - basic
+      - basics
+      - awareness
+    Proficient:
+      - solid
+      - strong
+      - proficient
+      - proficiency
+      - hands-on
+      - good
+      - working knowledge
+    Expert:
+      - deep
+      - expert
+      - expertise
+      - extensive
+      - mastery
 
 groups:
   - name: Go

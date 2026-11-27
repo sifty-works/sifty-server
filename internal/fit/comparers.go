@@ -225,19 +225,21 @@ func compareLanguages(v Vacancy, p ProfileView, s Strictness) Verdict {
 }
 
 func compareRequirements(v Vacancy, p ProfileView, s Strictness) Verdict {
-	if len(v.Decided) == 0 {
+	if len(v.Judged) == 0 {
 		return skipped()
 	}
 	var num, den float64
-	no := 0
-	for _, l := range v.Decided {
+	no, near := 0, 0
+	for _, j := range v.Judged {
 		w := 1.0
-		if l.Level == "required" {
+		if j.Required {
 			w = 2.0
 		}
-		switch l.Verdict {
+		switch j.Verdict {
 		case "✓":
 			num, den = num+w, den+w
+		case "≈":
+			num, den, near = num+w/2, den+w, near+1
 		case "✕":
 			den, no = den+w, no+1
 		}
@@ -246,8 +248,11 @@ func compareRequirements(v Vacancy, p ProfileView, s Strictness) Verdict {
 		return result(-1, facts.Source{}, s, "", "", "")
 	}
 	u := num / den
-	if no > 0 {
+	switch {
+	case no > 0:
 		return Verdict{Outcome: Mismatch, Utility: u, Reason: fmt.Sprintf("%d of the requirements are not met", no)}
+	case near > 0:
+		return Verdict{Outcome: Match, Utility: u, Reason: fmt.Sprintf("%d of the requirements are close", near)}
 	}
 	return Verdict{Outcome: Match, Utility: u, Reason: "Requirements met"}
 }
