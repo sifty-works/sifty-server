@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -82,7 +83,7 @@ func TestContractSchemaMatchesShape(t *testing.T) {
 				return
 			}
 			shapeSet := make(map[string]bool)
-			for _, n := range server.TopLevelFieldNames(ri.RespType) {
+			for _, n := range topLevelFieldNames(ri.RespType) {
 				shapeSet[n] = true
 			}
 			for k := range props {
@@ -97,4 +98,27 @@ func TestContractSchemaMatchesShape(t *testing.T) {
 			}
 		})
 	}
+}
+
+func topLevelFieldNames(typ reflect.Type) []string {
+	if typ == nil {
+		return nil
+	}
+	t := typ
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return nil
+	}
+	var names []string
+	for i := range t.NumField() {
+		f := t.Field(i)
+		if f.Anonymous && f.Tag.Get("json") == "" {
+			names = append(names, topLevelFieldNames(f.Type)...)
+		} else if n := server.JSONTagName(f); n != "" && n != "-" {
+			names = append(names, n)
+		}
+	}
+	return names
 }

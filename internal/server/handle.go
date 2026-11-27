@@ -201,23 +201,3 @@ func ValidateShape(typ reflect.Type, body map[string]any, prefix string) []strin
 	}
 	return errs
 }
-
-func TopLevelFieldNames(typ reflect.Type) []string {
-	if typ == nil {
-		return nil
-	}
-	t := deref(typ)
-	if t.Kind() != reflect.Struct {
-		return nil
-	}
-	var names []string
-	for i := range t.NumField() {
-		f := t.Field(i)
-		if f.Anonymous && f.Tag.Get("json") == "" {
-			names = append(names, TopLevelFieldNames(f.Type)...)
-		} else if n := JSONTagName(f); n != "" && n != "-" {
-			names = append(names, n)
-		}
-	}
-	return names
-}

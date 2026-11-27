@@ -237,8 +237,38 @@ func trimStrings[T any](v *T) {
 	}
 }
 
+const photoFileName = "me_photo"
+
 func photoPath(filesDir string) string {
-	return filepath.Join(filesDir, "me_photo")
+	return filepath.Join(filesDir, photoFileName)
+}
+
+func serveStoredFile(w http.ResponseWriter, r *http.Request, logger *slog.Logger, filesDir, missing string, storedName func(*http.Request) (string, error)) {
+	if filesDir == "" {
+		server.MapError(w, apperr.NotFound{Message: missing}, logger)
+		return
+	}
+	name, err := storedName(r)
+	if err != nil {
+		server.MapError(w, err, logger)
+		return
+	}
+	if name == "" {
+		server.MapError(w, apperr.NotFound{Message: missing}, logger)
+		return
+	}
+	body, err := os.ReadFile(filepath.Join(filesDir, name))
+	if os.IsNotExist(err) {
+		server.MapError(w, apperr.NotFound{Message: missing}, logger)
+		return
+	}
+	if err != nil {
+		server.MapError(w, fmt.Errorf("candidate: read stored file: %w", err), logger)
+		return
+	}
+	w.Header().Set("Content-Type", http.DetectContentType(body))
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
 }
 
 func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, readers Readers, logger *slog.Logger, changed func(), enqueue func(kind, subject string) (int64, error)) {
@@ -403,23 +433,9 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 	})
 
 	server.HandleRaw(mux, "GET /api/me/photo", func(w http.ResponseWriter, r *http.Request) {
-		if filesDir == "" {
-			server.MapError(w, apperr.NotFound{Message: "No photo set."}, logger)
-			return
-		}
-		body, err := os.ReadFile(photoPath(filesDir))
-		if os.IsNotExist(err) {
-			server.MapError(w, apperr.NotFound{Message: "No photo set."}, logger)
-			return
-		}
-		if err != nil {
-			server.MapError(w, fmt.Errorf("candidate: read photo: %w", err), logger)
-			return
-		}
-		ct := http.DetectContentType(body)
-		w.Header().Set("Content-Type", ct)
-		w.WriteHeader(http.StatusOK)
-		w.Write(body)
+		serveStoredFile(w, r, logger, filesDir, "No photo set.", func(*http.Request) (string, error) {
+			return photoFileName, nil
+		})
 	})
 
 	server.Handle(mux, "GET /api/qa", logger, func(r *http.Request, _ struct{}) (QAListResp, error) {
@@ -538,36 +554,17 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, filesDir string, reader
 	})
 
 	server.HandleRaw(mux, "GET /api/documents/{id}/original", func(w http.ResponseWriter, r *http.Request) {
-		if filesDir == "" {
-			server.MapError(w, apperr.NotFound{Message: "No original file for this document."}, logger)
-			return
-		}
-		id, err := parseDocumentID(r)
-		if err != nil {
-			server.MapError(w, err, logger)
-			return
-		}
-		row, err := loadDocumentRow(r.Context(), database, id)
-		if server.MapError(w, err, logger) {
-			return
-		}
-		if row.FileName == "" {
-			server.MapError(w, apperr.NotFound{Message: "No original file for this document."}, logger)
-			return
-		}
-		body, err := os.ReadFile(filepath.Join(filesDir, row.FileName))
-		if os.IsNotExist(err) {
-			server.MapError(w, apperr.NotFound{Message: "No original file for this document."}, logger)
-			return
-		}
-		if err != nil {
-			server.MapError(w, fmt.Errorf("candidate: read document file: %w", err), logger)
-			return
-		}
-		ct := http.DetectContentType(body)
-		w.Header().Set("Content-Type", ct)
-		w.WriteHeader(http.StatusOK)
-		w.Write(body)
+		serveStoredFile(w, r, logger, filesDir, "No original file for this document.", func(r *http.Request) (string, error) {
+			id, err := parseDocumentID(r)
+			if err != nil {
+				return "", err
+			}
+			row, err := loadDocumentRow(r.Context(), database, id)
+			if err != nil {
+				return "", err
+			}
+			return row.FileName, nil
+		})
 	})
 
 	server.Handle(mux, "POST /api/documents/{id}/refresh", logger, func(r *http.Request, _ struct{}) (DocumentItem, error) {

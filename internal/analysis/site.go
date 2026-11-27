@@ -392,19 +392,12 @@ func period(low string) string {
 }
 
 func hasAny(s string, subs ...string) bool {
-	for _, sub := range subs {
-		if strings.Contains(s, sub) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(subs, func(sub string) bool { return strings.Contains(s, sub) })
 }
 
 func hasFold(xs []string, x string) bool {
-	for _, y := range xs {
-		if strings.EqualFold(strings.Join(strings.Fields(y), " "), strings.Join(strings.Fields(x), " ")) {
-			return true
-		}
-	}
-	return false
+	norm := strings.Join(strings.Fields(x), " ")
+	return slices.ContainsFunc(xs, func(y string) bool {
+		return strings.EqualFold(strings.Join(strings.Fields(y), " "), norm)
+	})
 }
