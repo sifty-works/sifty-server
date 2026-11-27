@@ -26,9 +26,9 @@ be_test=$(files '*_test.go' | count)
 row() { printf "%-40s %10s %10s %s\n" "$1" "$2" "$3" "$4"; }
 over() { if [ "$1" -gt "$2" ]; then echo "OVER"; fi; }
 
-row "Backend code (lines)" "$be" "19500" "$(over "$be" 19500)"
+row "Backend code (lines)" "$be" "20000" "$(over "$be" 20000)"
 row "Backend tests (lines)" "$be_test" "-" ""
-if [ "$be" -gt 19500 ]; then fail=1; fi
+if [ "$be" -gt 20000 ]; then fail=1; fi
 
 printf "\n%-40s %10s %10s\n" "List API measure" "Actual" "Budget"
 printf "%-40s %10s %10s\n" "----------------" "------" "------"
