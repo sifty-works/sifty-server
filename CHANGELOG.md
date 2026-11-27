@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- The vacancy page shows Fits you as one large number coloured by its bucket, and Money, Location, Work mode and Contract as cards with a green, red or grey mark. The status bar shows a state dot, what runs with a progress bar, why work waits ("paused" or "waiting"), and the waiting kinds with their counts.
+
 ## 0.4.0
 
 - Target roles, keywords and "All of these" terms also match the plural of their last word ("Engineer" finds "Engineers") and the singular of a plural term, wherever they select vacancies; a term still never matches inside another word.
