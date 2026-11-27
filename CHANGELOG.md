@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.14.0
+
 - Requirement lines no longer take in benefits, pay ranges, equal-opportunity, how-to-apply and hiring-process text: a heading glued to a paragraph ("…on your CV.Benefits & Perks;") or written inside one ("…planning. What We Look For In You 10+ years…") now opens its section, prose after a requirements section's last list is not a requirement, and such lines are never requirements. Headings the analysis did not know ("Minimum requirements", "What you bring", "Must-haves", "Your profile" and about sixty more) are read. Every vacancy is analysed again once.
 
 ## 0.13.0
