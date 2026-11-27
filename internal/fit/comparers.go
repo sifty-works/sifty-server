@@ -174,7 +174,7 @@ func compareWorkMode(v Vacancy, p ProfileView, s Strictness) Verdict {
 	hits := valueHits(b, v.WorkModes)
 	r := bucketVerdict(hits, v.Sources[facts.WorkMode], "Work mode not stated")
 	if g := geoOf(v); len(hits) > 0 && bestHit(hits).label == "Remote" && !g.open && (r.Bucket == candidate.Preferred || r.Bucket == candidate.Possible) {
-		return Verdict{Outcome: Unknown}
+		return Verdict{Outcome: Unknown, Reason: "Remote — see Work authorization"}
 	}
 	return r
 }
