@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.12.0
+
 - The Key facts table adds, each only when the vacancy states it, Apply by (the date and the days left, ✕ once it has passed), Contract length, Citizenship or clearance, Relocation and Visa (sponsorship offered or not). They do not change Fits you. Every vacancy is analysed again once.
 
 ## 0.11.0
