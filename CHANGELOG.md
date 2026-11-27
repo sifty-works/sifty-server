@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.16.0
+
 - The company's domain is a goal: the Goals table has a Domain row with 22 domains (Infrastructure, DeFi, Exchange, Gambling…) to place in Preferred, Possible, Unwanted or Never. It enters Fit with weight 0.10; a domain in Never caps Fit at 40, not 15, and does not move the vacancy to the end of Best fit, because the domain is read by the model and it is wrong for about one company in ten. A company not read yet counts as not stated. Every result is recomputed once.
 
 ## 0.15.0
