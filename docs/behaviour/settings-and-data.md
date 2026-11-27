@@ -21,7 +21,7 @@ The application is one program to run; reading application forms additionally ne
 ## Where settings live
 
 - **The settings file**, one file in the data folder, holds what the user configures: sources, the collection interval and switch, providers and the provider of each kind of model work, "Allow paid bulk work", "Precise reading", the daily limit of background model calls, the web search provider, weights and rates.
-- **The database** holds what the application remembers about its use: the active profile and the switch that pauses background model work.
+- **The database** holds what the application remembers about its use: the active profile and the switch that pauses background work.
 - The description of known sites is kept in `<data>/vocab/sites.yaml` when the user wants to override it; otherwise the application uses an embedded description.
 - Forms in Settings edit all of these. Advanced shows the settings file only.
 
@@ -48,7 +48,7 @@ The reason of a refused settings file is the sentence the settings screen gives 
   - the state of each provider and a "Check" button that sends a fixed test prompt with no user data;
   - "Allow paid bulk work", off by default;
   - "Precise reading", with the line "Reads every new vacancy's company with the Reading model; uses your local machine or a paid provider. Off: only vacancies you open are read." Until the user sets it, it is on when the Reading provider is marked local, and off when it is marked free or paid or there is none; once the user sets it, that choice stays whatever the provider is. Off, only the vacancies the user opens are read. With no Reading provider nothing is read and the switch says so; with a paid Reading provider and "Allow paid bulk work" off, only opened vacancies are read, and the switch says it needs that permission;
-  - a switch that pauses background model work, and a daily limit of background model calls.
+  - a switch that pauses background work, and a daily limit of background model calls. While it is paused, scheduled collection does not start and every queued job waits, including the jobs that a decision, a skill answer, a retry or opening a vacancy queues; jobs that are already running finish. Collect now still collects; everything else waits until background work is turned on again.
 - **Web search:** the provider used to find employers' pages (Tavily, Brave, DuckDuckGo, or none), with its key taken from the environment or the secrets file. With none, the employer search uses only applicant tracking boards.
 - **Monitor › Background work:** what is running, and what is waiting and why (see `application.md`).
 - **Monitor › Logs:** the jobs that failed in the last 7 days, each with its reason as a sentence (see `application.md`), and the last 200 warnings and errors of the server log, newest first, each with its time, level, message and attributes as written. "see log #N" and "job #N" are found here by the `id` or `job` attribute. The log is written as JSON lines in the data folder (`logs/sifty.log`, then `logs/sifty.log.1` when the current file holds fewer than 200); a line that cannot be read is skipped. The value of every API key the application holds, from the environment or the secrets file, is shown as `***` in the message and in each attribute. The number in "see log #N" starts from the time the application started, so it does not repeat after a restart.

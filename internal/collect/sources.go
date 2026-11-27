@@ -189,7 +189,7 @@ func (c *Collector) RegisterRoutes(mux *http.ServeMux) {
 	})
 
 	server.Handle(mux, "POST /api/collect", c.log, func(r *http.Request, req collectReq) (server.StatusExtra, error) {
-		if req.Force || (!c.blocked && c.Due(c.now())) {
+		if req.Force || c.scheduled(r.Context(), c.now()) {
 			c.runner.Enqueue(runner.Spec{Kind: "collect"})
 		}
 		return c.buildStatusExtra(), nil

@@ -28,6 +28,10 @@ func (c *Collector) Due(now time.Time) bool {
 	return true
 }
 
+func (c *Collector) scheduled(ctx context.Context, now time.Time) bool {
+	return !c.blocked && !c.runner.Paused(ctx) && c.Due(now)
+}
+
 func (c *Collector) Ticker(ctx context.Context) {
 	t := time.NewTicker(5 * time.Minute)
 	defer t.Stop()
@@ -36,7 +40,7 @@ func (c *Collector) Ticker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-t.C:
-			if !c.blocked && c.Due(now) {
+			if c.scheduled(ctx, now) {
 				c.runner.Enqueue(runner.Spec{Kind: "collect"})
 			}
 			if c.OnTick != nil {

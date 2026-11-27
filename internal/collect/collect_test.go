@@ -1050,3 +1050,21 @@ func TestPutScheduleAgeLimit(t *testing.T) {
 		t.Errorf("empty limit: status %d body %v", status, body)
 	}
 }
+
+func TestPausedInstanceStartsNoScheduledCollectionButCollectNowStillRuns(t *testing.T) {
+	e := newEnv(t)
+	e.fm.Set("https://feeds.example.com/jobs.xml", fetchtest.MapEntry{Response: fetch.Response{Status: 200, ContentType: "application/xml", Body: []byte(feedXML)}})
+	addSource(t, e, "https://feeds.example.com/jobs.xml")
+	paused := true
+	e.r.SetPause(func(context.Context) (bool, error) { return paused, nil })
+
+	e.mutate(t, "POST", "/api/collect", map[string]any{"force": false})
+	if _, ok := e.r.Last("collect"); ok {
+		t.Fatal("a due scheduled collection was queued while paused")
+	}
+
+	e.mutate(t, "POST", "/api/collect", map[string]any{"force": true})
+	if j := waitJob(t, e.r); j.State != "done" {
+		t.Errorf("Collect now while paused ended %q, want done", j.State)
+	}
+}

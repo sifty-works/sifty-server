@@ -172,7 +172,7 @@ func workHandler(database *db.DB, gate *models.Gate, r *runner.Runner, now func(
 		if err != nil {
 			return workResp{}, err
 		}
-		if out.Waiting, err = waitingWork(ctx, gate, queued, pace, now()); err != nil {
+		if out.Waiting, err = waitingWork(ctx, gate, r, queued, pace, now()); err != nil {
 			return workResp{}, err
 		}
 		return out, nil
@@ -198,10 +198,10 @@ func failedWork(ctx context.Context, database *db.DB, r *runner.Runner, now func
 	return out, nil
 }
 
-func waitingWork(ctx context.Context, gate *models.Gate, queued []runner.QueuedKind, pace map[string]time.Duration, now time.Time) ([]workWaiting, error) {
+func waitingWork(ctx context.Context, gate *models.Gate, r *runner.Runner, queued []runner.QueuedKind, pace map[string]time.Duration, now time.Time) ([]workWaiting, error) {
 	out := []workWaiting{}
 	for _, q := range queued {
-		reason, err := waitReason(ctx, gate, jobKinds[q.Kind].work, q.NotBefore, now)
+		reason, err := waitReason(ctx, gate, r.Holds(ctx, q.Kind), jobKinds[q.Kind].work, q.NotBefore, now)
 		if err != nil {
 			return nil, err
 		}
@@ -229,16 +229,12 @@ func runningModel(gate *models.Gate, kind string) *workModel {
 	return &workModel{Provider: provider, Model: pc.Model}
 }
 
-func waitReason(ctx context.Context, gate *models.Gate, work string, earliest, now time.Time) (*workReason, error) {
+func waitReason(ctx context.Context, gate *models.Gate, held bool, work string, earliest, now time.Time) (*workReason, error) {
+	if held {
+		return &workReason{Code: "paused", Text: "Background work is paused."}, nil
+	}
 	if gate != nil && work != "" {
 		cfg := gate.Store().Get()
-		paused, err := gate.IsPaused(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if paused {
-			return &workReason{Code: "paused", Text: "Background model work is paused."}, nil
-		}
 		until, reached, err := gate.DailyLimitUntil(ctx)
 		if err != nil {
 			return nil, err

@@ -45,6 +45,7 @@ type Kind struct {
 	Resume  bool
 	Serial  bool
 	Patient bool
+	Direct  bool
 	After   []string
 	Then    []string
 	Follow  func(ctx context.Context, enqueue func(Spec) (int64, error)) error
@@ -176,6 +177,7 @@ type Runner struct {
 	log   *slog.Logger
 	kinds map[string]Kind
 	lanes map[string]*lane
+	pause func(context.Context) (bool, error)
 
 	mu     sync.Mutex
 	active map[int64]*jobState
@@ -201,6 +203,22 @@ func New(database *db.DB, lanes map[string]int, now func() time.Time, log *slog.
 
 func (r *Runner) Register(k Kind) {
 	r.kinds[k.Name] = k
+}
+
+func (r *Runner) SetPause(f func(context.Context) (bool, error)) {
+	r.pause = f
+}
+
+func (r *Runner) Paused(ctx context.Context) bool {
+	if r.pause == nil {
+		return false
+	}
+	paused, err := r.pause(ctx)
+	return paused || err != nil
+}
+
+func (r *Runner) Holds(ctx context.Context, kind string) bool {
+	return !r.kinds[kind].Direct && r.Paused(ctx)
 }
 
 func (k Kind) judge(err error) (at time.Time, final bool) {
@@ -468,7 +486,7 @@ func (r *Runner) dispatch(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		j, err := r.pickOne()
+		j, err := r.pickOne(ctx)
 		if err != nil || j == nil {
 			return
 		}
@@ -495,16 +513,20 @@ func (r *Runner) dispatch(ctx context.Context) {
 	}
 }
 
-func (r *Runner) pickOne() (*Job, error) {
+func (r *Runner) pickOne(ctx context.Context) (*Job, error) {
 	if len(r.kinds) == 0 {
 		return nil, nil
 	}
+	paused := r.Paused(ctx)
 
 	now := r.now().UTC().Format(time.RFC3339)
 	names := make([]string, 0, len(r.kinds))
 	args := make([]any, 0, 1+len(r.kinds))
 	args = append(args, now)
 	for name, k := range r.kinds {
+		if paused && !k.Direct {
+			continue
+		}
 		if k.Serial {
 			var n int
 			r.db.QueryRow(`SELECT count(*) FROM job WHERE kind=? AND state='running' LIMIT 1`, name).Scan(&n)
