@@ -22,6 +22,9 @@ sites:
   - host: weworkremotely.com
     module: feed
     list_address: https://weworkremotely.com/remote-jobs.rss
+    content:
+      - attr: class
+        substr: lis-container__job__content__description
   - host: cryptocurrencyjobs.co
     module: feed
     list_address: https://cryptocurrencyjobs.co/index.xml
