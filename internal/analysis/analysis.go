@@ -114,8 +114,24 @@ func digest(fs []facts.Fact) string {
 }
 
 func effective(all []facts.Fact) []facts.Fact {
-	inText, siteFact := map[facts.Kind]bool{}, map[facts.Kind]bool{}
+	inText, siteFact, textPlace, sitePlace := map[facts.Kind]bool{}, map[facts.Kind]bool{}, false, false
 	for _, f := range all {
+		textPlace = textPlace || f.Kind == facts.Place && f.Source.Way == facts.Vocabulary && f.Value != worldwideLabel
+		sitePlace = sitePlace || f.Kind == facts.Place && f.Source.Way == facts.SiteField
+	}
+	if sitePlace {
+		kept := make([]facts.Fact, 0, len(all))
+		for _, f := range all {
+			if f.Kind != facts.Place || f.Value != worldwideLabel || f.Source.Way != facts.Vocabulary {
+				kept = append(kept, f)
+			}
+		}
+		all = kept
+	}
+	for _, f := range all {
+		if f.Kind == facts.Place && textPlace && f.Source.Way == facts.SiteField && f.End == f.Start {
+			continue
+		}
 		inText[f.Kind] = inText[f.Kind] || f.End > f.Start
 		siteFact[f.Kind] = siteFact[f.Kind] || f.Source.Way == facts.SiteField
 	}
@@ -123,6 +139,7 @@ func effective(all []facts.Fact) []facts.Fact {
 	for _, f := range all {
 		fieldOnly := f.Source.Way == facts.SiteField && f.End == f.Start
 		switch {
+		case f.Kind == facts.Place && textPlace && fieldOnly:
 		case f.Source.Origin == facts.Aggregator && fieldOnly && inText[f.Kind]:
 		case f.Source.Origin == facts.Employer && f.Source.Way == facts.Vocabulary && siteFact[f.Kind]:
 		default:

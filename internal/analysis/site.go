@@ -4,8 +4,11 @@ import (
 	_ "embed"
 	"fmt"
 	"regexp"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 
@@ -39,22 +42,29 @@ type Site struct {
 	TimeZone   string
 	Spans      map[facts.Kind]Span
 	Stated     map[string]Span
+	aggregator bool
 }
+
+const weeklyPattern = `(\d+(?:\.\d+)?)(?:\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?))?\s*(?:h|hr|hrs|hours)\s*(?:/|per)?\s*week`
+
+var internWordPattern = alt(vocab.Engagement["intern_words"])
 
 //go:embed labels.yaml
 var wordsYAML []byte
 
 var (
-	labels, modes       = loadWords()
-	amountRe            = regexp.MustCompile(`(\d{1,3}(?:[,\s]\d{3})+|\d+(?:\.\d+)?)\s*([kK])?`)
-	currencyRe, symbols = currencyPattern()
-	notCashRe           = regexp.MustCompile(`(?i)\b(bonus|equity|stock[- ]option|commission|estimate|survey|ote|allowance|relocation)\b`)
-	weeklyRe            = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)(?:\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?))?\s*(?:h|hr|hrs|hours)\s*(?:/|per)?\s*week`)
-	internRe            = regexp.MustCompile(`\bintern(ship)?\b`)
+	labels, modes                                       = loadWords()
+	amountRe                                            = regexp.MustCompile(`(\d{1,3}(?:[,\s\x{00a0}\x{202f}]\d{3})+|\d+(?:\.\d+)?)\s*([kK])?`)
+	currencyCodes, currencyMarkers, markerCode, symbols = loadCurrencies()
+	currencyRe                                          = regexp.MustCompile(`(?i)\b(` + strings.Join(currencyCodes, "|") + `)\b`)
+	weeklyRe                                            = regexp.MustCompile(`(?i)` + weeklyPattern)
+	markerRe                                            = regexp.MustCompile(`(?i)` + alt(currencyMarkers))
+	internTitleRe                                       = regexp.MustCompile(`(?i)\b(?:` + internWordPattern + `)s?\b\s*(?:$|[-–(,:|])`)
+	internRe                                            = regexp.MustCompile(`(?i)\b(?:` + internWordPattern + `)s?\b`)
 )
 
 func ReadSite(doc *Doc) Site {
-	s := Site{Spans: map[facts.Kind]Span{}, Stated: map[string]Span{}}
+	s := Site{Spans: map[facts.Kind]Span{}, Stated: map[string]Span{}, aggregator: doc.Origin == facts.Aggregator}
 	if f := doc.Fields["salary"]; f != "" {
 		s.Money = ParseMoney(f, f)
 	}
@@ -90,6 +100,7 @@ func ReadSite(doc *Doc) Site {
 				}
 			}
 		case "location":
+			value = s.takeModes(value)
 			var parts []string
 			if items := placeItems(value); !places.Recognised(value) && len(items) > 0 {
 				for _, it := range items {
@@ -126,6 +137,9 @@ func ReadSite(doc *Doc) Site {
 			}
 		}
 	}
+	if s.Engagement == "" && internTitleRe.MatchString(doc.Title) {
+		s.Engagement = "internship"
+	}
 	for _, t := range doc.Tags {
 		low := strings.ToLower(strings.TrimSpace(t))
 		if m, ok := ParseMode(low); ok && len(s.Modes) == 0 {
@@ -134,8 +148,8 @@ func ReadSite(doc *Doc) Site {
 		if s.Hours == nil && (low == "full-time" || low == "part-time") {
 			s.Hours = ParseHours(low)
 		}
-		if s.Engagement == "" && (low == "contract" || low == "freelance") {
-			s.Engagement = "contract"
+		if s.Engagement == "" && slices.Contains(vocab.Engagement["tags"], low) {
+			s.Engagement = ParseEngagement(low)
 		}
 	}
 	return s
@@ -144,13 +158,19 @@ func ReadSite(doc *Doc) Site {
 func (s *Site) AddPlaces(value string) []string {
 	var parts []string
 	for _, part := range strings.FieldsFunc(value, func(c rune) bool { return c == '·' || c == ';' || c == '|' }) {
-		part = strings.TrimSpace(part)
+		part = s.takeModes(strings.TrimSpace(part))
 		if trimmed := strings.TrimRight(part, "."); !strings.Contains(trimmed, ".") {
 			part = trimmed
 		}
+		if len(part) == 2 && part != strings.ToUpper(part) {
+			continue
+		}
+		if name, ok := places.CountryName(part); ok {
+			part = name
+		}
 		if m, ok := ParseMode(part); ok {
 			s.AddMode(m)
-		} else if part != "" {
+		} else if part != "" && !notPlace(part) && !(s.aggregator && bareWorldwide(part)) {
 			parts = append(parts, part)
 			if !hasFold(s.Places, part) {
 				s.Places = append(s.Places, part)
@@ -158,6 +178,18 @@ func (s *Site) AddPlaces(value string) []string {
 		}
 	}
 	return parts
+}
+
+func (s *Site) takeModes(part string) string {
+	var rest []string
+	for _, token := range strings.Split(part, ",") {
+		if m, ok := ParseMode(token); ok && strings.Contains(part, ",") {
+			s.AddMode(m)
+		} else {
+			rest = append(rest, strings.TrimSpace(token))
+		}
+	}
+	return strings.Join(rest, ", ")
 }
 
 func (s *Site) AddMode(m string) {
@@ -211,18 +243,32 @@ func loadWords() (map[string]string, map[string]string) {
 }
 
 func ParseEngagement(low string) string {
+	low = companyContractorRe.ReplaceAllString(low, " ")
 	switch {
-	case strings.Contains(low, "contract") || strings.Contains(low, "freelance") ||
-		internRe.MatchString(low) || strings.Contains(low, "temporar"):
+	case internRe.MatchString(low):
+		return "internship"
+	case employmentContractRe.MatchString(low):
+		return "employment"
+	case hasAny(low, vocab.Engagement["field_contract"]...):
 		return "contract"
-	case strings.Contains(low, "employment") || strings.Contains(low, "permanent") ||
-		strings.Contains(low, "full-time") || strings.Contains(low, "full time") ||
-		strings.Contains(low, "fulltime") || strings.Contains(low, "employee") ||
-		strings.Contains(low, "part-time") || strings.Contains(low, "part time") ||
-		strings.Contains(low, "parttime"):
+	case hasAny(low, vocab.Engagement["field_employment"]...):
 		return "employment"
 	}
 	return ""
+}
+
+func notPlace(label string) bool {
+	low := strings.ToLower(strings.TrimSpace(label))
+	if slices.Contains(vocab.Place["not_places"], low) || !strings.ContainsFunc(low, unicode.IsLetter) {
+		return true
+	}
+	_, country := places.CountryName(low)
+	short := slices.ContainsFunc(vocab.Place["short_codes"], func(c string) bool { return strings.EqualFold(c, low) })
+	return len([]rune(low)) <= 2 && !country && !short
+}
+
+func bareWorldwide(label string) bool {
+	return slices.Contains(vocab.Place["bare_worldwide"], strings.ToLower(strings.TrimSpace(label)))
 }
 
 func ParseMoney(value, line string) *Money {
@@ -248,7 +294,7 @@ func ParseMoney(value, line string) *Money {
 		if err != nil {
 			return nil
 		}
-		k := x[4] >= 0
+		k := x[4] >= 0 && (x[1] == len(value) || !unicode.IsLetter([]rune(value[x[1]:])[0]))
 		hasK = append(hasK, k)
 		if k {
 			n *= 1000
@@ -268,19 +314,29 @@ func ParseMoney(value, line string) *Money {
 			return nil
 		}
 	case len(amounts) == 2:
-		between := strings.ToLower(strings.Trim(value[idx[0][1]:idx[1][0]], symbols+" \t,"))
+		between := strings.ToLower(strings.Trim(markerRe.ReplaceAllString(currencyRe.ReplaceAllString(value[idx[0][1]:idx[1][0]], ""), ""), symbols+" \t,"))
 		if between != "-" && between != "–" && between != "—" && between != "to" {
 			return nil
 		}
 		if hasK[1] && !hasK[0] {
 			amounts[0] *= 1000
 		}
-		m.Min, m.Max = min(amounts[0], amounts[1]), max(amounts[0], amounts[1])
+		if amounts[1] < amounts[0] {
+			return nil
+		}
+		m.Min, m.Max = amounts[0], amounts[1]
 	case len(amounts) == 1 && (hasAny(low, " from ", "starting at", "starting from", "minimum", "at least", ">=") || strings.HasPrefix(low, "from ")):
 		m.Min = amounts[0]
 	case len(amounts) == 1:
 		m.Max = amounts[0]
 	default:
+		return nil
+	}
+	floor := vocab.FloorWithoutPeriod
+	if f, ok := vocab.Floors[m.Period]; ok {
+		floor = f
+	}
+	if max(m.Min, m.Max) < floor {
 		return nil
 	}
 	return m
@@ -290,6 +346,11 @@ func currency(s string) string {
 	if c := currencyRe.FindString(s); c != "" {
 		return strings.ToUpper(c)
 	}
+	for _, mk := range currencyMarkers {
+		if strings.Contains(s, mk) {
+			return markerCode[mk]
+		}
+	}
 	for _, c := range config.Currencies {
 		if c.Symbol != "" && strings.Contains(s, c.Symbol) {
 			return c.Code
@@ -298,23 +359,33 @@ func currency(s string) string {
 	return ""
 }
 
-func currencyPattern() (re *regexp.Regexp, symbols string) {
-	var codes []string
+func loadCurrencies() (codes, markers []string, byMarker map[string]string, symbols string) {
+	byMarker = map[string]string{}
 	for _, c := range config.Currencies {
 		codes, symbols = append(codes, c.Code), symbols+c.Symbol
 	}
-	return regexp.MustCompile(`(?i)\b(` + strings.Join(codes, "|") + `)\b`), symbols
+	for code, ms := range vocab.Currencies {
+		codes = append(codes, code)
+		for _, m := range ms {
+			if m != code {
+				markers, byMarker[m] = append(markers, m), code
+			}
+		}
+	}
+	sort.Strings(codes)
+	sort.Strings(markers)
+	return
 }
 
 func period(low string) string {
 	switch {
-	case hasAny(low, "per year", "/year", "yearly", "annual", "p.a.", "per-year-salary", "1 year"):
+	case hasAny(low, "per year", "/year", "/yr", "per yr", "a year", "yearly", "annual", "p.a.", "per-year-salary", "1 year"):
 		return "year"
-	case hasAny(low, "per month", "/month", "monthly", "1 month"):
+	case hasAny(low, "per month", "/month", "/mo ", "per mo ", "a month", "monthly", "1 month"):
 		return "month"
-	case hasAny(low, "per day", "/day", "daily"):
+	case hasAny(low, "per day", "/day", "a day", "daily"):
 		return "day"
-	case hasAny(low, "per hour", "/hour", "hourly", "1 hour"):
+	case hasAny(low, "per hour", "/hour", "/hr", "per hr", "an hour", "hourly", "1 hour"):
 		return "hour"
 	}
 	return ""

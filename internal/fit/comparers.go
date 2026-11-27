@@ -48,19 +48,23 @@ type geo struct {
 	countries []string
 	remote    bool
 	open      bool
+	anywhere  bool
 	known     bool
 }
 
 func geoOf(v Vacancy) geo {
 	g := geo{remote: has(v.WorkModes, "remote"), known: true}
 	g.open = g.remote
+	worldwide := false
 	for _, l := range v.Locations {
 		pl := places.Resolve(l)
 		g.places = append(g.places, pl)
 		g.open = g.open && pl.Worldwide
+		worldwide = worldwide || pl.Worldwide
 		g.known = g.known && pl.Known()
 		g.countries = append(g.countries, pl.Countries...)
 	}
+	g.anywhere = g.open && worldwide && v.TimeZone == ""
 	return g
 }
 
@@ -125,11 +129,11 @@ func compareLocation(v Vacancy, p ProfileView, s Strictness) Verdict {
 	}
 	g := geoOf(v)
 	where, _ := places.Short(v.Locations)
-	if g.open {
+	if g.anywhere {
 		where = "Remote, anywhere"
 	}
 	line := sentence(where) + " — you prefer " + wanted(prefs)
-	return result(location(prefs, g.places, g.open), v.Sources[facts.Place], s, line, line, "")
+	return result(location(prefs, g.places, g.anywhere), v.Sources[facts.Place], s, line, line, "")
 }
 
 func wanted(prefs []candidate.Location) string {
@@ -146,7 +150,7 @@ func compareAuthorization(v Vacancy, p ProfileView, s Strictness) Verdict {
 		return skipped()
 	}
 	where, _ := places.Short(v.Locations)
-	return result(restriction(p.Authorizations, g.places, g.remote, g.open, g.known), v.Sources[facts.Place], s,
+	return result(restriction(p.Authorizations, g.places, g.remote, g.anywhere, g.known), v.Sources[facts.Place], s,
 		"Remote work is open to you there", "Remote only in "+where+" — you need a visa there", "Work authorization not stated")
 }
 
@@ -282,7 +286,7 @@ func locationTile(v Vacancy, g geo, _ map[string]float64) (string, string, strin
 	case len(v.Locations) > 0:
 		short, full := places.Short(v.Locations)
 		return short, "", full
-	case g.open:
+	case g.anywhere:
 		return "Remote, anywhere", "", ""
 	}
 	return "Not stated", "", ""

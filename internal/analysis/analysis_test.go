@@ -16,16 +16,30 @@ import (
 
 func read(t *testing.T, company, body string) *analysis.Doc {
 	t.Helper()
+	return readTitled(t, company, "", body)
+}
+
+func readTitled(t *testing.T, company, title, body string) *analysis.Doc {
+	t.Helper()
+	return readSite(t, company, title, "", body)
+}
+
+func readSite(t *testing.T, company, title, location, body string) *analysis.Doc {
+	t.Helper()
 	body = listing.Normalize(body)
-	doc := &analysis.Doc{Company: company, Body: body, Original: listing.PlainText(body)}
+	doc := &analysis.Doc{Title: title, Company: company, Location: location, Origin: facts.Aggregator, Body: body, Original: listing.PlainText(body)}
 	doc.Sections, doc.Headings = analysis.Split(doc)
 	for _, w := range analysis.Workers {
 		found, err := w.Extract(context.Background(), doc)
 		if err != nil {
 			t.Fatalf("%s: %v", w.Name(), err)
 		}
-		doc.Facts = append(doc.Facts, found...)
+		for _, f := range found {
+			f.Source.Origin = doc.Origin
+			doc.Facts = append(doc.Facts, f)
+		}
 	}
+	doc.Facts = analysis.Effective(doc.Facts)
 	return doc
 }
 
@@ -97,8 +111,8 @@ func TestSiteFieldsAreReadFromTheFieldsTheSiteStates(t *testing.T) {
 	cases := []struct {
 		name, field, value, want string
 	}{
-		{"camel-case full time", "employment_type", "FullTime", "engagement employment; hours full_time"},
-		{"underscored part time", "employment_type", "part_time", "engagement employment; hours part_time"},
+		{"camel-case full time", "employment_type", "FullTime", "hours full_time"},
+		{"underscored part time", "employment_type", "part_time", "hours part_time"},
 		{"upper-case contractor", "employment_type", "CONTRACTOR", "engagement contract"},
 		{"freelance", "employment_type", "Freelance", "engagement contract"},
 		{"an intern word inside a longer word is no engagement", "employment_type", "International team", ""},
@@ -205,6 +219,151 @@ func TestOfferSectionsGiveOneTilePerKindAndTheOtherItems(t *testing.T) {
 			}
 			if got := strings.Join(parts, "; "); got != tc.want {
 				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func factValues(doc *analysis.Doc, kind facts.Kind) string {
+	var got []string
+	for _, f := range doc.Facts {
+		if f.Kind == kind {
+			got = append(got, f.Value)
+		}
+	}
+	return strings.Join(got, "; ")
+}
+
+func TestEngagementIsReadOnlyFromAStatementOfIt(t *testing.T) {
+	cases := []struct{ name, title, body, want string }{
+		{"an internship is its own value, not contract", "", `<p>This is a paid internship for students.</p>`, "internship"},
+		{"full-time alone states hours, not employment", "", `<p>Full-time, 40 hours a week.</p>`, ""},
+		{"smart contracts are no engagement", "", `<p>You will build smart contract tooling.</p>`, ""},
+		{"contract negotiation is no engagement", "", `<p>Experience with contract negotiation.</p>`, ""},
+		{"contract management is no engagement", "", `<p>Own contract management for our suppliers.</p>`, ""},
+		{"contractors in equal-opportunity text are no engagement", "", `<p>We do not discriminate against employees or contractors.</p>`, ""},
+		{"B2B SaaS describes the company", "", `<p>Acme is a B2B SaaS company.</p>`, ""},
+		{"permanent residence is no employment", "", `<p>Candidates need permanent residence in the EU.</p>`, ""},
+		{"interns and an internship programme in running text are no engagement", "", `<p>You will mentor our interns and manage the internship program.</p>`, ""},
+		{"a negated statement is no engagement", "", `<p>This is not a contract role.</p>`, ""},
+		{"a negated list of engagements is no engagement", "", `<p>Do not apply to fixed term and temporary roles.</p>`, ""},
+		{"a government contractor employer is no engagement", "", `<p>Federal contractor position requires clearance.</p>`, ""},
+		{"a government contractor self-identification request is no engagement", "", `<p>As a government contractor subject to the Vietnam Era Veterans Readjustment Assistance Act (VEVRAA), we request that you self-identify.</p>`, ""},
+		{"a federal contractor equal-opportunity notice is no engagement", "", `<p>Acme is an equal opportunity employer and a federal contractor with contract work for the government.</p>`, ""},
+		{"a type label followed by something else is no engagement", "", `<p>Type: Contract negotiation</p>`, ""},
+		{"a footnote negation after a list is no engagement", "", `<ul><li>A chance to share in the company’s success.</li></ul><p>*Do not apply to fixed term and temporary roles</p><h3>YOUR MISSION</h3>`, ""},
+		{"temporary work visa in an application question is no engagement", "", `<p>Will you need longer term employment authorization (temporary work visa or permanent residency)?*Select one</p>`, ""},
+		{"mentoring interns is no engagement", "", `<p>You will mentor interns.</p>`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := factValues(readTitled(t, "Acme", tc.title, tc.body), facts.Engagement); got != tc.want {
+				t.Errorf("engagement = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPlaceIsReadOnlyFromWhatTheVacancyStates(t *testing.T) {
+	cases := []struct{ name, title, site, body, want string }{
+		{"an application question restricts the place", "", "", `<h2>How to apply</h2><p>Are you legally authorized to work in the United States?</p>`, "United States"},
+		{"a benefits note restricts the place", "", "", `<h2>Benefits</h2><ul><li>Eligibility: you must reside in Spain</li></ul>`, "Spain"},
+		{"worldwide about customers is no place", "", "", `<p>Our customers worldwide love it.</p>`, ""},
+		{"a two-letter word in a pipe header is no place", "", "", `<p>Acme | AI | Remote</p>`, ""},
+		{"worldwide beside a country restriction is dropped", "", "", `<p>Work from anywhere in the world, but you must be authorized to work in Canada.</p>`, "Canada"},
+		{"worldwide beside a time-zone restriction is dropped", "", "", `<p>Work from anywhere in the world, overlapping CET ± 3 hours.</p>`, ""},
+		{"a parenthesised country before based is the place", "", "", `<p>This position is West Coast (U.S.) based and can be remote.</p>`, "U.S."},
+		{"working from anywhere in a country is that country", "", "", `<p>Work from anywhere in Canada.</p>`, "Canada"},
+		{"a soft overlap request is no time-zone restriction on worldwide", "", "", `<p>All roles with Acme Labs are global and remote-based. Unless otherwise stated, we ask that you try to overlap some working hours with our team's time zone.</p>`, "Worldwide"},
+		{"a company-wide worldwide line does not override a country in the site location", "", "Switzerland", `<p>All roles with Acme Labs are global and remote-based. Unless otherwise stated, we ask that you try to overlap some working hours with our team's time zone.</p>`, "Switzerland"},
+		{"a restriction in the text still overrides a country in the site location", "", "Switzerland", `<p>You must be based in Brazil.</p>`, "Brazil"},
+		{"a restriction in the title beats a softer text phrase", "Engineer (Remote - LATAM)", "", `<p>US / nearshore time zones preferred. You must be based in the US.</p>`, "LATAM"},
+		{"developers served in another region are no restriction", "", "", `<p>Communicate with external developers based in Asia pacific.</p>`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := factValues(readSite(t, "Acme", tc.title, tc.site, tc.body), facts.Place); got != tc.want {
+				t.Errorf("place = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPlaceFieldsOfASiteSayOnlyWhatTheSiteStates(t *testing.T) {
+	cases := []struct {
+		name                 string
+		origin               facts.Origin
+		location, text       string
+		wantPlace, wantModes string
+	}{
+		{"an aggregator's Anywhere is no place", facts.Aggregator, "Anywhere", "", "", ""},
+		{"an aggregator's bare Remote is a work mode, not a place", facts.Aggregator, "Remote", "", "", "remote"},
+		{"remote beside a city keeps the city as the place", facts.Aggregator, "Remote · Anywhere · Berlin", "", "Berlin", "remote"},
+		{"a lowercase two-letter value is no place", facts.Aggregator, "na", "", "", ""},
+		{"TELECOMMUTE is a remote statement from an aggregator too", facts.Aggregator, "TELECOMMUTE", "", "", "remote"},
+		{"TELECOMMUTE with a country keeps the country", facts.Aggregator, "TELECOMMUTE · Poland", "", "Poland", "remote"},
+		{"an employer's remote field is a work mode", facts.Employer, "Remote", "", "", "remote"},
+		{"a placeholder is no place", facts.Employer, "LOCATION", "", "", ""},
+		{"a country code becomes its country name", facts.Aggregator, "PL", "", "Poland", ""},
+		{"a worldwide field beside a time-zone restriction is no place", facts.Employer, "Worldwide", "Time zone: CET (+/- 3 hours). We cannot consider other time zones.", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := &analysis.Doc{Origin: tc.origin, Location: tc.location, Original: tc.text}
+			doc.Sections, doc.Headings = analysis.Split(doc)
+			found, err := analysis.Workers[0].Extract(context.Background(), doc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			doc.Facts = found
+			if got := factValues(doc, facts.Place); got != tc.wantPlace {
+				t.Errorf("place = %q, want %q", got, tc.wantPlace)
+			}
+			if got := factValues(doc, facts.WorkMode); got != tc.wantModes {
+				t.Errorf("modes = %q, want %q", got, tc.wantModes)
+			}
+		})
+	}
+}
+
+func TestMoneyIsOnlyThePayOfTheRole(t *testing.T) {
+	cases := []struct{ name, body, want string }{
+		{"a perk amount before the salary does not hide it", `<p>A $6,000 learning budget per year; salary $90,000 - $110,000</p>`, `{"min":90000,"max":110000,"currency":"USD","period":"year"}`},
+		{"a typo of a range is read as a range", `<p>$180,000-$200,00</p>`, `{"min":180000,"max":200000,"currency":"USD"}`},
+		{"a perk amount with equity after a plus is no pay", `<p>$1,000 learning budget + 0.5% equity</p>`, ""},
+		{"a sign-on bonus is no pay", `<p>A $1,500 sign-on bonus</p>`, ""},
+		{"an equipment allowance is no pay", `<p>$1,000 equipment allowance</p>`, ""},
+		{"a learning budget is no pay", `<p>A $12,000 annual learning budget</p>`, ""},
+		{"a per-task payment is no pay", `<p>Pay: $12,000 per task</p>`, ""},
+		{"a reversed range is no pay", `<p>Salary: $200,000-$150,000</p>`, ""},
+		{"an amount under the floor of its period is no pay", `<p>Salary: $3 per hour</p>`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := factValues(read(t, "Acme", tc.body), facts.Money); got != tc.want {
+				t.Errorf("money = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestWorkModeIsNotOnsiteFromALookAlike(t *testing.T) {
+	cases := []struct{ name, body, want string }{
+		{"in-person interviews are no onsite mode", `<p>We hold in-person interviews.</p>`, ""},
+		{"in-person team events are no onsite mode", `<p>Join our in-person team events.</p>`, ""},
+		{"remote days at home beside an office elsewhere are remote only", `<p>We work from home 5 days a week, with an office available in Paris.</p>`, "remote"},
+		{"remote-friendly is no work mode", `<p>Remote-friendly culture</p>`, ""},
+		{"a perk in the office of a city is no onsite mode", `<h2>Benefits</h2><ul><li>Lunch and dinner stipend (in-office NYC)</li></ul>`, ""},
+		{"a hybrid way of working with remote freedom is hybrid", `<p>We work in a hybrid-but-flexible way (no set days in the office, work remotely when you like).</p>`, "hybrid"},
+		{"a share of telecommuting is hybrid", `<p>50% Telecommuting Permitted.</p>`, "hybrid"},
+		{"a business hybrid model is no work mode", `<p>Our hybrid model out-performs brokered contracts or other “compute markets”</p>`, ""},
+		{"a city or remote in a pipe header is remote and onsite", `<p>Acme | Staff Engineers (Elixir) | NYC or REMOTE (US, Europe, South America) | Full-Time | $200K-$250K + equity | https://jobs.example.com/x</p>`, "remote; onsite"},
+		{"a remote place restriction is remote only", `<p>Remote, US-based</p>`, "remote"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := factValues(read(t, "Acme", tc.body), facts.WorkMode); got != tc.want {
+				t.Errorf("work mode = %q, want %q", got, tc.want)
 			}
 		})
 	}

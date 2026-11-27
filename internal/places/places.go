@@ -175,6 +175,16 @@ func Resolve(label string) Place {
 	return p
 }
 
+func CountryName(code string) (string, bool) {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	for _, c := range vocab.Countries {
+		if c.Code == code {
+			return c.Name, true
+		}
+	}
+	return "", false
+}
+
 func IsCity(label string) bool {
 	_, ok := cityIndex[strings.ToLower(strings.TrimSpace(label))]
 	return ok && unicode.IsUpper([]rune(strings.TrimSpace(label))[0])

@@ -12,4 +12,4 @@ labels:
 modes:
   remote: [remote, remote only, fully remote, remote-first, remote first, telecommute, telecommuting, telework, teleworking]
   hybrid: [hybrid]
-  onsite: [office, on-site, onsite, on site, in office, in-office, on_site]
+  onsite: [office, on-site, onsite, on site, in office, in-office, on_site, in person, in-person]

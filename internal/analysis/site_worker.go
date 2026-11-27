@@ -6,13 +6,14 @@ import (
 	"strings"
 
 	"github.com/sifty-works/sifty-server/internal/facts"
+	"github.com/sifty-works/sifty-server/internal/places"
 )
 
 type siteFields struct{}
 
 func (siteFields) Name() string { return "site_fields" }
 
-func (siteFields) Version() int { return 4 }
+func (siteFields) Version() int { return 8 }
 
 func (siteFields) Produces() []facts.Kind {
 	return []facts.Kind{facts.Money, facts.WorkMode, facts.Engagement, facts.Place, facts.TimeZone, facts.Hours}
@@ -39,7 +40,11 @@ func (siteFields) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 		b, _ := json.Marshal(s.Hours)
 		add(facts.Hours, string(b))
 	}
+	restricted := len(s.Places) > 0 && textRestrictsPlace(doc)
 	for _, p := range s.Places {
+		if pl := places.Resolve(p); restricted && pl.Worldwide && len(pl.Countries) == 0 && len(pl.Cities) == 0 {
+			continue
+		}
 		span, stated := s.Stated[strings.ToLower(p)]
 		if stated && !recognisedPlace(p) {
 			continue
