@@ -110,7 +110,7 @@ type conditions struct{}
 
 func (conditions) Name() string { return "conditions" }
 
-func (conditions) Version() int { return 14 }
+func (conditions) Version() int { return 14 + sectionsVersion }
 
 func (conditions) Produces() []facts.Kind {
 	return []facts.Kind{facts.Money, facts.WorkMode, facts.Engagement, facts.Place, facts.TimeZone, facts.Hours, facts.Language}

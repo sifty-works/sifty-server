@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Requirements: more requirement headings are recognised ("What we expect from you", "You might be a great fit if", "You may be a fit for this role if you have:"), and "Desired", "Good to have", "Bonus Qualifications" and "Preferred Requirements" mark nice-to-haves instead of Required; a heading such as "Skills You Should Have" is no longer split into a heading and a requirement, and "<Product> Education:" inside a company sentence no longer opens a requirements section. Conditions and key facts are read again with the new sections.
 - Requirements: a requirements section now ends where the posting moves on. Duties under an unknown heading ("How success is measured"), closing text (equal opportunity, "you will hear from us"), page footers and recruitment scam warnings no longer appear as requirements; a requirements list written as one paragraph per item is still read in full, and company sentences that state an eligibility condition (residence, visa, work authorization) stay. Stored postings are read again.
 
 ## 0.19.0

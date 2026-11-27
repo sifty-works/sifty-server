@@ -61,6 +61,15 @@ func TestSectionBoundaries(t *testing.T) {
 		{"a heading glued to the start of its line opens its section",
 			`<p>Bring a laptop.</p><p>BENEFITS: Lunch and a gym</p>`,
 			[]string{"intro", "offer"}},
+		{"a short unmarked line with a section phrase and no list or run of paragraphs after it opens no section",
+			`<p>Build things.</p><p>Why we are a good fit</p><p>Closing remark.</p>`,
+			[]string{"intro"}},
+		{"duty sub-headings that hold a requirements word open no section",
+			`<p>Build things.</p><p>Partner Discovery &amp; Requirements Analysis</p><p>You talk to partners every day.</p><p>Ticket Creation &amp; Scoping</p><p>You cut work into tickets.</p>`,
+			[]string{"intro"}},
+		{"a label in the middle of a sentence opens no section",
+			`<p>Our Product Education: we teach robots to read.</p><p>Acme sells it.</p>`,
+			[]string{"intro"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -143,6 +152,12 @@ func TestTermsOutsideRequirementSectionsAreNotRequired(t *testing.T) {
 		{"a company line without a demand word is no requirement in prose after the list but stays as a list item",
 			`<h2>Requirements</h2><ul><li>Go experience</li><li>We use Go and Kubernetes daily</li></ul><p>Our engineers have years of experience in robotics.</p><p>We expect experience with Rust.</p>`,
 			[]string{"requirement required Go experience", "requirement required We use Go and Kubernetes daily", "requirement required We expect experience with Rust."}},
+		{"a nice-to-have heading that also holds a requirements word keeps its section and its words are no requirement",
+			`<p><strong>Requirements</strong></p><ul><li>Go experience</li></ul><p><strong>Bonus Qualifications</strong></p><ul><li>Rust experience</li></ul>`,
+			[]string{"requirement required Go experience", "requirement preferred Rust experience"}},
+		{"a heading that starts with a known heading word is one heading and its other words are no requirement",
+			`<p>Skills You Should Juggle</p><ul><li>Go experience</li></ul>`,
+			[]string{"requirement required Go experience"}},
 		{"scam warnings and official-channel notes are no requirements while fraud experience stays",
 			`<h2>Requirements</h2><ul><li>Go experience</li><li>Candidates are contacted only through official channels</li><li>Beware of recruitment scams</li><li>3+ years in fraud prevention</li></ul>`,
 			[]string{"requirement required Go experience", "requirement required 3+ years in fraud prevention"}},

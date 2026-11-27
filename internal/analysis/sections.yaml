@@ -190,6 +190,22 @@ contains:
   - {text: "a plus", kind: nice_to_have}
   - {text: "desirable", kind: nice_to_have}
   - {text: "even better", kind: nice_to_have}
+  - {text: "bonus", kind: nice_to_have}
+  - {text: "desired", kind: nice_to_have}
+  - {text: "good to have", kind: nice_to_have}
+  - {text: "not required", kind: nice_to_have}
+  - {text: "strongly preferred", kind: nice_to_have}
+  - {text: "strong plus", kind: nice_to_have}
+  - {text: "advantage", kind: nice_to_have}
+  - {text: "required", kind: requirements}
+  - {text: "what we expect", kind: requirements}
+  - {text: "what you need", kind: requirements}
+  - {text: "you might thrive", kind: requirements}
+  - {text: "good fit", kind: requirements}
+  - {text: "great fit", kind: requirements}
+  - {text: "a fit for", kind: requirements}
+  - {text: "you should apply if", kind: requirements}
+  - {text: "succeed", kind: requirements}
   - {text: "requirements", kind: requirements}
   - {text: "qualifications", kind: requirements}
   - {text: "looking for", kind: requirements}

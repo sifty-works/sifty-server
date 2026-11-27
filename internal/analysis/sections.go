@@ -55,10 +55,20 @@ type heading struct {
 	at    int
 }
 
+const sectionsVersion = 1
+
+const (
+	exactOnly = iota
+	anyPhrase
+	multiWordPhrase
+)
+
 const (
 	minGluedHeadingLength = 8
 	maxGluedHeadingLength = 80
 	maxInlineWords        = 8
+	maxLeadHeadingWords   = 6
+	maxLeadInWords        = 12
 )
 
 func normHeading(s string) string {
@@ -72,7 +82,7 @@ func companyHeading(norm, company string) bool {
 	return len(name) >= 2 && (norm == "about "+name || norm == "who is "+name || norm == "life at "+name || norm == "why "+name)
 }
 
-func classify(norm, company string, exact bool) string {
+func classify(norm, company string, mode int) string {
 	for _, e := range headingMap.Headings {
 		if norm == e.Text {
 			return e.Kind
@@ -81,11 +91,11 @@ func classify(norm, company string, exact bool) string {
 	if companyHeading(norm, company) {
 		return SectionCompany
 	}
-	if exact || len(strings.Fields(norm)) > maxHeadingWords {
+	if mode == exactOnly || mode == anyPhrase && len(strings.Fields(norm)) > maxHeadingWords {
 		return ""
 	}
 	for _, e := range headingMap.Contains {
-		if strings.Contains(norm, e.Text) {
+		if (mode == anyPhrase || strings.Contains(e.Text, " ")) && strings.Contains(norm, e.Text) {
 			return e.Kind
 		}
 	}
@@ -140,39 +150,77 @@ func findHeadings(body, company string) []heading {
 		return nil
 	}
 	var out []heading
-	add := func(text string, level int, marked bool) {
+	add := func(text string, level int, marked bool, mode int) bool {
 		text = html.UnescapeString(strings.TrimSpace(text))
-		kind := classify(normHeading(text), company, level == lineLevel && !marked)
+		kind := classify(normHeading(text), company, mode)
 		if marked || kind != "" {
 			out = append(out, heading{text: text, level: level, kind: kind})
 		}
+		return kind != ""
 	}
-	for _, n := range nodes {
+	for i, n := range nodes {
 		if n.Type != xhtml.ElementNode {
 			continue
 		}
 		switch n.DataAtom {
 		case atom.H1, atom.H2:
-			add(nodeText(n), 2, true)
+			add(nodeText(n), 2, true, anyPhrase)
 		case atom.H3:
-			add(nodeText(n), 3, true)
+			add(nodeText(n), 3, true, anyPhrase)
 		case atom.H4, atom.H5, atom.H6:
-			add(nodeText(n), 4, true)
+			add(nodeText(n), 4, true, anyPhrase)
 		case atom.P:
-			for _, l := range paragraphLines(n) {
+			lines := paragraphLines(n)
+			for j, l := range lines {
+				words := len(strings.Fields(l.text))
+				ended := strings.HasSuffix(l.text, ":")
+				colon := ended && words <= maxColonWords
+				marked := l.bold || colon
+				short := words <= maxHeadingWords
+				labelled := strings.Contains(strings.TrimSuffix(l.text, ":"), ":")
+				sentence := strings.ContainsAny(l.text[len(l.text)-1:], ".!?")
+				whole := exactOnly
+				if marked {
+					whole = anyPhrase
+				}
+				if short && !labelled && add(l.text, lineLevel, false, whole) {
+					continue
+				}
 				if hs := gluedHeadings(l.text, company); len(hs) > 0 {
+					if h := hs[0]; len(hs) == 1 && h.at == 0 && words <= maxLeadHeadingWords && !labelled && !sentence && len(h.text) < len(l.text) && strings.ContainsRune(" \t", rune(l.text[len(h.text)])) {
+						hs[0].text = l.text
+					}
 					out = append(out, hs...)
 					continue
 				}
-				short := len(strings.Fields(l.text)) <= maxHeadingWords
-				colon := strings.HasSuffix(l.text, ":") && len(strings.Fields(l.text)) <= maxColonWords
-				if short {
-					add(l.text, lineLevel, l.bold || colon)
+				switch {
+				case short && marked:
+					add(l.text, lineLevel, true, anyPhrase)
+				case !labelled && !sentence && (words <= maxInlineWords || ended && words <= maxLeadInWords) && followed(len(lines)-j-1, nodes[i+1:]):
+					add(l.text, lineLevel, false, multiWordPhrase)
 				}
 			}
 		}
 	}
 	return out
+}
+
+func followed(more int, rest []*xhtml.Node) bool {
+	for _, n := range rest {
+		switch {
+		case n.Type != xhtml.ElementNode:
+		case more == 0 && (n.DataAtom == atom.Ul || n.DataAtom == atom.Ol):
+			return true
+		case n.DataAtom == atom.P:
+			more++
+		default:
+			return more >= 2
+		}
+		if more >= 2 {
+			return true
+		}
+	}
+	return more >= 2
 }
 
 func gluedHeadings(line, company string) []heading {
@@ -201,7 +249,7 @@ func gluedHeadings(line, company string) []heading {
 }
 
 func inlineKind(text, company string) string {
-	if kind := classify(normHeading(text), company, true); kind != SectionOther {
+	if kind := classify(normHeading(text), company, exactOnly); kind != SectionOther {
 		return kind
 	}
 	return ""
@@ -241,7 +289,7 @@ func inlineHeading(line string, from int, company string) (int, int, string) {
 			var ok bool
 			switch {
 			case end < len(line) && line[end] == ':':
-				ok = rest != "" || p > 0
+				ok = p == 0 && rest != "" || afterEnd || !spaced
 			case !spaced:
 			case p == 0:
 				ok = next
