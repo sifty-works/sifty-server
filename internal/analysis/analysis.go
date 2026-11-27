@@ -41,7 +41,7 @@ type Worker interface {
 	Extract(ctx context.Context, doc *Doc) ([]facts.Fact, error)
 }
 
-var Workers = []Worker{siteFields{}, conditions{}, requirements{}, offer{}, keyFacts{}}
+var Workers = []Worker{siteFields{}, conditions{}, requirements{}, keyFacts{}}
 
 type Loader func(ctx context.Context, id int64) (doc *Doc, version int64, ok bool, err error)
 

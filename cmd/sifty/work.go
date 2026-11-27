@@ -28,7 +28,7 @@ type jobKind struct {
 
 var jobKinds = map[string]jobKind{
 	"collect":          {label: "Collection"},
-	"recompute_fit":    {label: "Recomputing Fits you"},
+	"recompute_fit":    {label: "Recomputing Fit"},
 	"retention":        {label: "Text retention"},
 	"analyze_vacancy":  {label: "Analyzing vacancy", subject: analysisSubject},
 	"shortlist_check":  {label: "Shortlist check", work: "shortlist_check", subject: shortlistSubject},

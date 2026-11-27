@@ -65,7 +65,7 @@ func TestAnalysisSavesFactsWithoutModelCall(t *testing.T) {
 	waitFor(t, 5*time.Second, func() bool {
 		var n int
 		d.QueryRow(`SELECT count(*) FROM fact WHERE vacancy=? AND kind=?`, full, facts.Analysed).Scan(&n)
-		return n == 5
+		return n == len(analysis.Workers)
 	})
 
 	sets, err := facts.Load(ctx, d, full)
@@ -143,7 +143,7 @@ func TestAnalysisRunsBeforeFitsYouAndFitsYouReadsTheFacts(t *testing.T) {
 	var recomputes int
 	probe.QueryRow(`SELECT count(*) FROM job WHERE kind='recompute_fit'`).Scan(&recomputes)
 	if recomputes != 1 {
-		t.Errorf("recompute_fit jobs = %d, want 1: Fits you was recomputed before the analysis ended or once per analysis", recomputes)
+		t.Errorf("recompute_fit jobs = %d, want 1: Fit was recomputed before the analysis ended or once per analysis", recomputes)
 	}
 	var score int
 	probe.QueryRow(`SELECT score FROM fit WHERE profile=1 AND vacancy=?`, visible).Scan(&score)
@@ -159,7 +159,7 @@ func TestAnalysisRunsBeforeFitsYouAndFitsYouReadsTheFacts(t *testing.T) {
 	fromFacts := fit.Score(p.View, fit.FromFacts("Platform Engineer", true, sets[visible]), rules).Score
 	fromNothing := fit.Score(p.View, fit.Vacancy{Title: "Platform Engineer", Full: true}, rules).Score
 	if score != fromFacts || score == fromNothing {
-		t.Errorf("Fits you = %d, want %d from the facts and not %d from none", score, fromFacts, fromNothing)
+		t.Errorf("Fit = %d, want %d from the facts and not %d from none", score, fromFacts, fromNothing)
 	}
 	if len(sets[hidden].Facts) != 0 || sets[hidden].Analysed {
 		t.Errorf("a vacancy hidden in every profile was analysed: %+v", sets[hidden])

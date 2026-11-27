@@ -55,8 +55,8 @@ func TestBestFitOrdersCurrentNumbersFirstThenDimmedAndUnscored(t *testing.T) {
 		marks[field(r, "title")] = fmt.Sprintf("%v|%v|%v|%v", m["score"], m["bucket"], m["text"], m["dimmed"])
 	}
 	for name, want := range map[string]string{
-		"A": "80|Strong|Fits you 80: Strong|false", "C": "60|Partial|Fits you 60: Partial|false",
-		"D": "40|Weak|Fits you 40: Weak|false", "E": "90|Strong|Fits you 90: Strong|true",
+		"A": "80|Strong|Fit 80: Strong|false", "C": "60|Partial|Fit 60: Partial|false",
+		"D": "40|Weak|Fit 40: Weak|false", "E": "90|Strong|Fit 90: Strong|true",
 		"F": "<nil>|Not scored|Not compared yet|false", "G": "<nil>|Not scored|Full job description is unavailable|false",
 	} {
 		if marks[name] != want {
@@ -136,7 +136,7 @@ func TestVacancyPageShowsTheBandWithItsTiles(t *testing.T) {
 		return b["band"].(map[string]any)
 	}
 	b := band(full)
-	if b["score"] == nil || b["text"] != fmt.Sprintf("Fits you %v /100", b["score"]) || len(b["tiles"].([]any)) != 8 {
+	if b["score"] == nil || b["text"] != fmt.Sprintf("Fit %v /100", b["score"]) || len(b["tiles"].([]any)) != 8 {
 		t.Errorf("band of a scored vacancy: %v", b)
 	}
 	if b := band(summaryID); b["score"] != nil || b["text"] != "Full job description is unavailable" {

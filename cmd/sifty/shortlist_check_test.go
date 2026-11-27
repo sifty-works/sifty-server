@@ -172,7 +172,7 @@ func TestShortlistingQueuesOneCheckWhoseAnswerStandsBesideTheOpenRequirement(t *
 	}
 	view := f.view(t)
 	if !reflect.DeepEqual(view["band"], bandBefore) || !reflect.DeepEqual(view["fit"], fitBefore) {
-		t.Errorf("Fits you or the requirements counter changed:\nband %v -> %v\nfit %v -> %v", bandBefore, view["band"], fitBefore, view["fit"])
+		t.Errorf("Fit or the requirements counter changed:\nband %v -> %v\nfit %v -> %v", bandBefore, view["band"], fitBefore, view["fit"])
 	}
 	if meAfter, _ := apiGet(t, f.base, "/api/me"); !reflect.DeepEqual(meBefore, meAfter) {
 		t.Errorf("My data changed: %v -> %v", meBefore, meAfter)
@@ -205,7 +205,7 @@ func TestShortlistCheckAnswerStandsBesideTheSkillItDecides(t *testing.T) {
 		t.Errorf("answer = %v, want it stated beside the skill Kafka", a)
 	}
 	if band := f.view(t)["band"]; !reflect.DeepEqual(band, bandBefore) {
-		t.Errorf("Fits you or the requirements counter changed:\n%v\n%v", bandBefore, band)
+		t.Errorf("Fit or the requirements counter changed:\n%v\n%v", bandBefore, band)
 	}
 }
 

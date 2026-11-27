@@ -24,7 +24,7 @@ func Digest(ctx context.Context, database *db.DB, profileID, vacancyID int64) (s
 	var version int64
 	var factsKey string
 	err := database.QueryRowContext(ctx,
-		`SELECT v.version, `+facts.KeySQLFor("site_fields", "conditions", "requirement_lines", "offer")+` FROM vacancy v WHERE v.id=?`,
+		`SELECT v.version, `+facts.KeySQLFor("site_fields", "conditions", "requirement_lines")+` FROM vacancy v WHERE v.id=?`,
 		vacancyID).Scan(&version, &factsKey)
 	if err != nil {
 		return "", fmt.Errorf("shortlistcheck: digest: vacancy: %w", err)

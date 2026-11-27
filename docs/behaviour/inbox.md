@@ -1,6 +1,6 @@
 # Inbox, search and the vacancy page
 
-What the user gets: for the chosen profile, the vacancies that fit its search, in four lists (Inbox, Shortlist, Applied, Dismissed) that all search and filter the same way; one decision per vacancy and profile made from the keyboard; and a vacancy page that shows what the vacancy asks and offers, how it fits, and its full text.
+What the user gets: for the chosen profile, the vacancies that fit its search, in four lists (Inbox, Shortlist, Applied, Dismissed) that all search and filter the same way; one decision per vacancy and profile made from the keyboard; and a vacancy page that shows how the vacancy fits, what it asks and its full text.
 
 ## Layout
 
@@ -44,7 +44,7 @@ There is one list of exclusions, managed in Settings.
 
 - the company;
 - in Applied, ◷ "Listing expired" when the vacancy is past its expiry date; ✓ "Shortlisted" for a vacancy shortlisted from Inbox in this session;
-- in every list, Fits you and the requirements counter (see `assessment.md`);
+- in every list, Fit (see `assessment.md`);
 - the title;
 - the location: as stored when it has no more than three entries separated by " · ", otherwise the first two and "+N more" ("Remote · AD +188 more"), with the full text on hover when shortened; "Location unstated" when empty;
 - in Applied, "· Applied <date>"; in the other lists, "Applied <date> from <profile>" when the user applied to this vacancy from any profile (a deleted profile is named by its last name);
@@ -72,7 +72,7 @@ There is one list of exclusions, managed in Settings.
 
 - **Search** ("Search company, role, tech", key `/`) finds a case-insensitive substring in the title, company, tags and text; in the text, punctuation counts as a space. A vacancy whose text was removed is found by its title, company and tags only. A query shorter than 3 characters matches title, company and tags only.
 - **Filters**, in a panel with a count of active filters:
-  - Fits you: Strong 75+, Partial 55–74, Weak, Not scored, without counts; a dimmed result counts as Not scored;
+  - Fit: Strong 75+, Partial 55–74, Weak, Not scored, without counts; a dimmed result counts as Not scored;
   - Published: All, 7 days or 30 days, by the vacancy's publication date; a vacancy with no publication date passes every choice;
   - Role: Remote (remote, anywhere or telecommute in the location); Leadership title (CTO, Head, Director, Manager, Lead, not "lead generation");
   - Sources: one checkbox per source with its count;
@@ -140,8 +140,8 @@ Then the dialog "Did you submit your application?" asks for the outcome: Not yet
 
 **Overview, from top to bottom:**
 
-1. The Fits you band (see `assessment.md`).
-2. What they ask on the left (see `assessment.md`) and What they offer on the right. What they offer shows a "Base salary" tile, carrying the value of the band's Money tile and left out when the vacancy states no money, then tiles built from the vacancy's compensation and benefits sections and an "Also offered" list; when nothing is found: "No Compensation or Benefits section recognised…" or "Section found but no specific items matched."
+1. The Fit band (see `assessment.md`).
+2. Other requirements, a folded full-width section below the band (see `assessment.md`).
 3. Listing text, with its state in words: "Full text", "Listing summary only", "Blocked by site", "Not fetched" or "Text removed after 60 days unseen; it returns if the source shows the role again". The sanitised text is shown with its headings; without text: "A full description has not been retrieved…".
 4. The Shortlist check, in Shortlist and Archive when a check exists (see `assessment.md`).
 
@@ -153,7 +153,7 @@ Opening a vacancy never makes a network request.
 - Global search expressions and their unreachable editor, with the collection fallback that used them.
 - Four separate ways to hide a vacancy: global stop words, blocked companies hidden only in Inbox, profile except-words kept apart from the rest, and triage rules that were never finished. The one list of exclusions replaces them.
 - Dismissed without search and filters, and the Archive counter that ignored Dismissed.
-- The second Fits you and the second Assess button on the page, raw JSON dumps, file paths, and the "AI analysis" note.
+- The second Fit and the second Assess button on the page, raw JSON dumps, file paths, and the "AI analysis" note.
 - The "Candidate facts and corrections" form on the page; Confirmed by you holds these facts (see `profiles.md`).
 - The internal text state ("available cleaned html") shown on the page.
 - The "By section" and "Original" switch of the listing text.

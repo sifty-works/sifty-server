@@ -99,25 +99,22 @@ type Tile struct {
 	Full      string `json:"full,omitempty"`
 	Line      string `json:"line"`
 	Verdict   string `json:"verdict"`
-	Goal      bool   `json:"goal"`
 	Bucket    string `json:"bucket,omitempty"`
 }
 
 type Fit struct {
-	State                 string
-	Score                 int
-	Bucket                string
-	Text                  string
-	Criteria              []Criterion
-	ScoredOn, Of          int
-	Reasons               []string
-	Broken                bool
-	Tiles                 []Tile
-	ReqRead               bool
-	ReqOK, ReqNear, ReqNo int
-	ReqMaybe              int
-	Requirements          []RequirementLine
-	Skills                []SkillEntry
+	State        string
+	Score        int
+	Bucket       string
+	Text         string
+	Criteria     []Criterion
+	ScoredOn, Of int
+	Reasons      []string
+	Broken       bool
+	Tiles        []Tile
+	ReqRead      bool
+	Requirements []RequirementLine
+	Skills       []SkillEntry
 }
 
 func (f Fit) Open() []Open {
@@ -177,18 +174,6 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 		for _, l := range f.Requirements {
 			v.Judged = append(v.Judged, Judged{l.Level == "required", l.Verdict})
 		}
-		for _, j := range v.Judged {
-			switch j.Verdict {
-			case "✓":
-				f.ReqOK++
-			case "≈":
-				f.ReqNear++
-			case "✕":
-				f.ReqNo++
-			default:
-				f.ReqMaybe++
-			}
-		}
 	}
 	var num, den float64
 	var text, weak, other, unknown []string
@@ -231,8 +216,8 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 	g := geoOf(v)
 	for _, t := range tiles {
 		value, converted, full := t.value(v, g, r.Rates)
-		line, verdict, goal, bucket := tileLine(f.Criteria, t.criterion, t.empty)
-		f.Tiles = append(f.Tiles, Tile{t.name, value, converted, full, line, verdict, goal, bucket})
+		line, verdict, bucket := tileLine(f.Criteria, t.criterion, t.empty)
+		f.Tiles = append(f.Tiles, Tile{t.name, value, converted, full, line, verdict, bucket})
 	}
 	f.Tiles = append(f.Tiles, keyFactTiles(v, p)...)
 	switch {
@@ -259,7 +244,7 @@ func noGoals(g candidate.GoalsView) bool {
 		(g.Compensation == nil || g.Compensation.CashMin == nil || *g.Compensation.CashMin <= 0)
 }
 
-func tileLine(cs []Criterion, name, empty string) (string, string, bool, string) {
+func tileLine(cs []Criterion, name, empty string) (string, string, string) {
 	for _, c := range cs {
 		if c.Name != name || c.Outcome == Skipped && c.Reason == "" {
 			continue
@@ -271,9 +256,9 @@ func tileLine(cs []Criterion, name, empty string) (string, string, bool, string)
 		if c.Reason == "" {
 			c.Reason = "Not stated in the vacancy"
 		}
-		return c.Reason, verdict, true, c.Bucket
+		return c.Reason, verdict, c.Bucket
 	}
-	return empty, "?", false, ""
+	return empty, "?", ""
 }
 
 func Bucket(score int) string {
@@ -284,15 +269,6 @@ func Bucket(score int) string {
 		return "Partial"
 	}
 	return "Weak"
-}
-
-func TileFor(ts []Tile, criterion string) (Tile, bool) {
-	for i, td := range tiles {
-		if td.criterion == criterion && i < len(ts) {
-			return ts[i], true
-		}
-	}
-	return Tile{}, false
 }
 
 func weakSource(s facts.Source) bool {

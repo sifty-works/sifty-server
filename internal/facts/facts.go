@@ -11,7 +11,6 @@ const (
 	Hours        Kind = "hours"
 	Language     Kind = "language"
 	Requirement  Kind = "requirement"
-	Offer        Kind = "offer"
 	Years        Kind = "years"
 	Seniority    Kind = "seniority"
 	CompanyStage Kind = "company_stage"

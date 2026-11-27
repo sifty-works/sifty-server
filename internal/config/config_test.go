@@ -358,7 +358,7 @@ func TestRefusedSettingsAreSentencesWhetherSavedOrStandingInTheFile(t *testing.T
 			"The weight for role must be a number of 0 or more."},
 		{"weight of an unknown criterion", "weights: {luck: 0.1}\n",
 			func(c *config.Config) { c.Weights["luck"] = 0.1 },
-			"luck is not a criterion of Fits you, so it has no weight."},
+			"luck is not a criterion of Fit, so it has no weight."},
 		{"rate of zero", "rates: {USD: 0}\n",
 			func(c *config.Config) { c.Rates["USD"] = 0 },
 			"The rate for USD must be a number above 0."},

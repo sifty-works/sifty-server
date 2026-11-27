@@ -363,7 +363,7 @@ func Validate(c Config) error {
 	defaults := Defaults().Weights
 	for _, k := range slices.Sorted(maps.Keys(c.Weights)) {
 		if _, ok := defaults[k]; !ok {
-			return fmt.Errorf("%s is not a criterion of Fits you, so it has no weight.", k)
+			return fmt.Errorf("%s is not a criterion of Fit, so it has no weight.", k)
 		}
 		if w := c.Weights[k]; w < 0 || math.IsInf(w, 0) || math.IsNaN(w) {
 			return fmt.Errorf("The weight for %s must be a number of 0 or more.", k)

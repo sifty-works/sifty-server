@@ -1,0 +1,7 @@
+DELETE FROM fact WHERE worker='offer';
+ALTER TABLE fit ADD COLUMN analysed INTEGER;
+UPDATE fit SET analysed=1 WHERE req_ok IS NOT NULL;
+ALTER TABLE fit DROP COLUMN req_ok;
+ALTER TABLE fit DROP COLUMN req_no;
+ALTER TABLE fit DROP COLUMN req_maybe;
+ALTER TABLE fit DROP COLUMN req_near;

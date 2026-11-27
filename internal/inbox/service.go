@@ -3,7 +3,6 @@ package inbox
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -14,7 +13,6 @@ import (
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
-	"github.com/sifty-works/sifty-server/internal/facts"
 	"github.com/sifty-works/sifty-server/internal/fit"
 	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/places"
@@ -82,7 +80,6 @@ type Band struct {
 	Text             string             `json:"text"`
 	Tiles            []fit.Tile         `json:"tiles"`
 	RequirementsText string             `json:"requirementsText"`
-	RequirementCount int                `json:"requirementCount"`
 	Groups           []RequirementGroup `json:"groups"`
 	ScoredOn         int                `json:"scoredOn"`
 	ScoredOf         int                `json:"scoredOf"`
@@ -90,27 +87,16 @@ type Band struct {
 	BrokenMust       bool               `json:"brokenMust"`
 }
 
-func reqText(state string, reqRead bool, reqOK, reqNear, reqNo, reqMaybe int, inAnalysisSet bool) string {
-	if state == fit.NoText {
+func reqText(state string, analysed, inAnalysisSet bool) string {
+	switch {
+	case state == fit.NoText:
 		return "Full job description is unavailable"
+	case analysed:
+		return ""
+	case inAnalysisSet:
+		return "Analysing requirements…"
 	}
-	if !reqRead {
-		if inAnalysisSet {
-			return "Analysing requirements…"
-		}
-		return "Not analysed yet"
-	}
-	if reqOK+reqNear+reqNo+reqMaybe == 0 {
-		return "No requirements stated"
-	}
-	if reqOK == 0 && reqNear == 0 && reqNo == 0 {
-		return "Not checked yet"
-	}
-	near := ""
-	if reqNear > 0 {
-		near = fmt.Sprintf(" · ≈ %d", reqNear)
-	}
-	return fmt.Sprintf("✓ %d%s · ✕ %d · ? %d", reqOK, near, reqNo, reqMaybe)
+	return "Not analysed yet"
 }
 
 func queryAnalysisSet(ctx context.Context, database *db.DB) (map[int64]bool, []int64, error) {
@@ -146,12 +132,10 @@ func fitMark(s fit.Stored, inputs int64, vacancyID int64, analysisSet map[int64]
 	if s.State.String == fit.Scored {
 		n := int(s.Score.Int64)
 		m.Score, m.Bucket = &n, fit.Bucket(n)
-		m.Text = fmt.Sprintf("Fits you %d: %s", n, m.Bucket)
+		m.Text = fmt.Sprintf("Fit %d: %s", n, m.Bucket)
 		m.BrokenMust = s.Broken.Bool && !m.Dimmed
 	}
-	m.RequirementsText = reqText(s.State.String, s.ReqOK.Valid,
-		int(s.ReqOK.Int64), int(s.ReqNear.Int64), int(s.ReqNo.Int64), int(s.ReqMaybe.Int64),
-		analysisSet[vacancyID])
+	m.RequirementsText = reqText(s.State.String, s.Analysed.Bool, analysisSet[vacancyID])
 	return m
 }
 
@@ -475,18 +459,6 @@ type VacancySource struct {
 	URL  string `json:"url,omitempty"`
 }
 
-type OfferTile struct {
-	Key   string `json:"key"`
-	Label string `json:"label"`
-	Value string `json:"value"`
-}
-
-type OfferView struct {
-	Tiles []OfferTile `json:"tiles"`
-	Items []string    `json:"items"`
-	Empty string      `json:"empty,omitempty"`
-}
-
 type VacancyView struct {
 	Row
 	Sources  []VacancySource `json:"sources"`
@@ -495,41 +467,7 @@ type VacancyView struct {
 	Actions  []Action        `json:"actions"`
 	Listing  ListingView     `json:"listing"`
 	Band     Band            `json:"band"`
-	Offer    OfferView       `json:"offer"`
 	Check    *CheckView      `json:"check"`
-}
-
-func offerView(fs []facts.Fact, tiles []fit.Tile) OfferView {
-	v := OfferView{Tiles: []OfferTile{}, Items: []string{}}
-	found, offered := false, 0
-	var perks []OfferTile
-	for _, f := range fs {
-		var p OfferTile
-		if f.Kind == facts.Offer && json.Unmarshal([]byte(f.Value), &p) == nil {
-			found = true
-			perks = append(perks, p)
-		}
-	}
-	if !found {
-		v.Empty = "No Compensation or Benefits section recognised in this listing."
-		return v
-	}
-	if t, ok := fit.TileFor(tiles, "money"); ok && t.Value != "" && t.Value != "Not stated" {
-		v.Tiles = append(v.Tiles, OfferTile{Key: "salary", Label: "Base salary", Value: t.Value})
-	}
-	for _, p := range perks {
-		switch {
-		case p.Key == "section":
-		case p.Key != "":
-			v.Tiles, offered = append(v.Tiles, OfferTile{Key: p.Key, Label: p.Label, Value: p.Value}), offered+1
-		default:
-			v.Items, offered = append(v.Items, p.Value), offered+1
-		}
-	}
-	if offered == 0 {
-		v.Empty = "Section found but no specific items matched."
-	}
-	return v
 }
 
 func listingState(textState string) string {
@@ -677,10 +615,6 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enq
 	if err != nil {
 		return VacancyView{}, err
 	}
-	vf, err := facts.Load(ctx, database, vacancyID)
-	if err != nil {
-		return VacancyView{}, err
-	}
 	cs, err := loadCheck(ctx, database, enqueue, profileID, vacancyID, stage, false)
 	if err != nil {
 		return VacancyView{}, err
@@ -710,13 +644,12 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enq
 	}
 	band := Band{
 		Bucket: f.Bucket, Text: f.Text, Tiles: f.Tiles,
-		RequirementsText: reqText(f.State, f.ReqRead, f.ReqOK, f.ReqNear, f.ReqNo, f.ReqMaybe, rs[vacancyID]),
-		RequirementCount: len(f.Skills) + len(f.Requirements),
+		RequirementsText: reqText(f.State, f.ReqRead, rs[vacancyID]),
 		Groups:           groups,
 		ScoredOn:         f.ScoredOn, ScoredOf: f.Of, Reasons: f.Reasons, BrokenMust: f.Broken,
 	}
 	if f.State == fit.Scored {
-		band.Score, band.Text = &f.Score, fmt.Sprintf("Fits you %d /100", f.Score)
+		band.Score, band.Text = &f.Score, fmt.Sprintf("Fit %d /100", f.Score)
 	}
 	apiRow := toRow(row, t, inputs, rs)
 	return VacancyView{
@@ -727,7 +660,6 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enq
 		Actions:  stageActions(stage, vd.url, vd.applyURL, apiRow.Company),
 		Listing:  lv,
 		Band:     band,
-		Offer:    offerView(vf[vacancyID].Facts, f.Tiles),
 		Check:    cs.view(f.Open(), queue, t),
 	}, nil
 }

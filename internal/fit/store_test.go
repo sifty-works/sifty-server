@@ -250,19 +250,19 @@ func TestStoredFitFollowsTheFactsOfTheCurrentVersion(t *testing.T) {
 	})
 }
 
-func TestAnalysedVacancyWithNoRequirementLinesStoresZeroCounts(t *testing.T) {
+func TestRecomputeMarksOnlyAnalysedVacanciesAnalysed(t *testing.T) {
 	d, cat, _ := fixture(t)
 	analysed := noSalaryVacancy(t, cat)
 	saveMoney(t, d, analysed, 1, 80000)
 	recompute(t, d, nil)
-	counts := func(id int64) (n [3]sql.NullInt64) {
-		d.QueryRow(`SELECT req_ok, req_no, req_maybe FROM fit WHERE profile=1 AND vacancy=?`, id).Scan(&n[0], &n[1], &n[2])
+	flag := func(id int64) (n sql.NullBool) {
+		d.QueryRow(`SELECT analysed FROM fit WHERE profile=1 AND vacancy=?`, id).Scan(&n)
 		return n
 	}
-	if n := counts(analysed); !n[0].Valid || n[0].Int64+n[1].Int64+n[2].Int64 != 0 {
-		t.Errorf("analysed vacancy without requirement lines: counts %v, want 0, 0, 0", n)
+	if n := flag(analysed); !n.Bool {
+		t.Errorf("analysed vacancy without requirement lines: analysed %v, want true", n)
 	}
-	if n := counts(1); n[0].Valid || n[1].Valid || n[2].Valid {
-		t.Errorf("vacancy not analysed: counts %v, want none", n)
+	if n := flag(1); n.Bool {
+		t.Errorf("vacancy not analysed: analysed %v, want false", n)
 	}
 }

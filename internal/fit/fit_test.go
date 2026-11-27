@@ -367,14 +367,14 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 	p.Languages = []candidate.Language{{Name: "English"}}
 	f := score(p, vacancy{Location: "Remote (EU only) · Remote", Text: "Salary: EUR 120,000 per year\nEmployment type: Permanent, full-time"})
 	want := []fit.Tile{
-		{Name: "Money", Value: "€120k a year", Converted: "≈ €120,000", Line: "Pays €120k a year — meets your minimum", Verdict: "✓", Goal: true},
-		{Name: "Location", Value: "Remote (EU only)", Line: "Remote (EU only) — preferred", Verdict: "✓", Goal: true, Bucket: "preferred"},
-		{Name: "Work mode", Value: "remote", Line: "Remote — in your Never list", Verdict: "✕", Goal: true, Bucket: "never"},
-		{Name: "Contract", Value: "employment", Line: "Employment — preferred", Verdict: "✓", Goal: true, Bucket: "preferred"},
-		{Name: "Time zone", Value: "Europe & Africa", Line: "Time zone fits Europe & Africa", Verdict: "✓", Goal: true},
+		{Name: "Money", Value: "€120k a year", Converted: "≈ €120,000", Line: "Pays €120k a year — meets your minimum", Verdict: "✓"},
+		{Name: "Location", Value: "Remote (EU only)", Line: "Remote (EU only) — preferred", Verdict: "✓", Bucket: "preferred"},
+		{Name: "Work mode", Value: "remote", Line: "Remote — in your Never list", Verdict: "✕", Bucket: "never"},
+		{Name: "Contract", Value: "employment", Line: "Employment — preferred", Verdict: "✓", Bucket: "preferred"},
+		{Name: "Time zone", Value: "Europe & Africa", Line: "Time zone fits Europe & Africa", Verdict: "✓"},
 		{Name: "Languages", Value: "Not stated", Line: "Not stated in the vacancy", Verdict: "?"},
-		{Name: "Hours", Value: "full-time", Line: "Full-time — possible", Verdict: "✓", Goal: true, Bucket: "possible"},
-		{Name: "Work authorization", Value: "Remote (EU only)", Line: "Remote work is open to you there", Verdict: "✓", Goal: true},
+		{Name: "Hours", Value: "full-time", Line: "Full-time — possible", Verdict: "✓", Bucket: "possible"},
+		{Name: "Work authorization", Value: "Remote (EU only)", Line: "Remote work is open to you there", Verdict: "✓"},
 	}
 	if len(f.Tiles) != len(want) {
 		t.Fatalf("got %d tiles, want %d: %+v", len(f.Tiles), len(want), f.Tiles)
@@ -405,11 +405,11 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 		return fit.Tile{}
 	}
 	lang := tile(score(p, vacancy{Text: "Requirements\n- Fluent Mandarin required"}), "Languages")
-	if lang.Value != "Mandarin" || lang.Verdict != "✕" || !lang.Goal || lang.Line != "Requires Mandarin — not in your languages" {
+	if lang.Value != "Mandarin" || lang.Verdict != "✕" || lang.Line != "Requires Mandarin — not in your languages" {
 		t.Errorf("a language the user lacks: Languages tile = %+v", lang)
 	}
 	noZone := tile(score(goals(candidate.GoalsView{EngagementType: preferred("employment")}), vacancy{Title: "Builder"}), "Time zone")
-	if noZone.Value != "Not stated" || noZone.Verdict != "?" || noZone.Goal {
+	if noZone.Value != "Not stated" || noZone.Verdict != "?" || noZone.Line != "No preference stated" {
 		t.Errorf("no time zone stated, no time zone goal: Time zone tile = %+v", noZone)
 	}
 	if c := tile(score(goals(candidate.GoalsView{EngagementType: preferred("employment")}), vacancy{Title: "Builder"}), "Contract"); c.Value != "Not stated" || c.Verdict != "?" {
@@ -425,7 +425,7 @@ func TestKeyFactsDoNotChangeFitsYou(t *testing.T) {
 	stated.Years, stated.Seniority, stated.Stage = 9, "Senior", "Series B"
 	a, b := fit.Score(p, plain, rules()), fit.Score(p, stated, rules())
 	if a.State != fit.Scored || a.Score != b.Score || a.ScoredOn != b.ScoredOn || a.Of != b.Of || len(a.Criteria) != len(b.Criteria) {
-		t.Errorf("Fits you with key facts = %d on %d of %d, without = %d on %d of %d", b.Score, b.ScoredOn, b.Of, a.Score, a.ScoredOn, a.Of)
+		t.Errorf("Fit with key facts = %d on %d of %d, without = %d on %d of %d", b.Score, b.ScoredOn, b.Of, a.Score, a.ScoredOn, a.Of)
 	}
 }
 
@@ -460,7 +460,7 @@ func TestConditionTilesSayWhatIsRefusedAndDoNotChangeFitsYou(t *testing.T) {
 	stated.Deadline, stated.Length, stated.Clearance, stated.Relocation, stated.Visa = "2099-12-01", "6 months", "US citizen", "none", "refused"
 	a, b := fit.Score(p, plain, rules()), fit.Score(p, stated, rules())
 	if a.State != fit.Scored || a.Score != b.Score || a.ScoredOn != b.ScoredOn || a.Of != b.Of {
-		t.Errorf("Fits you with condition facts = %d on %d of %d, without = %d on %d of %d", b.Score, b.ScoredOn, b.Of, a.Score, a.ScoredOn, a.Of)
+		t.Errorf("Fit with condition facts = %d on %d of %d, without = %d on %d of %d", b.Score, b.ScoredOn, b.Of, a.Score, a.ScoredOn, a.Of)
 	}
 	got := map[string]string{}
 	for _, tl := range b.Tiles {
@@ -516,9 +516,6 @@ func TestRequirementsCriterionAveragesSkillsAndOtherRequirements(t *testing.T) {
 		{Text: "Redis is a plus", Level: "preferred"},
 	}
 	f := fit.Score(p, fit.Vacancy{Title: "Engineer", Full: true, Analysed: true, Requirements: reqs}, rules())
-	if f.ReqOK != 1 || f.ReqNear != 1 || f.ReqNo != 2 || f.ReqMaybe != 1 {
-		t.Errorf("counts ✓ %d ≈ %d ✕ %d ? %d, want 1 1 2 1", f.ReqOK, f.ReqNear, f.ReqNo, f.ReqMaybe)
-	}
 	if got, want := criterion(t, f, "requirements"), 3.0/7; math.Abs(got-want) > 1e-9 {
 		t.Errorf("requirements utility = %v, want %v", got, want)
 	}

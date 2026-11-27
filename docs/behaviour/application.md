@@ -56,8 +56,8 @@ Diagnostic panels (questionnaire coverage, the technical record of form reading,
 | Work | Started by | What the user sees | Model calls |
 |---|---|---|---|
 | Collection | interval, opening the application, "Collect jobs" (see `collection.md`) | progress in the status bar and on the Sources page | none |
-| Analyzing vacancy | new or changed texts, a vacancy becoming visible, a new version of the application | the requirements counter's states; its facts are read by the next change of Fits you, which waits for it | none |
-| Recomputing Fits you | changes of vacancies, goals, My data, or weights | dimmed results until done | none |
+| Analyzing vacancy | new or changed texts, a vacancy becoming visible, a new version of the application | the analysis state of a row ("Analysing requirements…"); its facts are read by the next change of Fit, which waits for it | none |
+| Recomputing Fit | changes of vacancies, goals, My data, or weights | dimmed results until done | none |
 | Text retention | daily (see `settings-and-data.md`) | "Text removed after 60 days unseen" | none |
 | Shortlist check | entering Shortlist; opening a shortlisted vacancy whose check is outdated (see `assessment.md`) | the check on the vacancy page | 1 |
 | Employer's page | entering Shortlist, the Apply button, startup | the Apply button's state | none; web search |
@@ -70,7 +70,7 @@ A one-line status bar along the bottom of every page shows the state as a dot (g
 
 Settings › Monitor › Background work lists what runs and what waits, and Settings › Monitor › Logs what failed:
 
-- **Running:** each running job with what it is (Collection, Analyzing vacancy, Recomputing Fits you, Shortlist check, Document analysis, Text retention), its subject in words (the vacancy's title and company, or the document's name; none for collection, recomputation and retention), its progress when it has one, and since when. A job that uses a model (Shortlist check, Document analysis) also names the provider and model that serve its kind of work in the current settings; this is not necessarily the one that served a call already under way, because a change of provider in Settings applies to the next call.
+- **Running:** each running job with what it is (Collection, Analyzing vacancy, Recomputing Fit, Shortlist check, Document analysis, Text retention), its subject in words (the vacancy's title and company, or the document's name; none for collection, recomputation and retention), its progress when it has one, and since when. A job that uses a model (Shortlist check, Document analysis) also names the provider and model that serve its kind of work in the current settings; this is not necessarily the one that served a call already under way, because a change of provider in Settings applies to the next call.
 - **Waiting:** the queued jobs of each kind with their count. When a kind waits for something other than its turn, the reason stands next to it: background model work is paused; the daily limit of model calls is reached, until a time; the provider is held, until a time, because it did not answer or kept giving answers that could not be used; the provider is paid and "Allow paid bulk work" is off; or the job waits to try again at a time.
 - **Failed:** the jobs that failed in the last 7 days, newest first, at most 50, each with its kind, subject, time and the reason as a sentence.
 

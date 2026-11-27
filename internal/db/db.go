@@ -138,6 +138,11 @@ func listMigrations(fsys fs.FS) ([]migration, error) {
 		out = append(out, migration{version: n, filename: e.Name()})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].version < out[j].version })
+	for i := 1; i < len(out); i++ {
+		if out[i].version == out[i-1].version {
+			return nil, fmt.Errorf("migrations %s and %s share the number %d", out[i-1].filename, out[i].filename, out[i].version)
+		}
+	}
 	return out, nil
 }
 
