@@ -338,6 +338,13 @@ func keyFactTiles(v Vacancy, p ProfileView) []Tile {
 			out = append(out, t)
 		}
 	}
+	if len(v.Domains) > 0 {
+		labels := make([]string, len(v.Domains))
+		for i, d := range v.Domains {
+			labels[i] = facts.DomainTitle(d)
+		}
+		out = append(out, Tile{Name: "Domain", Value: strings.Join(labels, " · "), Line: "Read by the model", Verdict: "?"})
+	}
 	return append(out, conditionTiles(v, p.Today)...)
 }
 

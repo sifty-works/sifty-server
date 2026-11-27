@@ -20,7 +20,7 @@ The application is one program to run; reading application forms additionally ne
 
 ## Where settings live
 
-- **The settings file**, one file in the data folder, holds what the user configures: sources, the collection interval and switch, providers and the provider of each kind of model work, "Allow paid bulk work", the daily limit of background model calls, the web search provider, weights and rates.
+- **The settings file**, one file in the data folder, holds what the user configures: sources, the collection interval and switch, providers and the provider of each kind of model work, "Allow paid bulk work", "Precise reading", the daily limit of background model calls, the web search provider, weights and rates.
 - **The database** holds what the application remembers about its use: the active profile and the switch that pauses background model work.
 - The description of known sites is kept in `<data>/vocab/sites.yaml` when the user wants to override it; otherwise the application uses an embedded description.
 - Forms in Settings edit all of these. Advanced shows the settings file only.
@@ -44,9 +44,10 @@ The reason of a refused settings file is the sentence the settings screen gives 
 - **Exclusions:** the one list of exclusions (see `inbox.md`).
 - **Models:**
   - the providers, each marked local, free or paid;
-  - a provider for each kind of model work: **Reading** (facts of profile documents; vacancies are read by code, and the choice is kept for the model that will read what code leaves), **Shortlist check**, and **Preparation** (form labels, drafts, cover letters, pasted forms);
+  - a provider for each kind of model work: **Reading** (facts of profile documents, and the domain of a company read from its vacancies; the rest of a vacancy is read by code), **Shortlist check**, and **Preparation** (form labels, drafts, cover letters, pasted forms);
   - the state of each provider and a "Check" button that sends a fixed test prompt with no user data;
   - "Allow paid bulk work", off by default;
+  - "Precise reading", off by default, with the line "Reads every new vacancy's company with the Reading model; uses your local machine or a paid provider. Off: only vacancies you open are read." Off, only the vacancies the user opens are read. With no Reading provider nothing is read and the switch says so; with a paid Reading provider and "Allow paid bulk work" off, only opened vacancies are read, and the switch says it needs that permission;
   - a switch that pauses background model work, and a daily limit of background model calls.
 - **Web search:** the provider used to find employers' pages (Tavily, Brave, DuckDuckGo, or none), with its key taken from the environment or the secrets file. With none, the employer search uses only applicant tracking boards.
 - **Monitor › Background work:** what is running, and what is waiting and why (see `application.md`).
@@ -62,8 +63,8 @@ A change applies at once without a restart, except a change of the port. A chang
 - The first version supports four kinds of provider: **Ollama**, **OpenAI-compatible** (local or remote, with an API key), **Claude CLI** and **opencode CLI**. Anthropic models are reached through the Claude CLI or an OpenAI-compatible endpoint.
 - Each kind of model work uses its own provider. There is no silent fallback to another provider, and no fallback to a paid one.
 - Data leaves the machine only to the providers the user configured.
-- Bulk work (analysing documents) refuses a provider marked paid, unless "Allow paid bulk work" is on.
-- A user's action goes ahead of background model work. One model serves one call at a time.
+- Bulk work (analysing documents, and reading the companies of new vacancies) refuses a provider marked paid, unless "Allow paid bulk work" is on.
+- A user's action goes ahead of background model work. One model serves one call at a time. The bulk reading of companies also keeps out of the way: it makes no call until two minutes have passed since the user's last model call, so drafting answers in Shortlist is not slowed down.
 - A provider that does not answer (it cannot be reached, loads no model, returns an error status, or its command line is not signed in or gives no text) holds background model work for five minutes at a time (Settings › Background work shows the hold and until when), and then the next background call tries it again by itself; its success lifts the hold. A failure of one request — a prompt longer than the context, a command-line answer that is not what was asked for, or an answer in which the model tried to call a tool — fails only that piece of work and holds nothing, unless three requests in a row fail this way, which holds the provider like one that does not answer; any success starts the count again. Background work also waits when the pause switch or today's calls cannot be read, and every call that may have been paid counts against the daily limit, even one the user cancelled.
 - **API keys** come only from the environment or from a secrets file in the data folder, read at start without overriding variables already set. Saving settings that contain a key in plain text is refused.
 - **Command-line providers** run with a reduced environment and with tools, extensions and project settings turned off. An answer in which the model tried to call a tool is rejected.

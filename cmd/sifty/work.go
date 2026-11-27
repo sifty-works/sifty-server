@@ -33,6 +33,7 @@ var jobKinds = map[string]jobKind{
 	"analyze_vacancy":  {label: "Analyzing vacancy", subject: analysisSubject},
 	"shortlist_check":  {label: "Shortlist check", work: "shortlist_check", subject: shortlistSubject},
 	"analyze_document": {label: "Document analysis", work: "reading", subject: documentSubject},
+	"read_model":       {label: "Reading companies", work: "reading", subject: readSubject},
 }
 
 func documentSubject(ctx context.Context, database *db.DB, subject string) (string, error) {
@@ -41,6 +42,10 @@ func documentSubject(ctx context.Context, database *db.DB, subject string) (stri
 		return "", nil
 	}
 	return candidate.DocumentName(ctx, database, id)
+}
+
+func readSubject(_ context.Context, _ *db.DB, subject string) (string, error) {
+	return subject, nil
 }
 
 func shortlistSubject(ctx context.Context, database *db.DB, subject string) (string, error) {

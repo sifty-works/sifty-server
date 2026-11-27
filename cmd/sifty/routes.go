@@ -16,10 +16,13 @@ import (
 	"github.com/sifty-works/sifty-server/internal/server"
 )
 
-func enqueueRecomputeFit(database *db.DB, r *runner.Runner, log *slog.Logger) func() {
+func enqueueRecomputeFit(database *db.DB, r *runner.Runner, log *slog.Logger, rd *reading) func() {
 	return func() {
 		if err := queueAnalysis(context.Background(), database, r); err != nil {
 			log.Warn("analysis not queued", "err", err)
+		}
+		if err := rd.queue(context.Background()); err != nil {
+			log.Warn("reading not queued", "err", err)
 		}
 		r.Enqueue(runner.Spec{Kind: "recompute_fit"})
 	}
@@ -42,6 +45,7 @@ func registerAllRoutes(
 	modelReady func(kind string) error,
 	logPath string,
 	heldKeys func() []string,
+	rd *reading,
 ) {
 	enqueue := func(kind, subject string) (int64, error) {
 		if r == nil {
@@ -77,8 +81,8 @@ func registerAllRoutes(
 	server.Handle(mux, "GET /api/work", logger, workHandler(database, gate, r, now))
 	server.Handle(mux, "GET /api/logs", logger, logsHandler(database, r, now, logPath, heldKeys))
 	server.Handle(mux, "GET /api/models", logger, models.ModelsHandler(gate))
-	server.Handle(mux, "PATCH /api/models", logger, models.PatchModelsHandler(gate))
-	inbox.RegisterRoutes(mux, database, now, logger, collectActive, sourceNames, rules, recomputeFit, enqueueModelWork)
+	server.Handle(mux, "PATCH /api/models", logger, models.PatchModelsHandler(gate, recomputeFit))
+	inbox.RegisterRoutes(mux, database, now, logger, collectActive, sourceNames, rules, recomputeFit, enqueueModelWork, rd.opened)
 	candidate.RegisterRoutes(mux, database, filesDir, readers, logger, recomputeFit, enqueue)
 	server.Handle(mux, "POST /api/documents/{id}/cancel", logger, candidate.CancelAnalysisHandler(database, cancel))
 	col.RegisterRoutes(mux)

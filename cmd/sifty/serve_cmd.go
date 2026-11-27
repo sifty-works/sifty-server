@@ -155,12 +155,15 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		logger.Info("interrupted analyses set back to ready", "count", n)
 	}
 	rules := fitRules(store)
-	recomputeFit := enqueueRecomputeFit(database, r, logger)
+	rd := &reading{database: database, store: store, runner: r, ready: gate.Ready}
+	recomputeFit := enqueueRecomputeFit(database, r, logger, rd)
 	recomputeFit()
 
 	blocked := offline && flags.replayDir == ""
 	col := collect.New(store, cat, r, fetcher, database, blocked, nil, logger)
-	col.Follow = func(ctx context.Context) error { return queueAnalysis(ctx, database, r) }
+	col.Follow = func(ctx context.Context) error {
+		return errors.Join(queueAnalysis(ctx, database, r), rd.queue(ctx))
+	}
 	col.Register()
 
 	col.OnTick = func(now time.Time) {
@@ -209,7 +212,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			}
 			return m
 		}
-		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r, gate.Ready, filepath.Join(dataDir, logDir, logFileName), keys)
+		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r, gate.Ready, filepath.Join(dataDir, logDir, logFileName), keys, rd)
 	})
 
 	srv := &http.Server{
@@ -381,6 +384,19 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 		Serial: true,
 		Then:   []string{"recompute_fit"},
 		Run:    analysis.Job(database, loadForAnalysis(database)),
+	})
+
+	r.Register(runner.Kind{
+		Name:    analysis.ReadKind,
+		Resume:  true,
+		Serial:  true,
+		Patient: true,
+		Then:    []string{"recompute_fit"},
+		Run: analysis.ReadJob(database, loadForAnalysis(database),
+			func(class string, vid int64) models.Model {
+				return gate.For(models.NamedTask("read_domain").Work, class, vid)
+			},
+			func() bool { return store.Get().PreciseReading }),
 	})
 
 	r.Register(runner.Kind{

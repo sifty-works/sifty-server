@@ -57,7 +57,7 @@ func TestAnalysisSavesFactsWithoutModelCall(t *testing.T) {
 	fm := &models.FakeModel{}
 	r := runner.New(d, nil, time.Now, slog.Default())
 	registerKindsWith(t, r, d, fm)
-	enqueueRecomputeFit(d, r, slog.Default())()
+	enqueueRecomputeFit(d, r, slog.Default(), nil)()
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go r.Start(runCtx)

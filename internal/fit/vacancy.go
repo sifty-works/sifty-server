@@ -52,6 +52,7 @@ type Vacancy struct {
 	Clearance    string                      `json:"-"`
 	Relocation   string                      `json:"-"`
 	Visa         string                      `json:"-"`
+	Domains      []string                    `json:"-"`
 	Requirements []Requirement               `json:"-"`
 	Sources      map[facts.Kind]facts.Source `json:"-"`
 	Judged       []Judged                    `json:"-"`
@@ -123,6 +124,8 @@ func FromFacts(title string, full bool, set facts.Set) Vacancy {
 			if v.Visa == "" {
 				v.Visa = f.Value
 			}
+		case facts.Domain:
+			add(&v.Domains, f.Value)
 		case facts.TimeZone:
 			if v.TimeZone == "" {
 				v.TimeZone = f.Value

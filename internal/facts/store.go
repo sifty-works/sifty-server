@@ -69,7 +69,7 @@ func Load(ctx context.Context, database *db.DB, vacancies ...int64) (map[int64]S
 		}
 		set := out[f.Vacancy]
 		if f.Kind == Analysed {
-			set.Analysed = true
+			set.Analysed = set.Analysed || f.Source.Way != Model
 			if set.Key != "" {
 				set.Key += ","
 			}

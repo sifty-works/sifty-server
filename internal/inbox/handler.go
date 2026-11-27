@@ -1,6 +1,7 @@
 package inbox
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -99,7 +100,7 @@ type SkillsDecisionResp struct {
 	VacancyView VacancyView `json:"vacancyView"`
 }
 
-func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, logger *slog.Logger, collectActive func() bool, getSourceNames func() map[string]string, rules func() fit.Rules, changed func(), enqueue func(kind, subject string) (int64, error)) {
+func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, logger *slog.Logger, collectActive func() bool, getSourceNames func() map[string]string, rules func() fit.Rules, changed func(), enqueue func(kind, subject string) (int64, error), opened func(ctx context.Context, vacancyID int64) error) {
 	cat := catalog.New(database, now)
 	if rules == nil {
 		rules = func() fit.Rules { d := config.Defaults(); return fit.Rules{Weights: d.Weights, Rates: d.Rates} }
@@ -205,6 +206,11 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		vacancyID, err := resolveVacancy(r.Context(), database, id)
 		if err != nil {
 			return VacancyView{}, err
+		}
+		if opened != nil {
+			if err := opened(r.Context(), vacancyID); err != nil {
+				logger.Warn("reading of an opened vacancy not queued", "vacancy", vacancyID, "err", err)
+			}
 		}
 		return vacancyView(r.Context(), database, now, enqueue, vacancyID, pid, sourceNamesFor(), rules())
 	})

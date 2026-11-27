@@ -788,3 +788,59 @@ func TestTaskAnswerUnreadableAskedOnce(t *testing.T) {
 		})
 	}
 }
+
+func TestIdleCallWaitsTwoMinutesAfterAUserCall(t *testing.T) {
+	f := newGateFixture(t, 0, 0, nil)
+	ctx := context.Background()
+
+	if _, err := f.gate.For("reading", "user").Complete(ctx, models.Request{Prompt: "drafting"}); err != nil {
+		t.Fatalf("user call: %v", err)
+	}
+	_, err := f.gate.For("reading", "idle").Complete(ctx, models.Request{Prompt: "bulk"})
+	we, ok := err.(models.WaitError)
+	if !ok {
+		t.Fatalf("idle call right after a user call: got %v, want WaitError", err)
+	}
+	if !we.RetryAfter.After(time.Now().Add(time.Minute)) {
+		t.Errorf("RetryAfter = %v, want about two minutes ahead", we.RetryAfter)
+	}
+	if _, err := f.background(ctx, "opened"); err != nil {
+		t.Errorf("background call right after a user call: %v", err)
+	}
+
+	f.advance(2 * time.Minute)
+	if _, err := f.gate.For("reading", "idle").Complete(ctx, models.Request{Prompt: "bulk"}); err != nil {
+		t.Errorf("idle call two minutes after a user call: %v", err)
+	}
+}
+
+func TestIdleCallIsRefusedOnPaidAndAtTheDailyLimitLikeAnyBackgroundCall(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"choices": []map[string]interface{}{{"message": map[string]string{"content": "ok"}}},
+			"usage":   map[string]int{},
+		})
+	}))
+	defer srv.Close()
+	ctx := context.Background()
+
+	cfg := config.Defaults()
+	cfg.Providers = map[string]config.ProviderConfig{"remote": providerConfig("openai", srv.URL, "gpt-4o", "paid")}
+	cfg.Work = config.WorkConfig{"reading": "remote"}
+	store := openTestStore(t, cfg)
+	gate := models.NewGate(openTestDB(t), store, false, nil, nil)
+	defer gate.Stop(ctx)
+	if _, err := gate.For("reading", "idle").Complete(ctx, models.Request{Prompt: "bulk"}); !errors.Is(err, models.ErrBulkOnPaid) {
+		t.Errorf("idle call on paid without permission: got %v, want ErrBulkOnPaid", err)
+	}
+
+	store.Update(func(c *config.Config) error { c.AllowPaidBulk = true; c.DailyModelLimit = 1; return nil })
+	gate2 := models.NewGate(openTestDB(t), store, false, nil, nil)
+	defer gate2.Stop(ctx)
+	if _, err := gate2.For("reading", "idle").Complete(ctx, models.Request{Prompt: "first"}); err != nil {
+		t.Fatalf("first idle call: %v", err)
+	}
+	if _, err := gate2.For("reading", "idle").Complete(ctx, models.Request{Prompt: "second"}); !errors.As(err, new(models.WaitError)) {
+		t.Errorf("idle call at the daily limit: got %v, want WaitError", err)
+	}
+}

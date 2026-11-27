@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- The model set for Reading can now read each company's main domain (Exchange, DeFi, Infrastructure, Gambling and 18 more) from its newest vacancy, once per company. It shows as a Domain row in Key facts, marked "Read by the model", and does not change Fit yet. Settings → Models has a "Precise reading" switch, off by default: on, every new vacancy's company is read in the background, newest first, waiting two minutes after you last used a model; off, only the company of a vacancy you open is read. On a paid provider background reading also needs "Allow paid bulk work". A local model takes about 1.5 seconds per company.
+
 ## 0.14.0
 
 - Requirement lines no longer take in benefits, pay ranges, equal-opportunity, how-to-apply and hiring-process text: a heading glued to a paragraph ("…on your CV.Benefits & Perks;") or written inside one ("…planning. What We Look For In You 10+ years…") now opens its section, prose after a requirements section's last list is not a requirement, and such lines are never requirements. Headings the analysis did not know ("Minimum requirements", "What you bring", "Must-haves", "Your profile" and about sixty more) are read. Every vacancy is analysed again once.

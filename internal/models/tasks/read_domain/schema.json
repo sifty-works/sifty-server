@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "domains": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "domain": {"type": "string", "enum": "{{domains}}"},
+          "quote":  {"type": "string"}
+        },
+        "required": ["domain", "quote"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["domains"],
+  "additionalProperties": false
+}

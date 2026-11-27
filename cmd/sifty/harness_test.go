@@ -111,6 +111,11 @@ func newRouteServer(t *testing.T, d *db.DB, r *runner.Runner) string {
 
 func newRouteServerWithReaders(t *testing.T, d *db.DB, r *runner.Runner, readers candidate.Readers) string {
 	t.Helper()
+	return newRouteServerWithReading(t, d, r, readers, nil)
+}
+
+func newRouteServerWithReading(t *testing.T, d *db.DB, r *runner.Runner, readers candidate.Readers, rd *reading) string {
+	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
@@ -123,7 +128,7 @@ func newRouteServerWithReaders(t *testing.T, d *db.DB, r *runner.Runner, readers
 		Logger:            logger,
 		BinaryUploadPaths: []string{"/api/documents"},
 	}, func(mux *http.ServeMux) {
-		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, enqueueRecomputeFit(d, r, logger), t.TempDir(), readers, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r, nil, filepath.Join(t.TempDir(), logFileName), nil)
+		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, enqueueRecomputeFit(d, r, logger, rd), t.TempDir(), readers, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r, nil, filepath.Join(t.TempDir(), logFileName), nil, rd)
 	})
 	ts := httptest.NewUnstartedServer(h)
 	ts.Listener = l

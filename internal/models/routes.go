@@ -16,10 +16,11 @@ type checkResp struct {
 }
 
 type modelsPatch struct {
-	Work          map[string]string `json:"work,omitempty"`
-	AllowPaidBulk *bool             `json:"allowPaidBulk,omitempty"`
-	Paused        *bool             `json:"paused,omitempty"`
-	DailyLimit    *int              `json:"dailyLimit,omitempty"`
+	Work           map[string]string `json:"work,omitempty"`
+	AllowPaidBulk  *bool             `json:"allowPaidBulk,omitempty"`
+	Paused         *bool             `json:"paused,omitempty"`
+	DailyLimit     *int              `json:"dailyLimit,omitempty"`
+	PreciseReading *bool             `json:"preciseReading,omitempty"`
 }
 
 type providerView struct {
@@ -37,12 +38,13 @@ type workView struct {
 }
 
 type modelsResp struct {
-	Providers     []providerView `json:"providers"`
-	Work          []workView     `json:"work"`
-	AllowPaidBulk bool           `json:"allowPaidBulk"`
-	Paused        bool           `json:"paused"`
-	DailyLimit    int            `json:"dailyLimit"`
-	TodayCalls    int            `json:"todayCalls"`
+	Providers      []providerView `json:"providers"`
+	Work           []workView     `json:"work"`
+	AllowPaidBulk  bool           `json:"allowPaidBulk"`
+	Paused         bool           `json:"paused"`
+	DailyLimit     int            `json:"dailyLimit"`
+	TodayCalls     int            `json:"todayCalls"`
+	PreciseReading bool           `json:"preciseReading"`
 }
 
 func getModels(ctx context.Context, gate *Gate) modelsResp {
@@ -69,18 +71,19 @@ func getModels(ctx context.Context, gate *Gate) modelsResp {
 	out.AllowPaidBulk = cfg.AllowPaidBulk
 	out.Paused = status.Paused
 	out.DailyLimit = cfg.DailyModelLimit
+	out.PreciseReading = cfg.PreciseReading
 	out.TodayCalls = gate.TodayBackgroundCalls(ctx)
 	return out
 }
 
-func patchModels(ctx context.Context, gate *Gate, req modelsPatch) (modelsResp, error) {
+func patchModels(ctx context.Context, gate *Gate, req modelsPatch, changed func()) (modelsResp, error) {
 	if gate == nil {
 		return getModels(ctx, gate), nil
 	}
 	if req.DailyLimit != nil && *req.DailyLimit < 0 {
 		return modelsResp{}, apperr.Invalid{Message: "The daily limit of background model calls is 0 or more; 0 means no limit."}
 	}
-	if req.Work != nil || req.AllowPaidBulk != nil || req.DailyLimit != nil {
+	if req.Work != nil || req.AllowPaidBulk != nil || req.DailyLimit != nil || req.PreciseReading != nil {
 		err := gate.Store().Update(func(c *config.Config) error {
 			for kind, provider := range req.Work {
 				if !c.SetWorkProvider(kind, provider) {
@@ -93,10 +96,16 @@ func patchModels(ctx context.Context, gate *Gate, req modelsPatch) (modelsResp, 
 			if req.DailyLimit != nil {
 				c.DailyModelLimit = *req.DailyLimit
 			}
+			if req.PreciseReading != nil {
+				c.PreciseReading = *req.PreciseReading
+			}
 			return nil
 		})
 		if err != nil {
 			return modelsResp{}, err
+		}
+		if changed != nil && (req.Work != nil || req.PreciseReading != nil || req.AllowPaidBulk != nil) {
+			changed()
 		}
 	}
 	if req.Paused != nil {
@@ -130,8 +139,8 @@ func ModelsHandler(gate *Gate) func(*http.Request, struct{}) (modelsResp, error)
 	}
 }
 
-func PatchModelsHandler(gate *Gate) func(*http.Request, modelsPatch) (modelsResp, error) {
+func PatchModelsHandler(gate *Gate, changed func()) func(*http.Request, modelsPatch) (modelsResp, error) {
 	return func(r *http.Request, req modelsPatch) (modelsResp, error) {
-		return patchModels(r.Context(), gate, req)
+		return patchModels(r.Context(), gate, req, changed)
 	}
 }

@@ -53,17 +53,24 @@ func Queue(ctx context.Context, database *db.DB, eligible string, args []any, r 
 	if err != nil {
 		return err
 	}
+	subjects := make([]string, len(pending))
+	for i, c := range pending {
+		subjects[i] = Subject(c.Vacancy, c.Version)
+	}
+	return enqueueNew(r, Kind, subjects)
+}
+
+func enqueueNew(r *runner.Runner, kind string, subjects []string) error {
 	active := map[string]bool{}
-	for _, j := range r.Active(Kind) {
+	for _, j := range r.Active(kind) {
 		active[j.Subject] = true
 	}
-	for _, c := range pending {
-		subject := Subject(c.Vacancy, c.Version)
+	for _, subject := range subjects {
 		if active[subject] {
 			continue
 		}
-		if _, err := r.Enqueue(runner.Spec{Kind: Kind, Subject: subject}); err != nil {
-			return fmt.Errorf("analysis: queue: %w", err)
+		if _, err := r.Enqueue(runner.Spec{Kind: kind, Subject: subject}); err != nil {
+			return fmt.Errorf("analysis: queue %s: %w", kind, err)
 		}
 	}
 	return nil

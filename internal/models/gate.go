@@ -25,7 +25,11 @@ type Gate struct {
 
 	mu      sync.Mutex
 	entries map[string]*providerEntry
+
+	lastUser atomic.Int64
 }
+
+const userQuiet = 2 * time.Minute
 
 type providerEntry struct {
 	model    Model
@@ -74,7 +78,7 @@ func (g *Gate) Ready(work string) error {
 }
 
 func (g *Gate) For(kind, class string, vacancy ...int64) Model {
-	c := &gatedCall{gate: g, kind: kind, background: class == "background"}
+	c := &gatedCall{gate: g, kind: kind, background: class == "background" || class == "idle", idle: class == "idle"}
 	if len(vacancy) > 0 {
 		c.vacancyID = sql.NullInt64{Int64: vacancy[0], Valid: true}
 	}
@@ -85,6 +89,7 @@ type gatedCall struct {
 	gate       *Gate
 	kind       string
 	background bool
+	idle       bool
 	vacancyID  sql.NullInt64
 }
 
@@ -123,6 +128,11 @@ func (c *gatedCall) Complete(ctx context.Context, r Request) (Response, error) {
 		if reached {
 			return Response{}, WaitError{RetryAfter: until}
 		}
+		if c.idle {
+			if until := time.Unix(0, c.gate.lastUser.Load()).Add(userQuiet); c.gate.now().Before(until) {
+				return Response{}, WaitError{RetryAfter: until}
+			}
+		}
 		if atomic.LoadInt32(&entry.waitUser) > 0 {
 			return Response{}, WaitError{RetryAfter: time.Now().Add(5 * time.Second)}
 		}
@@ -141,7 +151,12 @@ func (c *gatedCall) Complete(ctx context.Context, r Request) (Response, error) {
 			return Response{}, ctx.Err()
 		}
 	}
-	defer func() { entry.mu <- struct{}{} }()
+	defer func() {
+		if !c.background {
+			c.gate.lastUser.Store(c.gate.now().UnixNano())
+		}
+		entry.mu <- struct{}{}
+	}()
 
 	if c.background {
 		if h, held := entry.hold(c.gate.now()); held {

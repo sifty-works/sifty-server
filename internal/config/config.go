@@ -118,6 +118,7 @@ type Config struct {
 	Work            WorkConfig                `yaml:"work,omitempty"`
 	AllowPaidBulk   bool                      `yaml:"allow_paid_bulk,omitempty"`
 	DailyModelLimit int                       `yaml:"daily_model_limit,omitempty"`
+	PreciseReading  bool                      `yaml:"precise_reading,omitempty"`
 }
 
 func Defaults() Config {
@@ -220,7 +221,7 @@ func parse(data []byte) (Config, []string, error) {
 	}
 
 	knownTop := map[string]bool{"port": true, "debug": true, "collection": true, "sources": true, "weights": true, "rates": true,
-		"providers": true, "work": true, "allow_paid_bulk": true, "daily_model_limit": true}
+		"providers": true, "work": true, "allow_paid_bulk": true, "daily_model_limit": true, "precise_reading": true}
 	knownCollection := map[string]bool{"auto": true, "interval": true, "max_age_months": true}
 	knownSource := map[string]bool{"name": true, "url": true, "enabled": true}
 	knownProvider := map[string]bool{"type": true, "model": true, "endpoint": true, "cost": true, "timeout": true, "context": true, "key_env": true}

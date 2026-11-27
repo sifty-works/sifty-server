@@ -130,6 +130,9 @@ func applyDiff(root *yaml.Node, old, new Config) {
 	if old.AllowPaidBulk != new.AllowPaidBulk {
 		setScalar(root, "allow_paid_bulk", strconv.FormatBool(new.AllowPaidBulk), "!!bool")
 	}
+	if old.PreciseReading != new.PreciseReading {
+		setScalar(root, "precise_reading", strconv.FormatBool(new.PreciseReading), "!!bool")
+	}
 	if old.DailyModelLimit != new.DailyModelLimit {
 		setScalar(root, "daily_model_limit", strconv.Itoa(new.DailyModelLimit), "!!int")
 	}
