@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.17.0
+
 - "Precise reading" is on by default when the model set for Reading is local, and off for a free or paid provider; a choice made in Settings stays. With a local model, every company's domain is now read in the background, newest first.
 - The vacancy band: a larger "Fit" label; "N skills to answer" sits at the bottom of the score column; each Skills column has its own title and count ("Skills required (2 of 3)"), and a single column spans the band; no line under the last Key facts row. The Other requirements header shows its count in brackets.
 
