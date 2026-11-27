@@ -351,3 +351,38 @@ func Short(locations []string) (shown, full string) {
 	}
 	return strings.Join(locations[:2], Separator) + fmt.Sprintf(" +%d more", len(locations)-2), joined
 }
+
+func Names(labels []string) string {
+	var names []string
+	for _, l := range labels {
+		name := l
+		switch p := Resolve(l); {
+		case len(p.Countries) == 1:
+			if n, ok := CountryName(p.Countries[0]); ok {
+				name = n
+			}
+		case len(p.Countries) > 1:
+			if at := slices.IndexFunc(regions, func(r ReferenceRegion) bool { return slices.Equal(r.Countries, p.Countries) }); at >= 0 {
+				name = regions[at].Name
+			}
+		}
+		if name != "" && !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return strings.Join(names, " or ")
+}
+
+func FreeMovement(codes []string) []string {
+	zone := slices.Concat(Codes("EEA"), []string{"CH"})
+	if !slices.ContainsFunc(codes, func(c string) bool { return slices.Contains(zone, c) }) {
+		return codes
+	}
+	out := slices.Clone(codes)
+	for _, c := range zone {
+		if !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	return out
+}

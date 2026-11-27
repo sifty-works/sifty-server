@@ -116,7 +116,7 @@ func TestEachCriterionMatchesMismatchesOrCannotBeCompared(t *testing.T) {
 		{"never work mode", "work_mode", goals(candidate.GoalsView{WorkMode: candidate.Buckets{Preferred: []string{"remote"}, Never: []string{"onsite"}}}), vacancy{Location: "Onsite"}, 0},
 		{"the best of several work modes counts", "work_mode", goals(candidate.GoalsView{WorkMode: candidate.Buckets{Preferred: []string{"hybrid"}, Never: []string{"onsite"}}}), vacancy{Text: "Work mode: Hybrid or Onsite"}, 1},
 		{"work mode not stated", "work_mode", goals(candidate.GoalsView{WorkMode: preferred("remote")}), vacancy{}, -1},
-		{"restricted remote leaves work mode to the restriction", "work_mode", goals(candidate.GoalsView{WorkMode: preferred("remote")}), vacancy{Location: "Remote (US only) · Remote"}, -1},
+		{"restricted remote is compared by the work mode lists", "work_mode", goals(candidate.GoalsView{WorkMode: preferred("remote")}), vacancy{Location: "Remote (US only) · Remote"}, 1},
 		{"preferred domain", "domain", goals(candidate.GoalsView{Domain: preferred("exchange")}), vacancy{Domain: "exchange"}, 1},
 		{"never domain", "domain", goals(candidate.GoalsView{Domain: candidate.Buckets{Preferred: []string{"exchange"}, Never: []string{"gambling"}}}), vacancy{Domain: "gambling"}, 0},
 		{"domain not read cannot be compared", "domain", goals(candidate.GoalsView{Domain: preferred("exchange")}), vacancy{}, -1},
@@ -157,7 +157,9 @@ func TestRemoteRestrictionIsCheckedAgainstWorkAuthorizations(t *testing.T) {
 		{"unrestricted without user geography", "Remote · Anywhere", nil, 1},
 		{"remote with no place is not comparable", "Remote", nil, -1},
 		{"needs a visa for the country", "Remote (US only)", []candidate.WorkAuthorization{eligibleEU, {Country: "US", Status: "need_visa"}}, 0},
-		{"no authorization stated for the country", "Remote (US only)", []candidate.WorkAuthorization{eligibleEU}, -1},
+		{"no authorization for the country while the profile names others", "Remote (US only)", []candidate.WorkAuthorization{eligibleEU}, 0},
+		{"an eligible authorization in one country of the free movement zone covers the others", "Remote - Spain", []candidate.WorkAuthorization{{Country: "DE", Status: "eligible"}}, 1},
+		{"restricted remote and no authorization in the profile", "Remote (US only)", nil, -1},
 		{"unknown place", "Remote - Atlantis", []candidate.WorkAuthorization{eligibleEU}, -1},
 		{"not remote", "Lisbon, Portugal", []candidate.WorkAuthorization{eligibleEU}, -1},
 	}
@@ -298,6 +300,8 @@ func TestBrokenMustCapsByItsSourceAndUnknownMustCostsHalfItsWeight(t *testing.T)
 			[]facts.Fact{{Kind: facts.Domain, Value: "gambling", Source: facts.Source{Way: facts.Model, Origin: facts.Employer}}}, 40, false, "Gambling — in your Never list", 2},
 		{"a domain list alone is a goal", goals(candidate.GoalsView{Domain: candidate.Buckets{Unwanted: []string{"exchange"}}}),
 			[]facts.Fact{{Kind: facts.Domain, Value: "exchange", Source: facts.Source{Way: facts.Model, Origin: facts.Employer}}}, 25, false, "Exchange — unwanted", 1},
+		{"remote only in a country the profile does not list", fit.ProfileView{Goals: candidate.GoalsView{TargetRoles: []string{"Go Engineer"}}, Authorizations: []candidate.WorkAuthorization{{Country: "DE", Status: "eligible"}}},
+			[]facts.Fact{fact(facts.WorkMode, "remote", inText), fact(facts.Place, "US", inText)}, 15, true, "Remote only in United States — not in your work authorizations", 2},
 		{"mismatch on a preferred criterion caps nothing", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Compensation: eur}),
 			[]facts.Fact{money(45000, inText)}, 78, false, "Pays €45k a year — below your minimum of EUR 90,000 a year", 2},
 	}
@@ -382,7 +386,7 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 		{Name: "Work mode", Value: "remote", Line: "Remote — in your Never list", Verdict: "✕", Bucket: "never"},
 		{Name: "Contract", Value: "employment", Line: "Employment — preferred", Verdict: "✓", Bucket: "preferred"},
 		{Name: "Time zone", Value: "Europe & Africa", Line: "Time zone fits Europe & Africa", Verdict: "✓"},
-		{Name: "Languages", Value: "Not stated", Line: "Not stated in the vacancy", Verdict: "?"},
+		{Name: "Languages", Value: "Not stated", Line: "Not stated", Verdict: "?"},
 		{Name: "Hours", Value: "full-time", Line: "Full-time — possible", Verdict: "✓", Bucket: "possible"},
 		{Name: "Work authorization", Value: "Remote (EU only)", Line: "Remote work is open to you there", Verdict: "✓"},
 		{Name: "Domain", Value: "Exchange", Line: "Exchange — preferred · read by the model", Verdict: "✓", Bucket: "preferred"},
@@ -420,7 +424,7 @@ func TestTilesNeverDisagreeWithTheCriteria(t *testing.T) {
 		t.Errorf("a language the user lacks: Languages tile = %+v", lang)
 	}
 	noZone := tile(score(goals(candidate.GoalsView{EngagementType: preferred("employment")}), vacancy{Title: "Builder"}), "Time zone")
-	if noZone.Value != "Not stated" || noZone.Verdict != "?" || noZone.Line != "No preference stated" {
+	if noZone.Value != "Not stated" || noZone.Verdict != "?" || noZone.Line != "Not stated" {
 		t.Errorf("no time zone stated, no time zone goal: Time zone tile = %+v", noZone)
 	}
 	if c := tile(score(goals(candidate.GoalsView{EngagementType: preferred("employment")}), vacancy{Title: "Builder"}), "Contract"); c.Value != "Not stated" || c.Verdict != "?" {
@@ -444,8 +448,8 @@ func TestApplyByTileIsClosedOnlyAfterItsDay(t *testing.T) {
 	p := goals(candidate.GoalsView{TargetRoles: []string{"Engineer"}})
 	p.Today = time.Date(2026, 12, 10, 15, 30, 0, 0, time.UTC)
 	cases := []struct{ name, deadline, verdict, line string }{
-		{"tomorrow is still open", "2026-12-11", "?", ""},
-		{"today is the last day", "2026-12-10", "?", "Closes today"},
+		{"tomorrow is still open", "2026-12-11", "–", ""},
+		{"today is the last day", "2026-12-10", "–", "Closes today"},
 		{"yesterday is closed", "2026-12-09", "✕", ""},
 	}
 	for _, tc := range cases {

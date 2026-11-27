@@ -144,11 +144,18 @@ func compareLocation(v Vacancy, p ProfileView, s Strictness) Verdict {
 func compareAuthorization(v Vacancy, p ProfileView, s Strictness) Verdict {
 	g := geoOf(v)
 	if !g.remote {
-		return skipped()
+		return Verdict{Outcome: Skipped, Reason: "Checked for remote vacancies only"}
 	}
-	where, _ := places.Short(v.Locations)
-	return result(restriction(p.Authorizations, g.places, g.remote, g.anywhere, g.known), v.Sources[facts.Place], s,
-		"Remote work is open to you there", "Remote only in "+where+" — you need a visa there", "Work authorization not stated")
+	where := places.Names(v.Locations)
+	u, listed := restriction(p.Authorizations, g.places, g.anywhere, g.known)
+	mismatch, unknown := "Remote only in "+where+" — not in your work authorizations", "Work authorization not stated"
+	if listed {
+		mismatch = "Remote only in " + where + " — you need a visa there"
+	}
+	if g.known && len(g.countries) > 0 && len(p.Authorizations) == 0 {
+		unknown = "Add your work authorizations to the profile"
+	}
+	return result(u, v.Sources[facts.Place], s, "Remote work is open to you there", mismatch, unknown)
 }
 
 func compareTimeZone(v Vacancy, p ProfileView, s Strictness) Verdict {
@@ -174,12 +181,7 @@ func compareWorkMode(v Vacancy, p ProfileView, s Strictness) Verdict {
 	if b.IsZero() {
 		return skipped()
 	}
-	hits := valueHits(b, v.WorkModes)
-	r := bucketVerdict(hits, v.Sources[facts.WorkMode], "Work mode not stated")
-	if g := geoOf(v); len(hits) > 0 && bestHit(hits).label == "Remote" && !g.open && (r.Bucket == candidate.Preferred || r.Bucket == candidate.Possible) {
-		return Verdict{Outcome: Unknown, Reason: "Remote — see Work authorization"}
-	}
-	return r
+	return bucketVerdict(valueHits(b, v.WorkModes), v.Sources[facts.WorkMode], "Work mode not stated")
 }
 
 func compareEngagement(v Vacancy, p ProfileView, s Strictness) Verdict {
@@ -280,7 +282,7 @@ func moneyValue(m *Money) string {
 func moneyTile(v Vacancy, _ geo, rates map[string]float64) (string, string, string) {
 	m := v.Money
 	if m == nil {
-		return "Not stated", "", ""
+		return notStated, "", ""
 	}
 	if eur := convert(m.Max, m, "EUR", "year", rates); eur > 0 {
 		return moneyValue(m), "≈ €" + amount(rounded(eur)), ""
@@ -298,18 +300,18 @@ func timeZoneTile(v Vacancy, g geo, _ map[string]float64) (string, string, strin
 			zones = append(zones, b.Label)
 		}
 	}
-	return list(zones, "Not stated"), "", ""
+	return list(zones, notStated), "", ""
 }
 
 func authorizationTile(v Vacancy, g geo, _ map[string]float64) (string, string, string) {
 	if !g.remote {
-		return "Not stated", "", ""
+		return "Not checked", "", ""
 	}
 	if g.anywhere {
 		return "No restriction", "", ""
 	}
 	short, full := places.Short(v.Locations)
-	return list([]string{short}, "Not stated"), "", full
+	return list([]string{short}, notStated), "", full
 }
 
 func locationTile(v Vacancy, g geo, _ map[string]float64) (string, string, string) {
@@ -320,23 +322,23 @@ func locationTile(v Vacancy, g geo, _ map[string]float64) (string, string, strin
 	case g.anywhere:
 		return "Remote, anywhere", "", ""
 	}
-	return "Not stated", "", ""
+	return notStated, "", ""
 }
 
 func contractTile(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
-	return list(strings.Fields(v.Engagement), "Not stated"), "", ""
+	return list(strings.Fields(v.Engagement), notStated), "", ""
 }
 
 func hoursTile(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
 	h := v.Hours
 	if h == nil {
-		return "Not stated", "", ""
+		return notStated, "", ""
 	}
-	return list([]string{h.Mode, strings.Trim(amount(h.Min)+"–"+amount(h.Max), "–") + map[bool]string{true: " h/week"}[h.Max > 0]}, "Not stated"), "", ""
+	return list([]string{h.Mode, strings.Trim(amount(h.Min)+"–"+amount(h.Max), "–") + map[bool]string{true: " h/week"}[h.Max > 0]}, notStated), "", ""
 }
 
 func languagesTile(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
-	return list(v.Languages, "Not stated"), "", ""
+	return list(v.Languages, notStated), "", ""
 }
 
 const shortfallYears = 2
@@ -348,7 +350,7 @@ func keyFactTiles(v Vacancy, p ProfileView, cs []Criterion) []Tile {
 	}
 	for _, t := range []Tile{{Name: "Seniority", Value: v.Seniority}, {Name: "Company stage", Value: v.Stage}} {
 		if t.Value != "" {
-			t.Verdict = "?"
+			t.Verdict = neutral
 			out = append(out, t)
 		}
 	}
@@ -368,12 +370,12 @@ func domainTile(v Vacancy, p ProfileView, cs []Criterion) []Tile {
 	if len(v.Domains) == 0 && !goal {
 		return nil
 	}
-	t := Tile{Name: "Domain", Value: "Not stated", Verdict: "?"}
+	t := Tile{Name: "Domain", Value: notStated, Verdict: neutral}
 	if len(v.Domains) > 0 {
 		t.Value, t.Line = strings.Join(domainLabels(v.Domains), " · "), "Read by the model"
 	}
 	if goal {
-		line, verdict, bucket := tileLine(cs, "domain", "")
+		line, verdict, bucket := tileLine(cs, "domain", len(v.Domains) > 0)
 		if len(v.Domains) > 0 {
 			line += " · read by the model"
 		}
@@ -388,7 +390,7 @@ func conditionTiles(v Vacancy, today time.Time) []Tile {
 		out = append(out, applyByTile(v.Deadline, today))
 	}
 	if v.Length != "" {
-		out = append(out, Tile{Name: "Contract length", Value: v.Length, Verdict: "?"})
+		out = append(out, Tile{Name: "Contract length", Value: v.Length, Verdict: neutral})
 	}
 	for _, t := range []Tile{
 		{Name: "Citizenship or clearance", Value: v.Clearance},
@@ -396,7 +398,7 @@ func conditionTiles(v Vacancy, today time.Time) []Tile {
 		{Name: "Visa", Value: map[string]string{"offered": "Sponsorship offered", "refused": "No sponsorship"}[v.Visa]},
 	} {
 		if t.Value != "" {
-			t.Verdict = "?"
+			t.Verdict = neutral
 			out = append(out, t)
 		}
 	}
@@ -411,7 +413,7 @@ func plural(n int, unit string) string {
 }
 
 func applyByTile(deadline string, today time.Time) Tile {
-	t := Tile{Name: "Apply by", Value: deadline, Verdict: "?"}
+	t := Tile{Name: "Apply by", Value: deadline, Verdict: neutral}
 	date, err := time.Parse("2006-01-02", deadline)
 	if err != nil {
 		return t

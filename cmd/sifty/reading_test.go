@@ -144,7 +144,7 @@ func TestPreciseReadingReadsNewestCompanyFirstAndEachCompanyOnce(t *testing.T) {
 	}
 	for id, want := range map[int64]string{older: "Exchange", newer: "Exchange", orbit: "Payments", north: "DeFi"} {
 		tile := f.domainTile(t, id)
-		if tile == nil || tile["value"] != want || tile["line"] != "Read by the model" || tile["verdict"] != "?" {
+		if tile == nil || tile["value"] != want || tile["line"] != "Read by the model" || tile["verdict"] != "–" {
 			t.Errorf("vacancy %d Domain tile = %v, want %s read by the model", id, tile, want)
 		}
 	}

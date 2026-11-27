@@ -144,22 +144,26 @@ func (f Fit) Open() []Open {
 	return out
 }
 
+const (
+	notStated = "Not stated"
+	neutral   = "–"
+)
+
 var tiles = []struct {
 	name      string
 	criterion string
-	empty     string
 	value     func(v Vacancy, g geo, rates map[string]float64) (value, converted, full string)
 }{
-	{"Money", "money", "No minimum stated", moneyTile},
-	{"Location", "location", "No preference stated", locationTile},
-	{"Work mode", "work_mode", "You want: not stated", func(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
-		return list(v.WorkModes, "Not stated"), "", ""
+	{"Money", "money", moneyTile},
+	{"Location", "location", locationTile},
+	{"Work mode", "work_mode", func(v Vacancy, _ geo, _ map[string]float64) (string, string, string) {
+		return list(v.WorkModes, notStated), "", ""
 	}},
-	{"Contract", "engagement", "You want: not stated", contractTile},
-	{"Time zone", "time_zone", "No preference stated", timeZoneTile},
-	{"Languages", "languages", "Not stated in the vacancy", languagesTile},
-	{"Hours", "hours", "You want: not stated", hoursTile},
-	{"Work authorization", "remote_restriction", "Checked for remote vacancies only", authorizationTile},
+	{"Contract", "engagement", contractTile},
+	{"Time zone", "time_zone", timeZoneTile},
+	{"Languages", "languages", languagesTile},
+	{"Hours", "hours", hoursTile},
+	{"Work authorization", "remote_restriction", authorizationTile},
 }
 
 func Score(p ProfileView, v Vacancy, r Rules) Fit {
@@ -216,7 +220,7 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 	g := geoOf(v)
 	for _, t := range tiles {
 		value, converted, full := t.value(v, g, r.Rates)
-		line, verdict, bucket := tileLine(f.Criteria, t.criterion, t.empty)
+		line, verdict, bucket := tileLine(f.Criteria, t.criterion, value != notStated)
 		f.Tiles = append(f.Tiles, Tile{t.name, value, converted, full, line, verdict, bucket})
 	}
 	f.Tiles = append(f.Tiles, keyFactTiles(v, p, f.Criteria)...)
@@ -244,21 +248,28 @@ func noGoals(g candidate.GoalsView) bool {
 		(g.Compensation == nil || g.Compensation.CashMin == nil || *g.Compensation.CashMin <= 0)
 }
 
-func tileLine(cs []Criterion, name, empty string) (string, string, string) {
+func tileLine(cs []Criterion, name string, stated bool) (string, string, string) {
 	for _, c := range cs {
-		if c.Name != name || c.Outcome == Skipped && c.Reason == "" {
+		if c.Name != name {
 			continue
 		}
-		verdict := map[Outcome]string{Match: "✓", Mismatch: "✕"}[c.Outcome]
-		if verdict == "" {
-			verdict = "?"
+		switch {
+		case c.Outcome == Match:
+			return c.Reason, "✓", c.Bucket
+		case c.Outcome == Mismatch:
+			return c.Reason, "✕", c.Bucket
+		case c.Outcome == Skipped && c.Reason != "":
+			return c.Reason, neutral, ""
+		case c.Outcome == Unknown && c.Reason != "":
+			return c.Reason, "?", ""
+		case c.Outcome == Unknown && stated:
+			return "Cannot be compared with your goal", neutral, ""
 		}
-		if c.Reason == "" {
-			c.Reason = "Not stated in the vacancy"
-		}
-		return c.Reason, verdict, c.Bucket
 	}
-	return empty, "?", ""
+	if stated {
+		return "No preference stated", neutral, ""
+	}
+	return notStated, "?", ""
 }
 
 func Bucket(score int) string {
@@ -335,29 +346,35 @@ func perYear(period string) float64 {
 	return 1
 }
 
-func restriction(auths []candidate.WorkAuthorization, ps []places.Place, remote, open, known bool) float64 {
+func restriction(auths []candidate.WorkAuthorization, ps []places.Place, open, known bool) (float64, bool) {
 	switch {
-	case !remote:
-		return na
 	case open:
-		return 1
+		return 1, false
 	case !known:
-		return na
+		return na, false
 	}
 	var restricted []string
 	for _, pl := range ps {
 		restricted = append(restricted, pl.Countries...)
 	}
-	out := na
+	out, listed := na, false
+	if len(auths) > 0 && len(restricted) > 0 {
+		out = 0
+	}
 	for _, a := range auths {
-		if overlap(places.Codes(a.Country), restricted) == 1 {
-			if a.Status == "eligible" {
-				return 1
+		eligible := a.Status == "eligible"
+		covers := places.Codes(a.Country)
+		if eligible {
+			covers = places.FreeMovement(covers)
+		}
+		if overlap(covers, restricted) == 1 {
+			if eligible {
+				return 1, true
 			}
-			out = 0
+			listed = true
 		}
 	}
-	return out
+	return out, listed
 }
 
 func overlap(a, b []string) float64 {
