@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.19.0
+
 - Status bar: one line in three parts. Left: the "Sifty" switch, which pauses and resumes all background work, and the collection ("Last collection 15:08", "+N in Inbox" since midnight, "Next 18:08"). Middle: the messages, which take turns sliding in from above, with the machine's CPU load when there are none. Right: analysis progress with the time left or "All analyzed", other jobs left, today's model calls against the daily limit, and the model with a panel to choose the provider of each kind of work. "N sources need attention" moved from the header into the bar.
 - Pause: the switch (also in Settings › Models) now holds collection on schedule, vacancy analysis, Fit recomputation and model work; "Collect now" still collects.
 - Skills a vacancy asks for that your experience names but your profile does not list get a level assumed from how long that experience lasted, shown as "~Proficient" with where it came from; experience that ended over ten years ago gives at most Beginner; your own answer replaces it.
