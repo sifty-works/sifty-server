@@ -121,6 +121,9 @@ groups:
     ambiguous_terms:
       - Go
   - name: TypeScript
+    terms:
+      - JavaScript/TypeScript
+      - TypeScript/JavaScript
     ambiguous_terms:
       - TS
   - name: JavaScript
@@ -147,6 +150,7 @@ groups:
   - name: C++
     terms:
       - Cpp
+      - C/C++
   - name: "C#"
     terms:
       - CSharp
@@ -169,6 +173,7 @@ groups:
     terms:
       - React.js
       - ReactJS
+      - React/TypeScript
   - name: Next.js
     terms:
       - NextJS
@@ -196,18 +201,24 @@ groups:
     terms:
       - Ruby on Rails
   - name: GraphQL
+    terms:
+      - GraphQL APIs
   - name: gRPC
   - name: REST
     terms:
       - RESTful
       - REST API
       - REST APIs
+      - RESTful APIs
+      - RESTful API
     ambiguous_terms:
       - REST
   - name: .NET
     terms:
       - dotnet
       - ASP.NET
+    ambiguous_terms:
+      - NET
   - name: PostgreSQL
     terms:
       - Postgres
@@ -239,6 +250,8 @@ groups:
     terms:
       - K8s
       - K8
+      - EKS
+      - GKE
   - name: Docker
   - name: Terraform
     terms:
@@ -246,6 +259,12 @@ groups:
   - name: AWS
     terms:
       - Amazon Web Services
+      - S3
+      - EC2
+      - RDS
+      - GovCloud
+    ambiguous_terms:
+      - Lambda
   - name: GCP
     terms:
       - Google Cloud
@@ -253,6 +272,7 @@ groups:
   - name: Azure
     terms:
       - Microsoft Azure
+      - Azure Government
   - name: Linux
   - name: Git
     terms:
@@ -264,16 +284,21 @@ groups:
       - Continuous Integration
       - Continuous Delivery
       - Continuous Deployment
+    ambiguous_terms:
+      - CI
   - name: Prometheus
   - name: Grafana
   - name: Machine learning
     terms:
       - ML
+      - AI/ML
+      - ML/AI
   - name: LLM
     terms:
       - LLMs
       - Large Language Models
       - Large Language Model
+      - LLM APIs
   - name: PyTorch
   - name: TensorFlow
   - name: Ethereum
@@ -285,3 +310,340 @@ groups:
   - name: Web3
     terms:
       - Web 3
+  - name: Claude
+    ambiguous_terms:
+      - Claude
+  - name: DevOps
+  - name: Excel
+    ambiguous_terms:
+      - Excel
+  - name: CRM
+  - name: Databricks
+  - name: Claude Code
+  - name: Salesforce
+  - name: Chainlink
+  - name: Cursor
+    ambiguous_terms:
+      - Cursor
+  - name: SOC 2
+    terms:
+      - SOC2
+    ambiguous_terms:
+      - SOC
+  - name: RAG
+    ambiguous_terms:
+      - RAG
+  - name: Tableau
+  - name: Solana
+  - name: Agile
+    ambiguous_terms:
+      - Agile
+  - name: MCP
+  - name: A/B testing
+    terms:
+      - A/B
+  - name: IAM
+  - name: Jira
+  - name: GitHub Copilot
+    ambiguous_terms:
+      - Copilot
+  - name: CSS
+  - name: NIST
+    terms:
+      - NIST SP
+  - name: GitHub Actions
+  - name: Datadog
+  - name: Power BI
+  - name: Airflow
+  - name: Android
+  - name: CAD
+    ambiguous_terms:
+      - CAD
+  - name: NoSQL
+  - name: ETL
+    terms:
+      - ETL/ELT
+  - name: ERP
+  - name: HTML
+  - name: UI design
+    terms:
+      - UI
+  - name: QA
+  - name: MATLAB
+  - name: Windows
+    ambiguous_terms:
+      - Windows
+  - name: React Native
+  - name: Google Workspace
+  - name: UX design
+    terms:
+      - UX
+  - name: Temporal
+    ambiguous_terms:
+      - Temporal
+  - name: Looker
+  - name: SIEM
+  - name: Ansible
+  - name: DNS
+  - name: Oracle
+    ambiguous_terms:
+      - Oracle
+  - name: Data Science
+  - name: SAP
+    ambiguous_terms:
+      - SAP
+  - name: JSON
+  - name: HTTP
+  - name: Slack
+    ambiguous_terms:
+      - Slack
+  - name: PowerShell
+  - name: SQL Server
+  - name: OAuth
+    terms:
+      - OAuth2
+  - name: RPC
+    ambiguous_terms:
+      - RPC
+  - name: SRE
+    terms:
+      - Site Reliability
+  - name: Scrum
+  - name: Playwright
+  - name: Confluence
+  - name: TCP/IP
+  - name: Trino
+  - name: VPC
+  - name: Figma
+  - name: Blockchain
+  - name: Codex
+    ambiguous_terms:
+      - Codex
+  - name: FedRAMP
+  - name: Azure DevOps
+  - name: RBAC
+  - name: ChatGPT
+  - name: GitOps
+  - name: SSO
+  - name: CMMC
+  - name: Google Sheets
+    ambiguous_terms:
+      - Sheets
+  - name: GitLab CI
+  - name: Postman
+  - name: Ethernet
+  - name: SPI
+    ambiguous_terms:
+      - SPI
+  - name: I2C
+  - name: Okta
+  - name: OWASP
+  - name: Helm
+    ambiguous_terms:
+      - Helm
+  - name: HubSpot
+  - name: SAML
+  - name: PKI
+  - name: MITRE ATT&CK
+    terms:
+      - MITRE
+      - MITRE ATT
+  - name: EDR
+  - name: Apache Iceberg
+    ambiguous_terms:
+      - Iceberg
+  - name: Observability
+  - name: Apache Flink
+    ambiguous_terms:
+      - Flink
+  - name: HIPAA
+  - name: Microsoft Entra ID
+    terms:
+      - Entra
+      - Entra ID
+  - name: Jenkins
+  - name: SEO
+  - name: MES
+    ambiguous_terms:
+      - MES
+  - name: Cloudflare
+  - name: Gemini
+    ambiguous_terms:
+      - Gemini
+  - name: Fireblocks
+  - name: GAAP
+  - name: OpenAI API
+    terms:
+      - OpenAI
+  - name: LangChain
+  - name: LangGraph
+  - name: WCAG
+  - name: MDM
+    ambiguous_terms:
+      - MDM
+  - name: PLM
+  - name: UDP
+  - name: ECS
+    ambiguous_terms:
+      - ECS
+  - name: SDLC
+  - name: Sigma Computing
+    ambiguous_terms:
+      - Sigma
+  - name: DevSecOps
+  - name: Amazon Redshift
+    terms:
+      - Redshift
+  - name: Adobe Creative Suite
+    terms:
+      - Adobe
+      - Creative Suite
+  - name: PowerPoint
+  - name: Active Directory
+  - name: n8n
+  - name: Canton
+    ambiguous_terms:
+      - Canton
+  - name: ClickHouse
+  - name: NetSuite
+  - name: RTOS
+  - name: JVM
+  - name: Splunk
+  - name: RabbitMQ
+  - name: Twilio
+  - name: Microsoft Dynamics
+    ambiguous_terms:
+      - Dynamics
+  - name: MLOps
+  - name: FMEA
+  - name: Altium
+  - name: Microsoft Fabric
+    ambiguous_terms:
+      - Fabric
+  - name: GDPR
+  - name: Microsoft Office
+  - name: Hyperledger Besu
+    terms:
+      - Besu
+  - name: Infrastructure as Code
+    terms:
+      - Infrastructure-as-Code
+      - IaC
+  - name: OpenTelemetry
+  - name: Linear
+    ambiguous_terms:
+      - Linear
+  - name: Cypress
+    ambiguous_terms:
+      - Cypress
+  - name: WebGL
+  - name: Foundry
+    ambiguous_terms:
+      - Foundry
+  - name: MEV
+  - name: Redpanda
+  - name: PCI DSS
+    terms:
+      - PCI
+  - name: Kanban
+  - name: Blender
+    ambiguous_terms:
+      - Blender
+  - name: AWS CDK
+    terms:
+      - CDK
+  - name: WebSockets
+  - name: Aptos
+  - name: FHIR
+  - name: NestJS
+  - name: ZoomInfo
+  - name: Amazon Bedrock
+    ambiguous_terms:
+      - Bedrock
+  - name: XML
+  - name: Shopify
+  - name: RS-422
+    terms:
+      - RS422
+  - name: Unity
+    ambiguous_terms:
+      - Unity
+  - name: RMF
+  - name: LDAP
+  - name: AWS CloudFormation
+    terms:
+      - CloudFormation
+  - name: HashiCorp Vault
+    ambiguous_terms:
+      - Vault
+  - name: Pandas
+    ambiguous_terms:
+      - Pandas
+  - name: Zendesk
+  - name: ASC 606
+    ambiguous_terms:
+      - ASC
+  - name: Webhooks
+  - name: FT3
+  - name: Google Analytics
+  - name: Google Ads
+  - name: Zero Trust
+  - name: WordPress
+  - name: Delta Lake
+    ambiguous_terms:
+      - Delta
+  - name: RTLinux
+  - name: RS-485
+    terms:
+      - RS485
+  - name: KiCad
+  - name: HSM
+    terms:
+      - HSMs
+  - name: DApps
+  - name: Generative AI
+    terms:
+      - GenAI
+  - name: Sentry
+    ambiguous_terms:
+      - Sentry
+  - name: OpenID Connect
+    terms:
+      - OpenID
+  - name: MLflow
+  - name: Unix
+  - name: JWT
+  - name: NumPy
+  - name: Visio
+  - name: PCB design
+    terms:
+      - PCB
+  - name: FPGA
+  - name: Siemens NX
+    ambiguous_terms:
+      - NX
+  - name: Argo CD
+    terms:
+      - ArgoCD
+  - name: SAS
+    ambiguous_terms:
+      - SAS
+  - name: monday.com
+    ambiguous_terms:
+      - Monday
+  - name: SAFe
+    ambiguous_terms:
+      - SAFe
+  - name: DynamoDB
+  - name: Bloomberg Terminal
+    terms:
+      - Bloomberg
+  - name: PitchBook
+  - name: Anaplan
+  - name: CNC
+  - name: Azure RTOS
+  - name: Windows Server
+  - name: Azure Data Factory
+    terms:
+      - Data Factory
+  - name: Capital IQ

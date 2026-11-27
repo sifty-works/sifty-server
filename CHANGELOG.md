@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- The skills vocabulary knows about 200 more skills (tools such as Excel, Salesforce, Figma, Databricks, Datadog, Terraform's neighbours, security standards and blockchain platforms), so more requirement lines are matched against your skills. A requirement naming a skill you have not stated stays ?; state it in your profile.
+
 ## 0.8.0
 
 - Work mode, engagement, hours and locations are each four lists in your profile: Preferred, Possible, Unwanted and Never, shown as one Goals table where a value moves by drag or a menu and every change is saved at once. Preferred raises Fits you most, Possible a little less, Unwanted lowers it, and Never caps it at 15 and puts the vacancy last in Best fit; a value in no list has no effect. Your old goals were converted once: chosen work modes became Preferred and the others Never (Unwanted if you were willing to relocate), chosen engagement and hours became Preferred and the others Unwanted, preferred locations became Preferred. Every result is recomputed once.

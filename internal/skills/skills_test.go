@@ -15,11 +15,16 @@ func TestDecide_technologyContextMakesAmbiguousFit(t *testing.T) {
 }
 
 func TestDecide_ambiguousTermWithoutContextDoesNotMatch(t *testing.T) {
-	i := idx([]string{"Go"}, nil)
-	r := "go to market"
-	got := Decide(r, i).Verdict
-	if got == "✓" {
-		t.Fatalf("go-to-market should not match Go skill, got %q", got)
+	for _, c := range []struct{ skill, text string }{
+		{"Go", "go to market"},
+		{"Excel", "Excel in a team"},
+	} {
+		t.Run(c.skill, func(t *testing.T) {
+			i := idx([]string{c.skill}, nil)
+			if got := Decide(c.text, i).Verdict; got == "✓" {
+				t.Fatalf("%q should not match the %s skill, got %q", c.text, c.skill, got)
+			}
+		})
 	}
 }
 
