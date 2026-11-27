@@ -40,6 +40,7 @@ func init() {
 			knownSiteModules[p.name] = &pageModule{p}
 		}
 	}
+	knownSiteModules[srcBraintrust.Name()] = srcBraintrust
 	entries, err := parseSites(embeddedSites)
 	if err != nil {
 		panic("source: cannot parse embedded sites.yaml: " + err.Error())

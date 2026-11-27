@@ -41,6 +41,10 @@ type Grouper interface {
 	Group(u *url.URL) string
 }
 
+type Detailer interface {
+	Detail(ctx context.Context, f fetch.Fetcher, p listing.Posting) (listing.Posting, error)
+}
+
 type Vacancier interface {
 	Vacancy(u *url.URL) (string, bool)
 }

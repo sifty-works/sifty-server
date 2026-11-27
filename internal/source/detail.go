@@ -6,6 +6,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/fetch"
 	"github.com/sifty-works/sifty-server/internal/listing"
 	xhtml "golang.org/x/net/html"
+	"net/url"
 	"strings"
 )
 
@@ -122,6 +123,13 @@ func firstText(n *xhtml.Node, pred func(*xhtml.Node) bool) string {
 }
 
 func Detail(ctx context.Context, f fetch.Fetcher, p listing.Posting, s Site) (listing.Posting, error) {
+	if u, err := url.Parse(p.URL); err == nil {
+		if mod, _ := For(u); mod != nil {
+			if d, ok := mod.(Detailer); ok {
+				return d.Detail(ctx, f, p)
+			}
+		}
+	}
 	resp, err := f.Get(ctx, p.URL, fetch.Opt{})
 	if err != nil {
 		return p, err

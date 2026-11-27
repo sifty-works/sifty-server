@@ -1048,3 +1048,66 @@ func mustReadFile(t *testing.T, name string) []byte {
 	}
 	return b
 }
+
+const braintrustListAddress = "https://app.usebraintrust.com/api/jobs/"
+
+func braintrustFake() *fetchtest.Map {
+	m := fetchtest.NewMap()
+	m.Set(braintrustListAddress, fetchtest.MapEntry{Response: fetch.Response{Status: 200, Body: []byte(`{
+		"count": 2, "next": "https://app.usebraintrust.com/api/jobs/?page=2", "previous": null,
+		"results": [
+			{"id": 9001, "title": "Rust Developer", "employer": {"id": 1, "name": "Invented Labs"},
+			 "budget_minimum_usd": "40.00", "budget_maximum_usd": "60.00", "payment_type": "hourly",
+			 "job_type": "freelance", "created": "2026-03-01T10:00:00Z",
+			 "locations": [{"location": "remote", "custom_location": "", "city": "Lisbon", "country": "Portugal"}]},
+			{"id": 9002, "title": "Designer", "employer": {"id": 2, "name": ""}}
+		]}`)}})
+	m.Set("https://app.usebraintrust.com/api/jobs/9001/", fetchtest.MapEntry{Response: fetch.Response{Status: 200, Body: []byte(`{
+		"id": 9001, "description": "<p>Build the invented ledger.</p>", "requirements": "<p>Five years of Rust.</p>",
+		"published_at": "2026-03-02T09:00:00Z",
+		"creator": {"name": "Zelda Quartz", "email": "zelda.quartz@invented.example"}}`)}})
+	return m
+}
+
+func TestBraintrust_list_then_detail_gives_posting_with_text(t *testing.T) {
+	m := braintrustFake()
+	mod, site := source.For(mustParseURL(t, "https://www.usebraintrust.com/jobs"))
+	ps, err := mod.List(context.Background(), m, site)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(ps) != 1 {
+		t.Fatalf("postings = %d, want 1 (the item without an employer is skipped)", len(ps))
+	}
+	p, err := source.Detail(context.Background(), m, ps[0], site)
+	if err != nil {
+		t.Fatalf("Detail: %v", err)
+	}
+	if p.URL != "https://app.usebraintrust.com/jobs/9001/" {
+		t.Errorf("URL = %q", p.URL)
+	}
+	if !strings.Contains(p.Text, "invented ledger") || !strings.Contains(p.Text, "Five years of Rust") {
+		t.Errorf("Text = %q, want description and requirements", p.Text)
+	}
+	if got := p.Fields["salary"]; got != "USD 40–60/hour" {
+		t.Errorf("salary = %q, want USD 40–60/hour", got)
+	}
+	all := p.Text + p.Title + p.Company + p.Location
+	for _, v := range p.Fields {
+		all += v
+	}
+	if strings.Contains(all, "Zelda") || strings.Contains(all, "zelda.quartz") {
+		t.Errorf("the creator of the job leaked into the posting: %q", all)
+	}
+}
+
+func TestBraintrust_reads_only_first_page(t *testing.T) {
+	m := braintrustFake()
+	mod, site := source.For(mustParseURL(t, "https://app.usebraintrust.com/jobs/"))
+	if _, err := mod.List(context.Background(), m, site); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if reqs := m.Requests(); len(reqs) != 1 || reqs[0] != braintrustListAddress {
+		t.Errorf("requests = %v, want only %s", reqs, braintrustListAddress)
+	}
+}

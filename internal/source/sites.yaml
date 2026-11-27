@@ -33,3 +33,9 @@ sites:
     script_var: portfolioJobs
   - host: paradigm.xyz
     module: paradigm
+  - host: usebraintrust.com
+    module: braintrust
+    list_address: https://app.usebraintrust.com/api/jobs/
+  - host: app.usebraintrust.com
+    module: braintrust
+    list_address: https://app.usebraintrust.com/api/jobs/
