@@ -261,9 +261,12 @@ func (v *vocab) rank(level string) int {
 
 type Held struct{ Name, Level string }
 
+type Assumption struct{ Level, From string }
+
 type Index struct {
-	level  map[string]string
-	absent map[string]bool
+	level   map[string]string
+	absent  map[string]bool
+	assumed map[string]Assumption
 }
 
 func NewIndex(held []Held, absent []string) *Index {
@@ -287,6 +290,11 @@ func NewIndex(held []Held, absent []string) *Index {
 	return idx
 }
 
+func (idx *Index) WithAssumed(assumed map[string]Assumption) *Index {
+	idx.assumed = assumed
+	return idx
+}
+
 func (idx *Index) Have(group string) string {
 	switch {
 	case idx.level[group] != "":
@@ -294,7 +302,15 @@ func (idx *Index) Have(group string) string {
 	case idx.absent[group]:
 		return No
 	}
-	return ""
+	return idx.assumed[group].Level
+}
+
+func (idx *Index) Assumed(group string) (Assumption, bool) {
+	if idx.level[group] != "" || idx.absent[group] {
+		return Assumption{}, false
+	}
+	a, ok := idx.assumed[group]
+	return a, ok
 }
 
 func (idx *Index) Verdict(e Entry) string {
@@ -375,20 +391,25 @@ func YearsIn(text string) (int, bool) {
 	return most, most > 0
 }
 
+func (v *vocab) levelFor(years int) string {
+	level := ""
+	for i, y := range v.years {
+		if i == 0 || years >= y.from {
+			level = y.level
+		}
+	}
+	return level
+}
+
+func LevelForYears(years int) string { return defaultVocab.levelFor(years) }
+
 func Levels() []string { return slices.Clone(defaultVocab.order) }
 
 func (v *vocab) demand(text string, toks []token, covered []bool) string {
 	best := 0
 	raise := func(level string) { best = max(best, v.rank(level)) }
 	if years, ok := YearsIn(text); ok {
-		if len(v.years) > 0 {
-			raise(v.years[0].level)
-		}
-		for _, y := range v.years {
-			if years >= y.from {
-				raise(y.level)
-			}
-		}
+		raise(v.levelFor(years))
 	}
 	for _, w := range v.words {
 		for i := 0; i+w.words <= len(toks); i++ {

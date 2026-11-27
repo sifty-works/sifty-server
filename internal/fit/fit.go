@@ -12,6 +12,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/facts"
 	"github.com/sifty-works/sifty-server/internal/places"
+	"github.com/sifty-works/sifty-server/internal/skills"
 )
 
 type ProfileView struct {
@@ -23,6 +24,7 @@ type ProfileView struct {
 	AbsentSkills   []candidate.AbsentSkill
 	Confirmed      []candidate.ConfirmedFact
 	DerivedYears   candidate.DerivedYears
+	Assumed        map[string]skills.Assumption
 	Today          time.Time `json:"-"`
 }
 
@@ -36,8 +38,10 @@ type RequirementLine struct {
 }
 
 type SkillHave struct {
-	Name string `json:"name"`
-	Have string `json:"have,omitempty"`
+	Name    string `json:"name"`
+	Have    string `json:"have,omitempty"`
+	Assumed bool   `json:"assumed,omitempty"`
+	From    string `json:"from,omitempty"`
 }
 
 type SkillEntry struct {

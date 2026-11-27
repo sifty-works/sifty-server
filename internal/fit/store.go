@@ -18,7 +18,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/skills"
 )
 
-const ScoringVersion = 10
+const ScoringVersion = 11
 
 const current = `(f.inputs IS ? AND f.version IS v.version)`
 
@@ -115,6 +115,7 @@ func LoadProfile(ctx context.Context, database *db.DB, id int64, r Rules) (Profi
 		AbsentSkills:   me.AbsentSkills,
 		Confirmed:      me.ConfirmedFacts,
 		DerivedYears:   candidate.DeriveYears(me.Experience, time.Now()),
+		Assumed:        Assume(me.Experience, time.Now()),
 		Today:          time.Now(),
 	}
 	return Profile{id, v, Inputs(v, r)}, nil

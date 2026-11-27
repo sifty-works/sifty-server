@@ -535,3 +535,42 @@ func TestRequirementsCriterionAveragesSkillsAndOtherRequirements(t *testing.T) {
 		t.Errorf("requirements utility = %v, want %v", got, want)
 	}
 }
+
+func TestAssumedSkillLevelComesFromExperienceUnlessMyDataListsOrExcludesTheSkill(t *testing.T) {
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	job := func(company, start, end string) candidate.Experience {
+		return candidate.Experience{Company: company, Title: "Engineer", Start: start, End: end, Skills: []string{"Solidity"}}
+	}
+	cases := []struct {
+		name     string
+		exp      []candidate.Experience
+		skills   []candidate.Skill
+		absent   []candidate.AbsentSkill
+		verdict  string
+		assumed  bool
+		have     string
+		fromText string
+	}{
+		{"six years on the skills list is Expert", []candidate.Experience{job("Acme", "2018-01", "2023-12")}, nil, nil, "✓", true, "Expert", "Acme · 6 years"},
+		{"overlapping entries count once", []candidate.Experience{job("Acme", "2020-01", "2021-12"), job("Beta", "2021-01", "2022-12")}, nil, nil, "≈", true, "Proficient", ""},
+		{"each entry without dates counts one year", []candidate.Experience{job("Acme", "", ""), job("Beta", "", "")}, nil, nil, "≈", true, "Proficient", ""},
+		{"a listed skill wins over a higher assumed level", []candidate.Experience{job("Acme", "2018-01", "2023-12")}, []candidate.Skill{{Name: "Solidity", Level: "Beginner"}}, nil, "✕", false, "Beginner", ""},
+		{"a skill the user does not have wins", []candidate.Experience{job("Acme", "2018-01", "2023-12")}, nil, []candidate.AbsentSkill{{Name: "Solidity"}}, "✕", false, "No", ""},
+		{"experience that ended over ten years ago gives at most Beginner", []candidate.Experience{job("Acme", "2005-01", "2014-12")}, nil, nil, "✕", true, "Beginner", "Acme · 2005-01–2014-12"},
+		{"a skill no entry names stays unknown", []candidate.Experience{{Company: "Acme", Title: "Engineer", Start: "2018-01", End: "2023-12", Skills: []string{"Go"}}}, nil, nil, "?", false, "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := fit.ProfileView{Skills: c.skills, AbsentSkills: c.absent, Assumed: fit.Assume(c.exp, now)}
+			v := fit.Vacancy{Title: "Engineer", Full: true, Analysed: true, Requirements: []fit.Requirement{{Text: "5+ years of Solidity", Level: "required"}}}
+			f := fit.Score(p, v, rules())
+			if len(f.Skills) != 1 || len(f.Skills[0].Skills) != 1 {
+				t.Fatalf("skills = %+v", f.Skills)
+			}
+			e, s := f.Skills[0], f.Skills[0].Skills[0]
+			if e.Verdict != c.verdict || s.Assumed != c.assumed || s.Have != c.have || s.From != c.fromText && c.fromText != "" {
+				t.Errorf("verdict %q assumed %v have %q from %q, want %q %v %q %q", e.Verdict, s.Assumed, s.Have, s.From, c.verdict, c.assumed, c.have, c.fromText)
+			}
+		})
+	}
+}

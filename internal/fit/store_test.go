@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/facts"
@@ -264,5 +265,20 @@ func TestRecomputeMarksOnlyAnalysedVacanciesAnalysed(t *testing.T) {
 	}
 	if n := flag(1); n.Bool {
 		t.Errorf("vacancy not analysed: analysed %v, want false", n)
+	}
+}
+
+func TestLoadedProfileAssumesASkillItsExperienceNames(t *testing.T) {
+	d, _, _ := fixture(t)
+	me := candidate.MeData{Experience: []candidate.Experience{{Company: "Acme", Title: "Engineer", Start: "2015-01", End: "2023-12", Skills: []string{"Solidity"}}}}
+	if err := candidate.SaveMe(ctx, d, me); err != nil {
+		t.Fatal(err)
+	}
+	p, err := fit.LoadProfile(ctx, d, 1, rules())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.View.Assumed["Solidity"].Level; got != "Expert" {
+		t.Fatalf("assumed level of Solidity = %q, want Expert", got)
 	}
 }

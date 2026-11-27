@@ -103,3 +103,21 @@ func DeriveYears(exp []Experience, now time.Time) DerivedYears {
 		Engineering: coveredMonths(eng) / 12,
 	}
 }
+
+func EndedBefore(e Experience, t time.Time) bool {
+	span, ok := expSpan(e, t)
+	return ok && span.to < t.Year()*12+int(t.Month())-1
+}
+
+func CountedMonths(exp []Experience, now time.Time) int {
+	var spans []monthSpan
+	undated := 0
+	for _, e := range exp {
+		if span, ok := expSpan(e, now); ok {
+			spans = append(spans, span)
+		} else {
+			undated++
+		}
+	}
+	return coveredMonths(spans) + undated*12
+}

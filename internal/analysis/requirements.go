@@ -42,7 +42,7 @@ type requirements struct{}
 
 func (requirements) Name() string { return "requirement_lines" }
 
-func (requirements) Version() int { return 6 }
+func (requirements) Version() int { return 7 }
 
 func (requirements) Produces() []facts.Kind { return []facts.Kind{facts.Requirement} }
 

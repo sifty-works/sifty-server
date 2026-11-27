@@ -55,7 +55,7 @@ func readRequirements(p ProfileView, v Vacancy) ([]SkillEntry, []RequirementLine
 	entries, rest := skills.Entries(lines)
 	idx := skills.NewIndex(
 		names(p.Skills, func(s candidate.Skill) skills.Held { return skills.Held{Name: s.Name, Level: s.Level} }),
-		names(p.AbsentSkills, func(s candidate.AbsentSkill) string { return s.Name }))
+		names(p.AbsentSkills, func(s candidate.AbsentSkill) string { return s.Name })).WithAssumed(p.Assumed)
 	var entriesOut []SkillEntry
 	for _, e := range entries {
 		out := SkillEntry{Demand: e.Demand, Line: e.Line, Verdict: idx.Verdict(e), Required: e.Required, Index: e.Index}
@@ -64,7 +64,8 @@ func readRequirements(p ProfileView, v Vacancy) ([]SkillEntry, []RequirementLine
 			if have == skills.Listed {
 				have = ""
 			}
-			out.Skills = append(out.Skills, SkillHave{Name: name, Have: have})
+			a, assumed := idx.Assumed(name)
+			out.Skills = append(out.Skills, SkillHave{Name: name, Have: have, Assumed: assumed, From: a.From})
 		}
 		entriesOut = append(entriesOut, out)
 	}

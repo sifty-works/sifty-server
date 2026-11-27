@@ -328,8 +328,6 @@ groups:
   - name: ERP
   - name: HTML
   - name: UI design
-    terms:
-      - UI
   - name: QA
   - name: MATLAB
   - name: Windows
