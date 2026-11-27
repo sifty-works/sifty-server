@@ -80,7 +80,7 @@ func TestOnsiteOnlyVacancyAgainstRemoteContractProfileIsCappedAndListedLast(t *t
 		`{"name":"Tester","targetRoles":["Engineer"],"workModes":["remote"],"engagement":["contract"],"compensation":{"cashMin":200000,"currency":"EUR","period":"year"}}`, `{}`,
 		[]mustVacancy{
 			{"Platform Engineer", "<p>Work mode: Onsite</p><p>Employment type: Contract</p>" + salary},
-			{"Staff Principal Distinguished Platform Infrastructure Reliability Software Cloud Data Security Applications Systems Engineer", "<p>Salary: EUR 20,000 per year</p>"},
+			{"Staff Principal Distinguished Platform Infrastructure Reliability Software Cloud Data Security Applications Systems Engineer", "<p>Employment type: Employment</p><p>Salary: EUR 20,000 per year</p>"},
 			{"Platform Engineer", "<p>Work mode: Remote</p><p>Employment type: Contract</p>" + salary},
 		})
 	onsite, poor, good := ids[0], ids[1], ids[2]

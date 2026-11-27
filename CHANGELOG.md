@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Fits you counts a criterion your profile has a goal for but the vacancy does not state as half-way, at half its weight, so a vacancy matching on one or two known criteria no longer scores 100. The tile still shows "?" and the band still says on how many criteria it was scored. Every result is recomputed once.
+
 ## 0.6.0
 
 - Every Fits you number has the same size, 100 included. The idle status bar no longer shows "0 in the catalogue": that count was the vacancies collected since the application started, not the catalogue.

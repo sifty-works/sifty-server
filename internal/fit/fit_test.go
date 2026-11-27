@@ -204,14 +204,14 @@ func TestNumberIsWeightedMeanOfKnownCriteriaAndSaysHowManyWereScored(t *testing.
 	p := goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Compensation: eur})
 	v := vacancy{Title: "Go Engineer", Text: "Salary: EUR 100,000 per year"}
 	r := rules()
-	t.Run("an unknown criterion is left out of the mean", func(t *testing.T) {
+	t.Run("an unknown criterion counts as half-way at half its weight", func(t *testing.T) {
 		f := fit.Score(p, fromCode(v), r)
 		if f.State != fit.Scored || f.Score != 100 || f.ScoredOn != 2 || f.Of != 2 {
 			t.Errorf("got %s %d on %d of %d, want scored 100 on 2 of 2", f.State, f.Score, f.ScoredOn, f.Of)
 		}
 		pw := goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, WorkModes: []string{"remote"}, Compensation: eur})
-		if f = fit.Score(pw, fromCode(v), r); f.Score != 100 || f.ScoredOn != 2 || f.Of != 3 {
-			t.Errorf("an unknown work mode: got %d on %d of %d, want 100 on 2 of 3", f.Score, f.ScoredOn, f.Of)
+		if f = fit.Score(pw, fromCode(v), r); f.Score != 98 || f.ScoredOn != 2 || f.Of != 3 {
+			t.Errorf("an unknown work mode: got %d on %d of %d, want 98 on 2 of 3", f.Score, f.ScoredOn, f.Of)
 		}
 	})
 	t.Run("a criterion of weight 0 is left out", func(t *testing.T) {
@@ -230,7 +230,7 @@ func TestNumberIsWeightedMeanOfKnownCriteriaAndSaysHowManyWereScored(t *testing.
 	})
 }
 
-func TestBrokenMustCapsByItsSourceAndUnknownMustCostsNothing(t *testing.T) {
+func TestBrokenMustCapsByItsSourceAndUnknownMustCostsHalfItsWeight(t *testing.T) {
 	inText := facts.Source{Way: facts.Vocabulary, Origin: facts.Employer}
 	field := facts.Source{Way: facts.SiteField, Origin: facts.Aggregator}
 	money := func(max int, src facts.Source) facts.Fact {
@@ -261,7 +261,7 @@ func TestBrokenMustCapsByItsSourceAndUnknownMustCostsNothing(t *testing.T) {
 		{"work authorization broken by the text", fit.ProfileView{Goals: candidate.GoalsView{TargetRoles: []string{"Go Engineer"}}, Authorizations: []candidate.WorkAuthorization{{Country: "US", Status: "need_visa"}}},
 			[]facts.Fact{fact(facts.WorkMode, "remote", inText), fact(facts.Place, "US", inText)}, 15, true, "Remote only in", 2},
 		{"work mode broken only by an aggregator field", remote, []facts.Fact{money(120000, inText), fact(facts.WorkMode, "onsite", field)}, 40, false, "Onsite only — you want remote", 3},
-		{"unknown must costs nothing and says why", remote, []facts.Fact{money(120000, inText)}, 100, false, "Work mode not stated", 2},
+		{"unknown must counts half-way and says why", remote, []facts.Fact{money(120000, inText)}, 98, false, "Work mode not stated", 2},
 		{"required language and no language in My data", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}}),
 			[]facts.Fact{fact(facts.Language, "Mandarin", inText)}, 100, false, "Requires Mandarin — your languages are not listed", 1},
 		{"mismatch on a preferred criterion caps nothing", goals(candidate.GoalsView{TargetRoles: []string{"Go Engineer"}, Compensation: eur}),

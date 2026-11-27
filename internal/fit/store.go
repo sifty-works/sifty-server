@@ -18,7 +18,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/skills"
 )
 
-const ScoringVersion = 6
+const ScoringVersion = 7
 
 const current = `(f.inputs IS ? AND f.version IS v.version)`
 

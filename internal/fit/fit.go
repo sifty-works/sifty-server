@@ -59,6 +59,9 @@ const (
 
 	CapBroken = 15
 	CapWeak   = 40
+
+	UnknownUtility = 0.5
+	UnknownShare   = 0.5
 )
 
 type Criterion struct {
@@ -147,7 +150,9 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 		}
 		if cr.Weight > 0 {
 			f.Of++
-			if cr.Outcome != Unknown {
+			if cr.Outcome == Unknown {
+				num, den = num+cr.Weight*UnknownUtility*UnknownShare, den+cr.Weight*UnknownShare
+			} else {
 				f.ScoredOn++
 				num, den = num+cr.Weight*cr.Utility, den+cr.Weight
 			}
@@ -173,7 +178,7 @@ func Score(p ProfileView, v Vacancy, r Rules) Fit {
 	case noGoals(p.Goals):
 		f.Broken = false
 		f.State, f.Text = NoGoals, Texts[NoGoals]
-	case den == 0 && !f.Broken:
+	case f.ScoredOn == 0 && !f.Broken:
 		f.State, f.Text = NoFacts, Texts[NoFacts]
 	default:
 		f.State = Scored
