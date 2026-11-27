@@ -4,10 +4,9 @@ What the user gets: for the chosen profile, the vacancies that fit its search, i
 
 ## Layout
 
-- The header carries the stage tabs "Inbox N", "Shortlist N" and "Archive N", the profile switcher, the Settings button. Archive counts Applied and Dismissed together.
+- The header carries the stage tabs "Inbox N", "Shortlist N" and "Archive N", the profile switcher, the Settings button. Archive counts Applied and Dismissed together. The counts also carry how many Inbox roles were first collected since local midnight of the server's clock.
 - The Sifty logo in the header animates while jobs are collected or a model works; hovering it names what runs, and a click plays one sweep.
-- The Inbox header also shows "N sources need attention" (see `collection.md`).
-- A status bar along the bottom of every page shows what runs, what waits and why (see `application.md`).
+- A status bar along the bottom of every page shows collection, messages, analysis and model work (see `application.md`).
 - Archive has two tabs, Applied and Dismissed.
 - Opening a profile or Settings replaces the working area. Changing the stage clears the selected vacancy, the held Unread row, the error and the notice; Archive opens on Applied.
 - Changing the profile reloads the list for that profile.

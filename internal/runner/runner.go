@@ -381,6 +381,32 @@ func (r *Runner) QueuedByKind() ([]QueuedKind, error) {
 	return out, rows.Err()
 }
 
+func (r *Runner) DonePace(since time.Time, minJobs int) (map[string]time.Duration, error) {
+	rows, err := r.db.Query(
+		`SELECT kind, count(*), min(updated), max(updated) FROM job
+		 WHERE state='done' AND updated >= ? GROUP BY kind HAVING count(*) >= ?`,
+		since.UTC().Format(time.RFC3339), minJobs)
+	if err != nil {
+		return nil, fmt.Errorf("runner: read finished jobs: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]time.Duration{}
+	for rows.Next() {
+		var kind, first, last string
+		var n int
+		if err := rows.Scan(&kind, &n, &first, &last); err != nil {
+			return nil, fmt.Errorf("runner: read finished jobs: %w", err)
+		}
+		a, errA := time.Parse(time.RFC3339, first)
+		b, errB := time.Parse(time.RFC3339, last)
+		if errA != nil || errB != nil {
+			return nil, fmt.Errorf("runner: read finished jobs: bad time for %s", kind)
+		}
+		out[kind] = b.Sub(a) / time.Duration(n-1)
+	}
+	return out, rows.Err()
+}
+
 func (r *Runner) selectJobs(strict bool, tail string, args ...any) ([]Job, error) {
 	rows, err := r.db.Query(
 		`SELECT id, kind, subject, priority, state, attempts, not_before,

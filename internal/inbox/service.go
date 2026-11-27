@@ -150,6 +150,7 @@ type Counts struct {
 	Applied   int `json:"applied"`
 	Dismissed int `json:"dismissed"`
 	Archive   int `json:"archive"`
+	NewToday  int `json:"newToday"`
 }
 
 func toRow(rr repoRow, now time.Time, inputs int64, analysisSet map[int64]bool) Row {
@@ -189,6 +190,7 @@ func buildCounts(cm map[string]int) Counts {
 		Applied:   cm["applied"],
 		Dismissed: cm["dismissed"],
 		Archive:   cm["applied"] + cm["dismissed"],
+		NewToday:  cm["newToday"],
 	}
 }
 

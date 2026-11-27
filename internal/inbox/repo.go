@@ -245,18 +245,21 @@ func stageCounts(ctx context.Context, database *db.DB, now time.Time, profileID 
 		return nil, fmt.Errorf("inbox: counts decided: %w", err)
 	}
 
-	inboxArgs := append([]any{profileID, profileID}, vis.Args...)
+	y, mo, d := now.Local().Date()
+	midnight := time.Date(y, mo, d, 0, 0, 0, 0, time.Local).UTC().Format(time.RFC3339)
+	inboxArgs := append([]any{midnight, profileID, profileID}, vis.Args...)
 	inboxArgs = append(inboxArgs, nowStr)
-	var inboxCount int
+	var inboxCount, newToday int
 	if err := database.QueryRowContext(ctx, `
-		SELECT COUNT(*)
+		SELECT COUNT(*), COALESCE(SUM(v.first_seen >= ?), 0)
 		FROM vacancy v
 		LEFT JOIN decision d ON d.vacancy=v.id AND d.profile=?
 		WHERE d.vacancy IS NULL AND `+notExcludedFor+` AND (`+vis.SQL+`) AND `+notExpiredSQL,
-		inboxArgs...).Scan(&inboxCount); err != nil {
+		inboxArgs...).Scan(&inboxCount, &newToday); err != nil {
 		return nil, fmt.Errorf("inbox: counts inbox: %w", err)
 	}
 	out["inbox"] = inboxCount
+	out["newToday"] = newToday
 
 	return out, nil
 }

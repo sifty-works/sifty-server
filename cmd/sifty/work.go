@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -18,6 +20,8 @@ import (
 const (
 	failedWindow = 7 * 24 * time.Hour
 	failedLimit  = 50
+	paceWindow   = time.Hour
+	paceMinJobs  = 3
 )
 
 type jobKind struct {
@@ -99,6 +103,7 @@ type workWaiting struct {
 	Kind   string      `json:"kind"`
 	Label  string      `json:"label"`
 	Count  int         `json:"count"`
+	ETA    *int64      `json:"eta"`
 	Reason *workReason `json:"reason"`
 }
 
@@ -114,6 +119,16 @@ type workFailed struct {
 type workResp struct {
 	Running []workRunning `json:"running"`
 	Waiting []workWaiting `json:"waiting"`
+	Load    *int          `json:"load"`
+}
+
+func cpuLoad() *int {
+	avg, ok := loadAverage()
+	if !ok || avg < 0 {
+		return nil
+	}
+	pct := min(int(math.Round(avg/float64(runtime.NumCPU())*100)), 100)
+	return &pct
 }
 
 func label(kind string) string {
@@ -132,14 +147,14 @@ func subjectOf(ctx context.Context, database *db.DB, j runner.Job) (string, erro
 
 func workHandler(database *db.DB, gate *models.Gate, r *runner.Runner, now func() time.Time) func(*http.Request, struct{}) (workResp, error) {
 	return func(req *http.Request, _ struct{}) (workResp, error) {
-		out := workResp{Running: []workRunning{}, Waiting: []workWaiting{}}
+		out := workResp{Running: []workRunning{}, Waiting: []workWaiting{}, Load: cpuLoad()}
 		if r == nil {
 			return out, nil
 		}
 		ctx := req.Context()
+		var err error
 		for _, j := range r.Running() {
 			item := workRunning{ID: j.ID, Kind: j.Kind, Label: label(j.Kind), Since: j.Started.UTC().Format(time.RFC3339)}
-			var err error
 			if item.Subject, err = subjectOf(ctx, database, j); err != nil {
 				return workResp{}, err
 			}
@@ -153,7 +168,11 @@ func workHandler(database *db.DB, gate *models.Gate, r *runner.Runner, now func(
 		if err != nil {
 			return workResp{}, err
 		}
-		if out.Waiting, err = waitingWork(ctx, gate, queued, now()); err != nil {
+		pace, err := r.DonePace(now().Add(-paceWindow), paceMinJobs)
+		if err != nil {
+			return workResp{}, err
+		}
+		if out.Waiting, err = waitingWork(ctx, gate, queued, pace, now()); err != nil {
 			return workResp{}, err
 		}
 		return out, nil
@@ -179,14 +198,19 @@ func failedWork(ctx context.Context, database *db.DB, r *runner.Runner, now func
 	return out, nil
 }
 
-func waitingWork(ctx context.Context, gate *models.Gate, queued []runner.QueuedKind, now time.Time) ([]workWaiting, error) {
+func waitingWork(ctx context.Context, gate *models.Gate, queued []runner.QueuedKind, pace map[string]time.Duration, now time.Time) ([]workWaiting, error) {
 	out := []workWaiting{}
 	for _, q := range queued {
 		reason, err := waitReason(ctx, gate, jobKinds[q.Kind].work, q.NotBefore, now)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, workWaiting{Kind: q.Kind, Label: label(q.Kind), Count: q.Count, Reason: reason})
+		item := workWaiting{Kind: q.Kind, Label: label(q.Kind), Count: q.Count, Reason: reason}
+		if interval, ok := pace[q.Kind]; ok && reason == nil {
+			eta := int64((interval * time.Duration(q.Count)).Round(time.Second).Seconds())
+			item.ETA = &eta
+		}
+		out = append(out, item)
 	}
 	return out, nil
 }
