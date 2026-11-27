@@ -403,6 +403,8 @@ func (v *vocab) demand(text string, toks []token, covered []bool) string {
 	return v.order[best-1]
 }
 
+var alternativeGapRe = regexp.MustCompile(`^(?:,?or|and/or|/)(?:related|similar|other|equivalent|any|another)?$`)
+
 func (v *vocab) chains(text string, hits []hit, toks []token) [][]string {
 	var out [][]string
 	var chain []string
@@ -427,7 +429,7 @@ func (v *vocab) chains(text string, hits []hit, toks []token) [][]string {
 		if k > 0 {
 			gap := strings.ToLower(strings.Join(strings.Fields(text[toks[hits[k-1].to-1].end:toks[h.from].start]), ""))
 			switch {
-			case gap == "or" || gap == ",or" || gap == "and/or" || gap == "/":
+			case alternativeGapRe.MatchString(gap):
 				seenOr, hasOr = true, true
 			case gap == "," && !seenOr:
 			default:

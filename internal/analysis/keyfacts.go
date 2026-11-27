@@ -96,7 +96,7 @@ type keyFacts struct{}
 
 func (keyFacts) Name() string { return "key_facts" }
 
-func (keyFacts) Version() int { return 4 }
+func (keyFacts) Version() int { return 5 }
 
 func (keyFacts) Produces() []facts.Kind {
 	return []facts.Kind{facts.Years, facts.Seniority, facts.CompanyStage, facts.Deadline, facts.ContractLen, facts.Clearance, facts.Relocation, facts.Visa}

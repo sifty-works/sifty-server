@@ -26,6 +26,9 @@ var (
 	bulletRe         = regexp.MustCompile(`^(?:[-*•·–—▪●◦]|\d{1,2}[.)])\s+`)
 	sentenceRe       = regexp.MustCompile(`[.!?]\s+`)
 	gluedSentenceRe  = regexp.MustCompile(`[a-z]{2}[.!?][A-Z]`)
+	aboutCompanyRe   = regexp.MustCompile(`(?i)^(?:we\b|our\b|this\s+(?:role|position|job)\b)`)
+	thisLeadRe       = regexp.MustCompile(`(?i)^this\b`)
+	demandRe         = regexp.MustCompile(`(?i)\b(?:want|need|looking for|seeking|require|expect)`)
 	fallbackRe       = regexp.MustCompile(`(?i)\b(?:experience|knowledge|proficien\w*|familiar\w*|years|degree|bachelor|master|skilled|understanding|ability to|fluen\w*|expertise)\b`)
 	offerWordRe      = regexp.MustCompile(`(?i)\b(?:salary|benefits|equity|vacation|insurance|perks|we offer|stipend)\b`)
 	nonRequirementRe = regexp.MustCompile(`(?i)\b(?:(?:competitive|attractive|generous|excellent) (?:salary|compensation|pay|benefits|package)|base salary|(?:salary|pay|compensation) (?:range|band|package|details)|total (?:starting )?compensation|(?:salary|compensation|pay|bonus|equity) (?:and|&) (?:equity|bonus|benefits|stock)|benefits package|we offer|perks|stipend|pto|vacation (?:policy|days|time)|unlimited (?:vacation|paid)|paid (?:time off|leave|vacation|holidays?)|(?:parental|maternity|paternity) leave|fertility|family planning|(?:health|dental|vision|medical)(?:\s*(?:,|and|&)\s*(?:health|dental|vision|medical))*\s+(?:insurance|benefits|coverage|plans?)|(?:medical|health)[, ]+(?:and )?(?:dental|vision)|dental[, ]+(?:and )?vision|insurance (?:coverage|plans?)|401\s?\(?k|stock options|equity (?:grants?|package|options)|reasonable accommodations?|request (?:an? )?accommodations?|to apply|when applying|how to apply|apply (?:by|online|now|today|here|via|through|using)|(?:application|hiring|interview) process|(?:submit|submitting) (?:a|an|your) (?:job )?application|if you (?:have a disability|need an? accommodation)|please let us know|inclusive (?:environment|workplace|culture)|we strive|join (?:us|our team)|best and brightest)\b`)
@@ -38,7 +41,7 @@ type requirements struct{}
 
 func (requirements) Name() string { return "requirement_lines" }
 
-func (requirements) Version() int { return 3 }
+func (requirements) Version() int { return 4 }
 
 func (requirements) Produces() []facts.Kind { return []facts.Kind{facts.Requirement} }
 
@@ -57,9 +60,15 @@ func (requirements) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 
 func requirementLines(doc *Doc, items []Span, hasSection bool) []facts.Fact {
 	var out []facts.Fact
-	companyLead := ""
-	if doc.Company != "" {
-		companyLead = "at " + strings.ToLower(doc.Company) + ","
+	company := strings.ToLower(doc.Company)
+	aboutCompany := func(text string, fallback bool) bool {
+		lower := strings.ToLower(text)
+		if company != "" && strings.HasPrefix(lower, "at "+company+",") {
+			return true
+		}
+		about := aboutCompanyRe.MatchString(text)
+		lead := about || company != "" && strings.HasPrefix(lower, company)
+		return fallback && (thisLeadRe.MatchString(text) && !about || lead && !demandRe.MatchString(text))
 	}
 	for _, line := range doc.lines() {
 		if strings.HasSuffix(line.Text, ":") {
@@ -72,14 +81,15 @@ func requirementLines(doc *Doc, items []Span, hasSection bool) []facts.Fact {
 			continue
 		}
 		base := facts.Flag("")
+		fallback := false
 		switch {
 		case section == SectionRequirements:
 			base = facts.Required
 		case section == SectionNiceToHave:
 			base = facts.Preferred
-		case !hasSection && (section == SectionIntro || section == SectionRole || section == SectionOther) &&
-			fallbackRe.MatchString(line.Text) && !offerWordRe.MatchString(line.Text):
+		case !hasSection && (section == SectionIntro || section == SectionRole || section == SectionOther) && !offerWordRe.MatchString(line.Text):
 			base = facts.Required
+			fallback = true
 		}
 		if base == "" {
 			continue
@@ -89,9 +99,11 @@ func requirementLines(doc *Doc, items []Span, hasSection bool) []facts.Fact {
 			lines = splitBullets(line)
 		}
 		for _, l := range lines {
-			for _, piece := range splitLong(l) {
-				if !nonRequirementRe.MatchString(piece.Text) && !eeoRe.MatchString(piece.Text) && !hashtagRe.MatchString(piece.Text) &&
-					(companyLead == "" || !strings.HasPrefix(strings.ToLower(piece.Text), companyLead)) {
+			for _, piece := range splitLong(l, fallback) {
+				if fallback && !fallbackRe.MatchString(piece.Text) {
+					continue
+				}
+				if !nonRequirementRe.MatchString(piece.Text) && !eeoRe.MatchString(piece.Text) && !hashtagRe.MatchString(piece.Text) && !aboutCompany(piece.Text, fallback) {
 					out = append(out, requirementFact(piece, base))
 				}
 			}
@@ -167,7 +179,7 @@ func hasRequirementSection(doc *Doc) bool {
 	return slices.ContainsFunc(doc.Sections, func(s Section) bool { return s.Name == SectionRequirements || s.Name == SectionNiceToHave })
 }
 
-func splitLong(l Line) []Line {
+func splitLong(l Line, always bool) []Line {
 	trim := func(l Line) Line {
 		if m := bulletRe.FindString(l.Text); m != "" {
 			l.Start += len(m)
@@ -176,7 +188,7 @@ func splitLong(l Line) []Line {
 		return l
 	}
 	l = trim(l)
-	if len(l.Text) <= maxRequirementLength {
+	if len(l.Text) <= maxRequirementLength && !always {
 		return keepLong([]Line{l})
 	}
 	var parts []Line

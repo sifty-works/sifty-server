@@ -265,6 +265,13 @@ groups:
   - name: Web3
     terms:
       - Web 3
+  - name: Crypto wallets
+    terms:
+      - Crypto wallet
+      - Web3 wallet
+      - Web3 wallets
+      - Self-custody wallet
+      - Non-custodial wallet
   - name: Claude
     ambiguous_terms:
       - Claude

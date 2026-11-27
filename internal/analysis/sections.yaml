@@ -86,6 +86,10 @@ headings:
   - {text: "mandatory", kind: requirements}
   - {text: "skills you should have", kind: requirements}
   - {text: "ihr profil", kind: requirements}
+  - {text: "key experience", kind: requirements}
+  - {text: "key qualifications", kind: requirements}
+  - {text: "key skills", kind: requirements}
+  - {text: "key requirements", kind: requirements}
   - {text: "nice to have", kind: nice_to_have}
   - {text: "nice to haves", kind: nice_to_have}
   - {text: "nice-to-have", kind: nice_to_have}

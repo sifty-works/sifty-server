@@ -182,6 +182,7 @@ func TestAlternativesAreOneEntryNamingThemAndSeparateSkillsAreSeparateEntries(t 
 		{"Docker, Kubernetes", [][]string{{"Docker"}, {"Kubernetes"}}},
 		{"Python or Go, Docker", [][]string{{"Python", "Go"}, {"Docker"}}},
 		{"Proficiency in one or more of Rust, TypeScript, Python or Move", [][]string{{"Rust", "TypeScript", "Python"}}},
+		{"Hands-on experience with crypto wallets, blockchain, or related Web3 products", [][]string{{"Crypto wallets", "Blockchain", "Web3"}}},
 	} {
 		t.Run(c.line, func(t *testing.T) {
 			entries, _ := entriesOf(c.line)
