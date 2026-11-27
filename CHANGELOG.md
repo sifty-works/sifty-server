@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+## 0.13.0
+
 - The vacancy page shows Skills inside the Fit band under Key facts, in two columns, Required and Nice to have, each with "N of M", the skills you lack first, then the unknown ones, then those you have; "N skills to answer" or "All skills answered" stands under the number. Every criterion of Fit is a row of Key facts, with ? and "Not stated" when the vacancy does not state it. The requirement lines that name no skill move to a folded "Other requirements" section with "I have it" and "I don't" buttons.
 - What they offer is removed from the vacancy page, with the analysis that read it. Saved Shortlist checks run again once, when their vacancy is next opened.
 - The requirement counts ("✓ 1 · ✕ 0 · ? 11") leave the Inbox rows and the page; a row says only that its vacancy is not analysed yet.
