@@ -5,6 +5,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 ## Unreleased
 
 - Analysis: an edit of any vocabulary or phrase list the analysis reads now re-reads stored postings by itself (locally, with no model call), so no posting keeps facts from an older list.
+- Skills: about forty more skills are recognised (F#, Redux, Dagster, pytest, Maven, ServiceNow, Qdrant, FinOps and others), a skill glued to the next sentence ("skills.Laravel") is found, and ordinary words no longer count as skills ("react quickly", "payment rails", "airflow management", "SOC" alone, "A/B failover", a company named Twilio in a sentence about careers). Stored postings are read again.
 
 ## 0.21.0
 

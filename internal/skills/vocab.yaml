@@ -42,6 +42,11 @@ other_names:
   - GitHub orgs
   - GitHub organization
   - GitHub organisation
+  - A/B failover
+  - Site Reliability Engineering Manager
+  - Site Reliability Engineering Director
+  - Site Reliability Engineering Lead
+  - Site Reliability Engineering Team
 
 company_words:
   - Labs
@@ -144,6 +149,8 @@ groups:
     terms:
       - React.js
       - ReactJS
+    exact_terms:
+      - React
   - name: Next.js
     terms:
       - NextJS
@@ -170,6 +177,8 @@ groups:
   - name: Rails
     terms:
       - Ruby on Rails
+    exact_terms:
+      - Rails
   - name: GraphQL
     terms:
       - GraphQL APIs
@@ -305,8 +314,6 @@ groups:
   - name: SOC 2
     terms:
       - SOC2
-    ambiguous_terms:
-      - SOC
   - name: RAG
     ambiguous_terms:
       - RAG
@@ -332,6 +339,10 @@ groups:
   - name: Datadog
   - name: Power BI
   - name: Airflow
+    terms:
+      - Apache Airflow
+    exact_terms:
+      - Airflow
   - name: Android
   - name: CAD
     ambiguous_terms:
@@ -424,6 +435,10 @@ groups:
       - MITRE
       - MITRE ATT
   - name: EDR
+    terms:
+      - Endpoint Detection and Response
+    ambiguous_terms:
+      - EDR
   - name: Apache Iceberg
     ambiguous_terms:
       - Iceberg
@@ -486,6 +501,8 @@ groups:
   - name: Splunk
   - name: RabbitMQ
   - name: Twilio
+    ambiguous_terms:
+      - Twilio
   - name: Microsoft Dynamics
     ambiguous_terms:
       - Dynamics
@@ -528,6 +545,8 @@ groups:
     terms:
       - CDK
   - name: WebSockets
+    terms:
+      - WebSocket
   - name: Aptos
   - name: FHIR
   - name: NestJS
@@ -585,6 +604,7 @@ groups:
   - name: OpenID Connect
     terms:
       - OpenID
+      - OIDC
   - name: MLflow
   - name: Unix
   - name: JWT
@@ -651,3 +671,55 @@ groups:
     ambiguous_terms:
       - Consul
   - name: Appian
+  - name: "F#"
+  - name: Airtable
+  - name: Qlik
+    terms:
+      - Qlik Sense
+      - QlikView
+  - name: Dagster
+  - name: Prefect
+    exact_terms:
+      - Prefect
+  - name: pytest
+  - name: JUnit
+  - name: Redux
+  - name: Tailwind CSS
+    terms:
+      - Tailwind
+  - name: Heroku
+  - name: Maven
+    ambiguous_terms:
+      - Maven
+  - name: Gradle
+  - name: SonarQube
+  - name: ServiceNow
+  - name: MuleSoft
+  - name: Informatica
+  - name: Talend
+  - name: Cosmos DB
+    terms:
+      - CosmosDB
+  - name: pgvector
+  - name: Qdrant
+  - name: ChromaDB
+  - name: LlamaIndex
+  - name: Express.js
+    terms:
+      - ExpressJS
+  - name: Groovy
+    exact_terms:
+      - Groovy
+  - name: FinOps
+  - name: Google Tag Manager
+  - name: SEMrush
+  - name: Ahrefs
+  - name: Asana
+  - name: JumpCloud
+  - name: Omni
+    ambiguous_terms:
+      - Omni
+  - name: Sanity
+    ambiguous_terms:
+      - Sanity
+  - name: Matplotlib

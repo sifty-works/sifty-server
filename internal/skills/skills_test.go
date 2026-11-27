@@ -238,6 +238,7 @@ func TestNamesThatAreNotSkillsAreIgnored(t *testing.T) {
 		{"Experience with Unity Catalog", nil},
 		{"Experience with Azure Key Vault", [][]string{{"Azure"}}},
 		{"Kanban Labs is hiring engineers", nil},
+		{"Candidates who react quickly to incidents", nil},
 		{"Strong Python foundation and Kanban experience", [][]string{{"Python"}, {"Kanban"}}},
 	} {
 		t.Run(c.line, func(t *testing.T) {
@@ -250,5 +251,16 @@ func TestNamesThatAreNotSkillsAreIgnored(t *testing.T) {
 				t.Fatalf("entries = %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+func TestDottedNamesInCapitalsStayOneSkillEach(t *testing.T) {
+	entries, _ := entriesOf("Node.JS and Vue.Js services")
+	var got [][]string
+	for _, e := range entries {
+		got = append(got, e.Names)
+	}
+	if want := [][]string{{"Node.js"}, {"Vue"}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("entries = %v, want %v", got, want)
 	}
 }

@@ -38,11 +38,13 @@ type groupData struct {
 	Name           string   `yaml:"name"`
 	Terms          []string `yaml:"terms"`
 	AmbiguousTerms []string `yaml:"ambiguous_terms"`
+	ExactTerms     []string `yaml:"exact_terms"`
 }
 
 type termInfo struct {
 	group     string
 	ambiguous bool
+	noContext bool
 	exact     string
 }
 
@@ -92,7 +94,7 @@ var defaultVocab = func() *vocab {
 			}
 		}
 	}
-	add := func(group, term string, ambiguous bool) {
+	add := func(group, term string, ambiguous, noContext bool) {
 		toks := tokenize(term)
 		if len(toks) == 0 {
 			return
@@ -101,24 +103,27 @@ var defaultVocab = func() *vocab {
 		if len(toks) > v.maxWords {
 			v.maxWords = len(toks)
 		}
-		v.terms[key] = termInfo{group, ambiguous, strings.TrimSpace(term)}
+		v.terms[key] = termInfo{group, ambiguous, noContext, strings.TrimSpace(term)}
 	}
 	for _, t := range d.OtherNames {
-		add("", t, false)
+		add("", t, false, false)
 	}
 	for _, g := range d.Groups {
-		ambig := map[string]bool{}
-		for _, t := range g.AmbiguousTerms {
-			ambig[strings.ToLower(strings.TrimSpace(t))] = true
+		special := map[string]bool{}
+		for _, t := range slices.Concat(g.AmbiguousTerms, g.ExactTerms) {
+			special[strings.ToLower(strings.TrimSpace(t))] = true
 		}
-		if !ambig[strings.ToLower(strings.TrimSpace(g.Name))] {
-			add(g.Name, g.Name, false)
+		if !special[strings.ToLower(strings.TrimSpace(g.Name))] {
+			add(g.Name, g.Name, false, false)
 		}
 		for _, t := range g.Terms {
-			add(g.Name, t, false)
+			add(g.Name, t, false, false)
 		}
 		for _, t := range g.AmbiguousTerms {
-			add(g.Name, t, true)
+			add(g.Name, t, true, false)
+		}
+		for _, t := range g.ExactTerms {
+			add(g.Name, t, true, true)
 		}
 	}
 	return v
@@ -131,6 +136,11 @@ type token struct {
 
 func isWordRune(r rune) bool  { return unicode.IsLetter(r) || unicode.IsDigit(r) }
 func firstRune(s string) rune { r, _ := utf8.DecodeRuneInString(s); return r }
+
+func gluedSentence(prev rune, rest string) bool {
+	head := []rune(rest[:min(len(rest), 12)])
+	return unicode.IsLower(prev) && len(head) > 2 && unicode.IsUpper(head[0]) && unicode.IsLower(head[1]) && unicode.IsLower(head[2])
+}
 
 func tokenize(s string) []token {
 	var out []token
@@ -147,7 +157,7 @@ func tokenize(s string) []token {
 			c, csz := utf8.DecodeRuneInString(s[j:])
 			if isWordRune(c) ||
 				((c == '+' || c == '#') && (isWordRune(prev) || prev == '+')) ||
-				((c == '.' || c == '&') && j+csz < len(s) && isWordRune(firstRune(s[j+csz:])) && isWordRune(prev)) {
+				((c == '.' || c == '&') && j+csz < len(s) && isWordRune(firstRune(s[j+csz:])) && isWordRune(prev) && !(c == '.' && gluedSentence(prev, s[j+csz:]))) {
 				prev, j = c, j+csz
 				continue
 			}
@@ -207,9 +217,9 @@ func (v *vocab) scan(text string) (hits []hit, toks []token) {
 	for _, h := range cands {
 		t := toks[h.from]
 		info := v.terms[t.lower]
-		ok := t.text == info.exact && !joinedByHyphen(text, t.start, t.end)
-		accepted := ok && whole
-		if ok && !whole {
+		ok := t.text == info.exact && (info.noContext || !joinedByHyphen(text, t.start, t.end))
+		accepted := ok && (whole || info.noContext)
+		if ok && !accepted {
 			for k := h.from - 3; k <= h.from+3; k++ {
 				if k < 0 || k >= len(toks) || k == h.from {
 					continue
