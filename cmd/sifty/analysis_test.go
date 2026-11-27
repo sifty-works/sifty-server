@@ -102,7 +102,7 @@ func TestAnalysisRunsBeforeFitsYouAndFitsYouReadsTheFacts(t *testing.T) {
 	}))
 	t.Cleanup(prov.Close)
 	dir := t.TempDir()
-	cfg := fmt.Sprintf("providers:\n  box: {type: openai, model: m, cost: local, endpoint: %q}\nwork: {reading: box, shortlist_check: box, preparation: box}\n", prov.URL)
+	cfg := fmt.Sprintf("providers:\n  box: {type: openai, model: m, cost: local, endpoint: %q}\nwork: {reading: box, shortlist_check: box, preparation: box}\nprecise_reading: false\n", prov.URL)
 	if err := os.WriteFile(filepath.Join(dir, "sifty.yaml"), []byte(cfg), 0600); err != nil {
 		t.Fatal(err)
 	}

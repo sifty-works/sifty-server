@@ -194,16 +194,25 @@ func TestTheSeparatePauseAddressIsNoLongerUsed(t *testing.T) {
 	}
 }
 
-func TestPreciseReadingIsOffByDefaultAndTheSwitchChangesOnlyItself(t *testing.T) {
+func TestPreciseReadingDefaultsByTheCostOfTheReadingProviderAndTheSwitchChangesOnlyItself(t *testing.T) {
 	base, _ := startModelsServe(t)
 
+	if m := getModels(t, base); !m.PreciseReading {
+		t.Fatalf("Precise reading with a local Reading provider and no choice: %+v", m)
+	}
+	if result, status := apiSend(t, http.MethodPatch, base, "/api/models", `{"work":{"reading":"cloudbox"}}`); status != http.StatusOK {
+		t.Fatalf("patch work: status %d, body %v", status, result)
+	}
 	if m := getModels(t, base); m.PreciseReading {
-		t.Fatalf("Precise reading on a fresh data folder: %+v", m)
+		t.Errorf("Precise reading with a paid Reading provider and no choice: %+v", m)
 	}
-	if result, status := apiSend(t, http.MethodPatch, base, "/api/models", `{"preciseReading":true}`); status != http.StatusOK {
-		t.Fatalf("patch: status %d, body %v", status, result)
+	if result, status := apiSend(t, http.MethodPatch, base, "/api/models", `{"work":{"reading":"localbox"}}`); status != http.StatusOK {
+		t.Fatalf("patch work back: status %d, body %v", status, result)
 	}
-	if m := getModels(t, base); !m.PreciseReading || m.AllowPaidBulk || m.Paused || m.DailyLimit != 25 || workProvider(m, "reading") != "localbox" {
-		t.Errorf("after turning Precise reading on: %+v", m)
+	if result, status := apiSend(t, http.MethodPatch, base, "/api/models", `{"preciseReading":false}`); status != http.StatusOK {
+		t.Fatalf("patch switch: status %d, body %v", status, result)
+	}
+	if m := getModels(t, base); m.PreciseReading || m.AllowPaidBulk || m.Paused || m.DailyLimit != 25 || workProvider(m, "reading") != "localbox" {
+		t.Errorf("after turning Precise reading off with a local provider: %+v", m)
 	}
 }

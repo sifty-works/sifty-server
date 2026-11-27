@@ -34,7 +34,7 @@ func (rd *reading) queue(ctx context.Context) error {
 		return nil
 	}
 	cfg := rd.store.Get()
-	if !cfg.PreciseReading {
+	if !cfg.PreciseReadingOn() {
 		return nil
 	}
 	if pc, ok := cfg.Providers[cfg.WorkProviderFor(models.NamedTask("read_domain").Work)]; ok && pc.Cost == "paid" && !cfg.AllowPaidBulk {

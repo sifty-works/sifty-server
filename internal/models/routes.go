@@ -71,7 +71,7 @@ func getModels(ctx context.Context, gate *Gate) modelsResp {
 	out.AllowPaidBulk = cfg.AllowPaidBulk
 	out.Paused = status.Paused
 	out.DailyLimit = cfg.DailyModelLimit
-	out.PreciseReading = cfg.PreciseReading
+	out.PreciseReading = cfg.PreciseReadingOn()
 	out.TodayCalls = gate.TodayBackgroundCalls(ctx)
 	return out
 }
@@ -97,7 +97,7 @@ func patchModels(ctx context.Context, gate *Gate, req modelsPatch, changed func(
 				c.DailyModelLimit = *req.DailyLimit
 			}
 			if req.PreciseReading != nil {
-				c.PreciseReading = *req.PreciseReading
+				c.PreciseReading = req.PreciseReading
 			}
 			return nil
 		})

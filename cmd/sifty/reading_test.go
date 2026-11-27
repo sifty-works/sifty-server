@@ -41,7 +41,7 @@ func newReadFix(t *testing.T, precise bool) readFix {
 	if err != nil {
 		t.Fatalf("open settings: %v", err)
 	}
-	if err := store.Update(func(c *config.Config) error { c.PreciseReading = precise; return nil }); err != nil {
+	if err := store.Update(func(c *config.Config) error { c.PreciseReading = &precise; return nil }); err != nil {
 		t.Fatalf("update settings: %v", err)
 	}
 	logger := slog.New(slog.DiscardHandler)

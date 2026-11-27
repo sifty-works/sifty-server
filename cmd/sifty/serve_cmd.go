@@ -396,7 +396,7 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 			func(class string, vid int64) models.Model {
 				return gate.For(models.NamedTask("read_domain").Work, class, vid)
 			},
-			func() bool { return store.Get().PreciseReading }),
+			func() bool { return store.Get().PreciseReadingOn() }),
 	})
 
 	r.Register(runner.Kind{

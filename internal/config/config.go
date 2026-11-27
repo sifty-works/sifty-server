@@ -118,7 +118,7 @@ type Config struct {
 	Work            WorkConfig                `yaml:"work,omitempty"`
 	AllowPaidBulk   bool                      `yaml:"allow_paid_bulk,omitempty"`
 	DailyModelLimit int                       `yaml:"daily_model_limit,omitempty"`
-	PreciseReading  bool                      `yaml:"precise_reading,omitempty"`
+	PreciseReading  *bool                     `yaml:"precise_reading,omitempty"`
 }
 
 func Defaults() Config {
@@ -161,6 +161,13 @@ var WorkNouns = map[string]string{"reading": "reading", "shortlist_check": "the 
 
 func (c *Config) WorkProviderFor(kind string) string {
 	return c.Work[kind]
+}
+
+func (c Config) PreciseReadingOn() bool {
+	if c.PreciseReading != nil {
+		return *c.PreciseReading
+	}
+	return c.Providers[c.WorkProviderFor("reading")].Cost == "local"
 }
 
 func (c *Config) SetWorkProvider(kind, provider string) bool {

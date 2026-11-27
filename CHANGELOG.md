@@ -4,6 +4,9 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- "Precise reading" is on by default when the model set for Reading is local, and off for a free or paid provider; a choice made in Settings stays. With a local model, every company's domain is now read in the background, newest first.
+- The vacancy band: a larger "Fit" label; "N skills to answer" sits at the bottom of the score column; each Skills column has its own title and count ("Skills required (2 of 3)"), and a single column spans the band; no line under the last Key facts row.
+
 ## 0.16.0
 
 - The company's domain is a goal: the Goals table has a Domain row with 22 domains (Infrastructure, DeFi, Exchange, Gambling…) to place in Preferred, Possible, Unwanted or Never. It enters Fit with weight 0.10; a domain in Never caps Fit at 40, not 15, and does not move the vacancy to the end of Best fit, because the domain is read by the model and it is wrong for about one company in ten. A company not read yet counts as not stated. Every result is recomputed once.
