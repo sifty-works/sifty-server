@@ -18,6 +18,8 @@ var VocabBytes []byte
 
 type vocabData struct {
 	TechnologyContext []string `yaml:"technology_context"`
+	OtherNames        []string `yaml:"other_names"`
+	CompanyWords      []string `yaml:"company_words"`
 	Numbers           map[string]int
 	Levels            levelsData  `yaml:"levels"`
 	Groups            []groupData `yaml:"groups"`
@@ -48,6 +50,7 @@ type vocab struct {
 	terms    map[string]termInfo
 	maxWords int
 	context  map[string]bool
+	company  map[string]bool
 	order    []string
 	numbers  map[string]int
 	years    []yearRule
@@ -70,9 +73,12 @@ var defaultVocab = func() *vocab {
 	if err := yaml.Unmarshal(VocabBytes, &d); err != nil {
 		panic("skills: load vocab.yaml: " + err.Error())
 	}
-	v := &vocab{terms: map[string]termInfo{}, context: map[string]bool{}, order: d.Levels.Order, numbers: d.Numbers, maxWords: 1}
+	v := &vocab{terms: map[string]termInfo{}, context: map[string]bool{}, company: map[string]bool{}, order: d.Levels.Order, numbers: d.Numbers, maxWords: 1}
 	for _, w := range d.TechnologyContext {
 		v.context[strings.ToLower(strings.TrimSpace(w))] = true
+	}
+	for _, w := range d.CompanyWords {
+		v.company[w] = true
 	}
 	for _, y := range d.Levels.Years {
 		v.years = append(v.years, yearRule{y.From, y.Level})
@@ -96,6 +102,9 @@ var defaultVocab = func() *vocab {
 			v.maxWords = len(toks)
 		}
 		v.terms[key] = termInfo{group, ambiguous, strings.TrimSpace(term)}
+	}
+	for _, t := range d.OtherNames {
+		add("", t, false)
 	}
 	for _, g := range d.Groups {
 		ambig := map[string]bool{}
@@ -177,7 +186,7 @@ func (v *vocab) scan(text string) (hits []hit, toks []token) {
 			if !ok {
 				continue
 			}
-			if i > 0 && toks[i-1].lower == "non" {
+			if info.group == "" || i > 0 && toks[i-1].lower == "non" || i+n < len(toks) && v.company[toks[i+n].text] {
 				i += n - 1
 				break
 			}
@@ -228,7 +237,7 @@ func (v *vocab) scanName(name string) []hit {
 	if len(toks) == 0 {
 		return nil
 	}
-	if info, ok := v.terms[joinLower(toks)]; ok {
+	if info, ok := v.terms[joinLower(toks)]; ok && info.group != "" {
 		return []hit{{info.group, 0, len(toks)}}
 	}
 	hits, _ := v.scan(name)

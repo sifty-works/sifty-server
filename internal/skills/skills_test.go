@@ -182,6 +182,7 @@ func TestAlternativesAreOneEntryNamingThemAndSeparateSkillsAreSeparateEntries(t 
 		{"Docker, Kubernetes", [][]string{{"Docker"}, {"Kubernetes"}}},
 		{"Python or Go, Docker", [][]string{{"Python", "Go"}, {"Docker"}}},
 		{"Proficiency in one or more of Rust, TypeScript, Python or Move", [][]string{{"Rust", "TypeScript", "Python"}}},
+		{"JavaScript/TypeScript", [][]string{{"JavaScript", "TypeScript"}}},
 		{"Hands-on experience with crypto wallets, blockchain, or related Web3 products", [][]string{{"Crypto wallets", "Blockchain", "Web3"}}},
 	} {
 		t.Run(c.line, func(t *testing.T) {
@@ -224,6 +225,29 @@ func TestVerdictCompareDemandedAndOwnLevel(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			if got := NewIndex(c.held, c.absent).Verdict(c.entry); got != c.want {
 				t.Fatalf("verdict = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestNamesThatAreNotSkillsAreIgnored(t *testing.T) {
+	for _, c := range []struct {
+		line string
+		want [][]string
+	}{
+		{"Experience with Unity Catalog", nil},
+		{"Experience with Azure Key Vault", [][]string{{"Azure"}}},
+		{"Kanban Labs is hiring engineers", nil},
+		{"Strong Python foundation and Kanban experience", [][]string{{"Python"}, {"Kanban"}}},
+	} {
+		t.Run(c.line, func(t *testing.T) {
+			entries, _ := entriesOf(c.line)
+			var got [][]string
+			for _, e := range entries {
+				got = append(got, e.Names)
+			}
+			if !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("entries = %v, want %v", got, c.want)
 			}
 		})
 	}

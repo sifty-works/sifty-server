@@ -1,4 +1,4 @@
-version: 1
+version: 2
 
 numbers: {one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, eighteen: 18, twenty-four: 24}
 
@@ -33,6 +33,25 @@ technology_context:
   - experienced
   - year
   - years
+
+other_names:
+  - Unity Catalog
+  - Key Vault
+  - Hyperledger Fabric
+  - GitHub org
+  - GitHub orgs
+  - GitHub organization
+  - GitHub organisation
+
+company_words:
+  - Labs
+  - Inc
+  - Ltd
+  - LLC
+  - GmbH
+  - Corp
+  - Corporation
+  - Foundation
 
 levels:
   order:
@@ -76,9 +95,6 @@ groups:
     ambiguous_terms:
       - Go
   - name: TypeScript
-    terms:
-      - JavaScript/TypeScript
-      - TypeScript/JavaScript
     ambiguous_terms:
       - TS
   - name: JavaScript
@@ -128,7 +144,6 @@ groups:
     terms:
       - React.js
       - ReactJS
-      - React/TypeScript
   - name: Next.js
     terms:
       - NextJS
@@ -607,3 +622,32 @@ groups:
     terms:
       - Data Factory
   - name: Capital IQ
+  - name: ISO 27001
+    terms:
+      - ISO/IEC 27001
+      - ISO27001
+  - name: DeFi
+    terms:
+      - Decentralized Finance
+  - name: macOS
+    terms:
+      - Mac OS
+  - name: iOS
+  - name: Vector databases
+    terms:
+      - Vector database
+      - Vector DB
+      - Vector DBs
+  - name: Laravel
+  - name: scikit-learn
+    terms:
+      - sklearn
+  - name: CrowdStrike
+  - name: Jamf
+  - name: Workday
+    ambiguous_terms:
+      - Workday
+  - name: HashiCorp Consul
+    ambiguous_terms:
+      - Consul
+  - name: Appian

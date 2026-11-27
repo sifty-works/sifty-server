@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Skills: more skills are recognised (ISO 27001, DeFi, macOS, iOS, vector databases, Laravel, scikit-learn, CrowdStrike, Jamf, Workday, Consul, Appian); product and company names no longer count as skills ("Unity Catalog" is not Unity, "Azure Key Vault" not Vault, a company called "<Skill> Labs" not the skill); "JavaScript/TypeScript" is met by either.
+
 ## 0.20.0
 
 - Requirements: more requirement headings are recognised ("What we expect from you", "You might be a great fit if", "You may be a fit for this role if you have:"), and "Desired", "Good to have", "Bonus Qualifications" and "Preferred Requirements" mark nice-to-haves instead of Required; a heading such as "Skills You Should Have" is no longer split into a heading and a requirement, and "<Product> Education:" inside a company sentence no longer opens a requirements section. Conditions and key facts are read again with the new sections.
