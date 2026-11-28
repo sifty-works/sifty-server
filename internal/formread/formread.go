@@ -3,11 +3,11 @@ package formread
 import "context"
 
 type Field struct {
-	ID       string
-	Label    string
-	Kind     string
-	Required bool
-	Options  []string
+	ID       string   `json:"key"`
+	Label    string   `json:"label"`
+	Kind     string   `json:"kind"`
+	Required bool     `json:"required"`
+	Options  []string `json:"options"`
 }
 
 type Form struct {

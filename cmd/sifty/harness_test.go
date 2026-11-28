@@ -23,6 +23,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/fetch"
 	"github.com/sifty-works/sifty-server/internal/fetch/fetchtest"
+	"github.com/sifty-works/sifty-server/internal/formread"
 	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
@@ -108,7 +109,7 @@ func registerKindsFetching(t *testing.T, r *runner.Runner, d *db.DB, m models.Mo
 	if err != nil {
 		t.Fatalf("open settings: %v", err)
 	}
-	registerJobKinds(r, d, store, fixedModel{m}, cat, f, slog.New(slog.NewTextHandler(io.Discard, nil)), false, now)
+	registerJobKinds(r, d, store, fixedModel{m}, cat, f, slog.New(slog.NewTextHandler(io.Discard, nil)), false, now, formread.NewReader(f, formread.Embedded()))
 }
 
 func newRouteServer(t *testing.T, d *db.DB, r *runner.Runner) string {

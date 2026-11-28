@@ -732,7 +732,7 @@ func TestFollowUpEnqueuedAfterSuccess(t *testing.T) {
 				Name: "first",
 				Then: []string{"second"},
 				Run:  func(context.Context, *runner.Job) error { return tc.run },
-				Follow: func(context.Context, func(runner.Spec) (int64, error)) error {
+				Follow: func(context.Context, *runner.Job, func(runner.Spec) (int64, error)) error {
 					return tc.follow
 				},
 			})

@@ -120,7 +120,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		if body.VacancyID <= 0 {
 			return SkillsDecisionResp{}, apperr.Invalid{Message: "vacancyId is required."}
 		}
-		vacancyID, err := resolveVacancy(ctx, database, body.VacancyID)
+		vacancyID, err := ResolveVacancy(ctx, database, body.VacancyID)
 		if err != nil {
 			return SkillsDecisionResp{}, err
 		}
@@ -206,7 +206,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		if err != nil {
 			return VacancyView{}, err
 		}
-		vacancyID, err := resolveVacancy(r.Context(), database, id)
+		vacancyID, err := ResolveVacancy(r.Context(), database, id)
 		if err != nil {
 			return VacancyView{}, err
 		}
@@ -259,7 +259,7 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		if err != nil {
 			return struct{}{}, err
 		}
-		vacancyID, err := resolveVacancy(r.Context(), database, id)
+		vacancyID, err := ResolveVacancy(r.Context(), database, id)
 		if err != nil {
 			return struct{}{}, err
 		}
@@ -397,7 +397,7 @@ func resolveRequestIDs(req *http.Request, database *db.DB, profileID int64) (int
 	if err != nil {
 		return 0, 0, err
 	}
-	vacancyID, err := resolveVacancy(req.Context(), database, id)
+	vacancyID, err := ResolveVacancy(req.Context(), database, id)
 	if err != nil {
 		return 0, 0, err
 	}

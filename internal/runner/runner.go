@@ -48,7 +48,7 @@ type Kind struct {
 	Direct  bool
 	After   []string
 	Then    []string
-	Follow  func(ctx context.Context, enqueue func(Spec) (int64, error)) error
+	Follow  func(ctx context.Context, j *Job, enqueue func(Spec) (int64, error)) error
 }
 
 type progressJSON struct {
@@ -308,6 +308,18 @@ func (r *Runner) enqueue(s Spec, states string) (int64, error) {
 	}
 	r.signal()
 	return id, nil
+}
+
+func Latest(ctx context.Context, database *db.DB, kind, subject string) (state, failure string, err error) {
+	err = database.QueryRowContext(ctx,
+		`SELECT state, error FROM job WHERE kind=? AND subject=? ORDER BY id DESC LIMIT 1`, kind, subject).Scan(&state, &failure)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("runner: latest %s job: %w", kind, err)
+	}
+	return state, failure, nil
 }
 
 func (r *Runner) Cancel(id int64) error {
@@ -601,7 +613,7 @@ func (r *Runner) runJob(ctx context.Context, j *Job, kind Kind) {
 		}()
 		runErr = kind.Run(ctx, j)
 		if runErr == nil && ctx.Err() == nil && kind.Follow != nil {
-			runErr = kind.Follow(ctx, r.Enqueue)
+			runErr = kind.Follow(ctx, j, r.Enqueue)
 		}
 		if runErr == nil && ctx.Err() == nil {
 			for _, name := range kind.Then {

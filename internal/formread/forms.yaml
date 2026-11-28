@@ -1,0 +1,68 @@
+forms:
+  - hosts: [boards.greenhouse.io, job-boards.greenhouse.io, boards.eu.greenhouse.io, job-boards.eu.greenhouse.io]
+    system: Greenhouse
+    page: '^/(?P<token>[^/?#]+)/jobs/(?P<id>[0-9]+)'
+    data: https://boards-api.greenhouse.io/v1/boards/{token}/jobs/{id}?questions=true
+    kinds:
+      input_text: short_text
+      textarea: long_text
+      input_file: file
+      multi_value_single_select: choice
+      multi_value_multi_select: multiple_choice
+      input_hidden: skip
+    questions:
+      - list: questions
+        label: label
+        required: required
+        type: fields.type
+        options: fields.values
+        option_label: label
+        id: fields.name
+      - list: location_questions
+        label: label
+        required: required
+        type: fields.type
+        options: fields.values
+        option_label: label
+        id: fields.name
+      - list: demographic_questions.questions
+        label: label
+        required: required
+        type: type
+        options: answer_options
+        option_label: label
+        id: id
+      - list: compliance.questions
+        label: label
+        required: required
+        type: fields.type
+        options: fields.values
+        option_label: label
+        id: fields.name
+  - hosts: [jobs.ashbyhq.com]
+    system: Ashby
+    page: '^/(?P<org>[^/?#]+)/(?P<id>[0-9a-fA-F-]{36})'
+    data: https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobPosting&variables=%7B%22organizationHostedJobsPageName%22%3A%22{org}%22%2C%22jobPostingId%22%3A%22{id}%22%7D&query=query%20ApiJobPosting%28%24organizationHostedJobsPageName%3A%20String%21%2C%20%24jobPostingId%3A%20String%21%29%20%7B%20jobPosting%28organizationHostedJobsPageName%3A%20%24organizationHostedJobsPageName%2C%20jobPostingId%3A%20%24jobPostingId%29%20%7B%20applicationForm%20%7B%20sections%20%7B%20fieldEntries%20%7B%20id%20field%20isRequired%20isHidden%20%7D%20%7D%20%7D%20%7D%20%7D
+    decode: json
+    kinds:
+      String: short_text
+      LongText: long_text
+      Email: email
+      Phone: phone
+      Url: link
+      Date: date
+      Number: number
+      Boolean: yes_no
+      File: file
+      Location: location
+      ValueSelect: choice
+      MultiValueSelect: multiple_choice
+    questions:
+      - list: data.jobPosting.applicationForm.sections.fieldEntries
+        label: field.title
+        required: isRequired
+        hidden: isHidden
+        type: field.type
+        options: field.selectableValues
+        option_label: label
+        id: field.path

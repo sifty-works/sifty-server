@@ -58,7 +58,7 @@ func New(
 func (c *Collector) Register() {
 	c.runner.Register(runner.Kind{
 		Name: "collect", Run: c.run, Resume: false, Direct: true, Then: []string{"recompute_fit"},
-		Follow: func(ctx context.Context, _ func(runner.Spec) (int64, error)) error {
+		Follow: func(ctx context.Context, _ *runner.Job, _ func(runner.Spec) (int64, error)) error {
 			if c.Follow == nil {
 				return nil
 			}

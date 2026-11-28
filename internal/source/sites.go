@@ -3,12 +3,10 @@ package source
 import (
 	_ "embed"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
+	"github.com/sifty-works/sifty-server/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -87,21 +85,13 @@ func buildSiteMap(entries []siteEntry) map[string]knownSite {
 }
 
 func LoadSites(overridePath string) (broken string, err error) {
-	data, readErr := os.ReadFile(overridePath)
-	if os.IsNotExist(readErr) {
-		return "", nil
-	}
-	if readErr != nil {
-		return "", readErr
-	}
-	entries, parseErr := parseSites(data)
-	if parseErr != nil {
-		if b := overridePath + ".broken-" + time.Now().UTC().Format("20060102T150405"); os.Rename(overridePath, b) == nil {
-			broken = filepath.Base(b)
+	return config.LoadOverride(overridePath, func(data []byte) error {
+		entries, err := parseSites(data)
+		if err != nil {
+			return err
 		}
-		return broken, parseErr
-	}
-	base, _ := parseSites(embeddedSites)
-	sitesByHost = buildSiteMap(append(base, entries...))
-	return "", nil
+		base, _ := parseSites(embeddedSites)
+		sitesByHost = buildSiteMap(append(base, entries...))
+		return nil
+	})
 }

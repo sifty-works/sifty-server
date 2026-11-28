@@ -49,7 +49,7 @@ func newReadFix(t *testing.T, precise bool) readFix {
 	r := runner.New(d, nil, time.Now, logger)
 	fm := &models.FakeModel{}
 	cat := catalog.New(d, time.Now)
-	registerJobKinds(r, d, store, fixedModel{fm}, cat, fetchtest.NewMap(), logger, false, time.Now)
+	registerJobKinds(r, d, store, fixedModel{fm}, cat, fetchtest.NewMap(), logger, false, time.Now, nil)
 	rd := &reading{database: d, store: store, runner: r}
 	base := newRouteServerWithReading(t, d, r, candidate.Readers{PDF: candidate.ProgramText{Program: filepath.Join(t.TempDir(), "absent")}}, rd)
 	return readFix{d: d, r: r, fm: fm, base: base, cat: cat, queue: enqueueRecomputeFit(d, r, logger, rd), logger: logger}

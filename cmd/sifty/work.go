@@ -39,6 +39,7 @@ var jobKinds = map[string]jobKind{
 	"locate":           {label: "Employer's page", subject: vacancySubject},
 	"analyze_document": {label: "Document analysis", work: "reading", subject: documentSubject},
 	"read_model":       {label: "Reading companies", work: "reading", subject: readSubject},
+	"prepare":          {label: "Reading the application form", subject: vacancySubject},
 }
 
 func documentSubject(ctx context.Context, database *db.DB, subject string) (string, error) {

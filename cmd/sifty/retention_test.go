@@ -50,7 +50,7 @@ func runRetentionJobWithLimit(t *testing.T, d *db.DB, cat *catalog.Catalog, now 
 	if err != nil {
 		t.Fatalf("open settings: %v", err)
 	}
-	registerJobKinds(r, d, store, fixedModel{&models.FakeModel{}}, cat, fetchtest.NewMap(), slog.New(slog.NewTextHandler(io.Discard, nil)), false, func() time.Time { return now })
+	registerJobKinds(r, d, store, fixedModel{&models.FakeModel{}}, cat, fetchtest.NewMap(), slog.New(slog.NewTextHandler(io.Discard, nil)), false, func() time.Time { return now }, nil)
 	r.Enqueue(runner.Spec{Kind: "retention"})
 	rCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()

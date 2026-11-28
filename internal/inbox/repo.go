@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/fit"
 	"github.com/sifty-works/sifty-server/internal/listing"
+	"github.com/sifty-works/sifty-server/internal/runner"
 )
 
 type repoRow struct {
@@ -55,7 +57,7 @@ func resolveProfile(ctx context.Context, database *db.DB, pid int64) (int64, err
 	return id, nil
 }
 
-func resolveVacancy(ctx context.Context, database *db.DB, id int64) (int64, error) {
+func ResolveVacancy(ctx context.Context, database *db.DB, id int64) (int64, error) {
 	var realID int64
 	err := database.QueryRowContext(ctx,
 		`SELECT id FROM vacancy WHERE id=COALESCE((SELECT new_id FROM vacancy_alias WHERE old_id=?),?)`,
@@ -341,7 +343,6 @@ func loadVacancyFull(ctx context.Context, database *db.DB, profileID, vacancyID 
 		       v.expires_at,
 		       v.url, v.apply_url, v.text_state, v.body,
 		       COALESCE((SELECT url FROM employer_page WHERE vacancy=v.id),''),
-		       EXISTS (SELECT 1 FROM job WHERE kind='locate' AND subject=CAST(v.id AS TEXT) AND state IN ('queued','running')),
 		       `+fit.Columns+`
 		FROM vacancy v LEFT JOIN decision d ON d.vacancy=v.id AND d.profile=? `+fit.Join+`
 		WHERE v.id=? AND `+notExcludedFor,
@@ -351,13 +352,18 @@ func loadVacancyFull(ctx context.Context, database *db.DB, profileID, vacancyID 
 		&unread, &row.reason,
 		&appliedAt, &appliedName,
 		&row.expiresAt,
-		&vd.url, &vd.applyURL, &vd.textState, &vd.body, &vd.employer, &vd.searching}, row.fit.Dest()...)...)
+		&vd.url, &vd.applyURL, &vd.textState, &vd.body, &vd.employer}, row.fit.Dest()...)...)
 	if err == sql.ErrNoRows {
 		return "", repoRow{}, viewData{}, apperr.NotFound{Message: "Role not found."}
 	}
 	if err != nil {
 		return "", repoRow{}, viewData{}, fmt.Errorf("inbox: vacancy full: %w", err)
 	}
+	search, _, err := runner.Latest(ctx, database, "locate", strconv.FormatInt(vacancyID, 10))
+	if err != nil {
+		return "", repoRow{}, viewData{}, err
+	}
+	vd.searching = search == "queued" || search == "running"
 	row.unread = unread != 0
 	row.stage = stage
 	row.appliedAt = appliedAt.String

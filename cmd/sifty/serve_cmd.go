@@ -25,6 +25,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/fetch"
 	"github.com/sifty-works/sifty-server/internal/fetch/fetchtest"
 	"github.com/sifty-works/sifty-server/internal/fit"
+	"github.com/sifty-works/sifty-server/internal/formread"
 	"github.com/sifty-works/sifty-server/internal/locate"
 	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
@@ -106,6 +107,11 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		recovered = append(recovered, server.RecoveredFile{File: "sites.yaml", Text: sitesRecoveryText(brokenSite, siteErr)})
 	}
 
+	templates, brokenForms, formsErr := formread.LoadTemplates(filepath.Join(dataDir, "vocab", "forms.yaml"))
+	if formsErr != nil {
+		recovered = append(recovered, server.RecoveredFile{File: "forms.yaml", Text: formsRecoveryText(brokenForms, formsErr)})
+	}
+
 	for _, r := range recovered {
 		fmt.Fprintf(stderr, "recovered %s: %s\n", r.File, r.Text)
 	}
@@ -148,7 +154,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	r := runner.New(database, map[string]int{"net": 4, "cpu": 1}, time.Now, logger)
 	r.SetPause(gate.IsPaused)
 
-	registerJobKinds(r, database, store, gate, cat, fetcher, logger, offline, time.Now)
+	registerJobKinds(r, database, store, gate, cat, fetcher, logger, offline, time.Now, formread.NewReader(fetcher, templates))
 	queueUnsearched(ctx, database, r, logger)
 	if n, err := candidate.ResetInterruptedAnalyses(ctx, database); err != nil {
 		logger.Warn("interrupted analyses not reset", "err", err)
@@ -289,15 +295,24 @@ func settingsRecoveryText(r config.OpenResult) string {
 }
 
 func sitesRecoveryText(broken string, err error) string {
-	const file = "Your site descriptions file vocab/sites.yaml "
 	var refused source.SitesRefused
-	if !errors.As(err, &refused) {
-		return file + "could not be read. The built-in site descriptions are used."
+	return vocabRecoveryText("site descriptions", "sites.yaml", broken, errors.As(err, &refused), refused.Reason)
+}
+
+func formsRecoveryText(broken string, err error) string {
+	var refused formread.Refused
+	return vocabRecoveryText("form templates", "forms.yaml", broken, errors.As(err, &refused), refused.Reason)
+}
+
+func vocabRecoveryText(what, file, broken string, refused bool, reason string) string {
+	prefix, builtIn := "Your "+what+" file vocab/"+file+" ", " The built-in "+what+" are used"
+	switch {
+	case !refused:
+		return prefix + "could not be read." + builtIn + "."
+	case broken == "":
+		return prefix + "could not be used and could not be moved aside, so it was left as it is. " + reason + builtIn + " for this run."
 	}
-	if broken == "" {
-		return file + "could not be used and could not be moved aside, so it was left as it is. " + refused.Reason + " The built-in site descriptions are used for this run."
-	}
-	return file + "could not be used and was moved to " + broken + ". " + refused.Reason + " The built-in site descriptions are used."
+	return prefix + "could not be used and was moved to " + broken + ". " + reason + builtIn + "."
 }
 
 func openLog(dataDir string, stderr io.Writer) (*slog.Logger, func(func() []string), func(), error) {
@@ -370,7 +385,7 @@ func fitRules(store *config.Store) func() fit.Rules {
 	return func() fit.Rules { c := store.Get(); return fit.Rules{Weights: c.Weights, Rates: c.Rates} }
 }
 
-func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, gate modelSource, cat *catalog.Catalog, fetcher fetch.Fetcher, logger *slog.Logger, offline bool, now func() time.Time) {
+func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, gate modelSource, cat *catalog.Catalog, fetcher fetch.Fetcher, logger *slog.Logger, offline bool, now func() time.Time, forms formread.FormReader) {
 	r.Register(runner.Kind{
 		Name:   "recompute_fit",
 		Resume: true,
@@ -421,6 +436,9 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 		Name:   locate.Kind,
 		Resume: true,
 		Run:    locate.Run(database, locate.Finder{Fetcher: fetcher, Boards: boardLists{fetcher}}, now),
+		Follow: func(runCtx context.Context, j *runner.Job, enqueue func(runner.Spec) (int64, error)) error {
+			return queuePrepare(runCtx, database, enqueue, j.Subject)
+		},
 	})
 
 	r.Register(runner.Kind{
@@ -429,6 +447,13 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 		Patient: true,
 		Run: func(runCtx context.Context, j *runner.Job) error {
 			return runAnalyzeDocument(runCtx, j, database, gate.For(models.NamedTask("document_proposals").Work, "background"))
+		},
+	})
+
+	r.Register(runner.Kind{
+		Name: formread.Kind,
+		Run: func(runCtx context.Context, j *runner.Job) error {
+			return runPrepare(runCtx, j, database, forms, now)
 		},
 	})
 
