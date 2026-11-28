@@ -37,6 +37,7 @@ func TestAnswersUseTheActiveProfileCompensationTheLegalNameAndFreeMovementOfWork
 		{ID: "why", Label: "Why do you want to work here?", Kind: "long_text"},
 		{ID: "spain", Label: "Are you legally authorized to work in Spain?", Kind: "yes_no"},
 		{ID: "us", Label: "Are you legally authorized to work in the U.S.?", Kind: "yes_no"},
+		{ID: "canada", Label: "Are you legally authorized to work in Canada?", Kind: "yes_no"},
 		{ID: "ussp", Label: "Will you require visa sponsorship to work in the United States?", Kind: "yes_no"},
 		{ID: "gender", Label: "Gender", Kind: "choice", Options: []string{"Female", "Male"}},
 		{ID: "based", Label: "Are you authorized to work in the country in which this job is based?", Kind: "yes_no"},
@@ -44,7 +45,7 @@ func TestAnswersUseTheActiveProfileCompensationTheLegalNameAndFreeMovementOfWork
 	if err != nil {
 		t.Fatalf("answer: %v", err)
 	}
-	for id, want := range map[string]string{"salary": "5000 USD per month", "name": "Rowan Quill", "why": "I like the product.", "spain": "Yes", "us": "No", "ussp": "Yes", "gender": "Male"} {
+	for id, want := range map[string]string{"salary": "5000 USD per month", "name": "Rowan Quill", "why": "I like the product.", "spain": "Yes", "us": "No", "canada": "No", "ussp": "Yes", "gender": "Male"} {
 		if got := out[id].Values; len(got) != 1 || got[0] != want {
 			t.Errorf("%s = %v, want %q", id, got, want)
 		}

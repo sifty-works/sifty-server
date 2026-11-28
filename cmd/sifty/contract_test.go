@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/sifty-works/sifty-server/internal/server"
+	"github.com/sifty-works/sifty-server/internal/server/servertest"
 )
 
 func TestContractResponseShapes(t *testing.T) {
@@ -52,7 +53,7 @@ func TestContractResponseShapes(t *testing.T) {
 				t.Fatalf("GET %s: decode body: %v", path, err)
 			}
 
-			for _, violation := range server.ValidateShape(ri.RespType, body, "") {
+			for _, violation := range servertest.Shape(ri.RespType, body, "") {
 				t.Errorf("GET %s: shape: %s", path, violation)
 			}
 		})

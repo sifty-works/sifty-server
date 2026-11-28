@@ -24,6 +24,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/inbox"
 	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/server"
+	"github.com/sifty-works/sifty-server/internal/server/servertest"
 )
 
 var testNow = time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
@@ -124,7 +125,7 @@ func checkShape(t *testing.T, method, path string, body map[string]any) {
 		if m != method || ri.RespType == nil || !routeMatch(pat, base) {
 			continue
 		}
-		for _, v := range server.ValidateShape(ri.RespType, body, "") {
+		for _, v := range servertest.Shape(ri.RespType, body, "") {
 			t.Errorf("response shape %s %s: %s", method, path, v)
 		}
 		return

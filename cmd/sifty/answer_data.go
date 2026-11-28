@@ -163,18 +163,13 @@ func authorized(auths []candidate.WorkAuthorization) func(label string) (bool, s
 		if len(auths) == 0 {
 			return false, "", false
 		}
-		listed := false
-		for _, a := range auths {
-			covers := places.Codes(a.Country)
-			if a.Status == "eligible" {
-				covers = places.FreeMovement(covers)
-			}
-			if slices.ContainsFunc(covers, func(c string) bool { return slices.Contains(named, c) }) {
-				if a.Status == "eligible" {
-					return true, "", true
-				}
-				listed = true
-			}
+		have := make([]places.Authorization, len(auths))
+		for i, a := range auths {
+			have[i] = places.Authorization{Country: a.Country, Eligible: a.Status == "eligible"}
+		}
+		eligible, listed := places.Authorized(have, named)
+		if eligible {
+			return true, "", true
 		}
 		if listed {
 			return false, "", true

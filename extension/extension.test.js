@@ -49,7 +49,7 @@ const docOf = (root) => ({
   controls: () => root.all().filter((n) => ['input', 'textarea', 'select', 'button'].includes(n.tag) || n.attrs.role === 'combobox'),
 });
 
-const field = (key, kind, label, extra = {}) => ({ key, kind, label, required: false, options: [], value: '', ...extra });
+const field = (key, control, label, extra = {}) => ({ key, control, label, required: false, options: [], value: '', ...extra });
 
 test('fill plan never touches a file, a consent box, a prefilled field or a submit control', () => {
   const yesNo = [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }];
@@ -91,7 +91,7 @@ test('fill plan never touches a file, a consent box, a prefilled field or a subm
   assert.deepEqual(pairIn((d) => h('form', {}, d), {}), []);
   assert.deepEqual(pairIn((d) => d, { type: 'submit' }), []);
   assert.deepEqual(pairIn((d) => h('div', { class: 'application--submit' }, d), { type: 'button' }), []);
-  assert.deepEqual(pairIn((d) => d, {}), ['yesno']);
+  assert.deepEqual(pairIn((d) => d, {}), ['yes_no']);
 });
 
 test('collector reads labels, required marks, kinds and options', () => {
@@ -111,22 +111,25 @@ test('collector reads labels, required marks, kinds and options', () => {
       h('ul', {},
         h('li', {}, h('div', { class: 'label' }, 'Nickname'), h('div', {}, h('input', { type: 'text', name: 'nick' }))),
         h('li', {}, h('div', { class: 'label' }, 'Referred by?', h('span', {}, '✱')), h('div', {}, h('input', { type: 'text', name: 'ref' })))),
+      h('label', {}, 'Resume', h('input', { type: 'file', name: 'cv' })),
       h('input', { type: 'hidden', name: 'token', value: 'x' }),
+      h('input', { type: 'submit', name: 'send', value: 'Send' }),
       h('input', { type: 'text', name: 'trap', 'aria-hidden': 'true' }),
       h('input', { type: 'text', name: 'offscreen', hiddenBox: true }),
       h('button', { type: 'submit' }, 'Apply')));
   const { fields } = collect(docOf(root));
   const by = Object.fromEntries(fields.map((f) => [f.key, f]));
 
-  assert.deepEqual(fields.map((f) => f.key), ['first', 'email', 'country', 'portfolio', 'auth', 'nick', 'ref']);
-  assert.deepEqual([by.first.label, by.first.required, by.first.kind], ['First name', true, 'text']);
+  assert.deepEqual(fields.map((f) => f.key), ['first', 'email', 'country', 'portfolio', 'auth', 'nick', 'ref', 'cv']);
+  assert.deepEqual([by.first.label, by.first.required, by.first.kind], ['First name', true, 'short_text']);
   assert.deepEqual([by.email.label, by.email.kind], ['Email', 'email']);
   assert.equal(by.country.label, 'Country');
   assert.deepEqual(by.country.options, [{ value: 'de', label: 'Germany' }, { value: 'fr', label: 'France' }]);
   assert.equal(by.portfolio.label, 'Portfolio link');
   assert.equal(by.auth.label, 'Work authorisation');
   assert.deepEqual(by.auth.options, [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]);
-  assert.deepEqual([by.auth.kind, by.auth.value], ['radio', 'No']);
+  assert.deepEqual([by.auth.kind, by.auth.value], ['choice', 'No']);
+  assert.equal(by.cv.kind, 'file');
   assert.deepEqual([by.nick.label, by.nick.required], ['Nickname', false]);
   assert.deepEqual([by.ref.label, by.ref.required], ['Referred by?', true]);
 });

@@ -402,3 +402,29 @@ func FreeMovement(codes []string) []string {
 	}
 	return out
 }
+
+type Authorization struct {
+	Country  string
+	Eligible bool
+}
+
+func Authorized(auths []Authorization, codes []string) (eligible, listed bool) {
+	for _, a := range auths {
+		covers := Codes(a.Country)
+		if a.Eligible {
+			covers = FreeMovement(covers)
+		}
+		if !slices.ContainsFunc(covers, func(c string) bool {
+			return slices.ContainsFunc(codes, func(x string) bool {
+				return strings.EqualFold(strings.TrimSpace(c), strings.TrimSpace(x))
+			})
+		}) {
+			continue
+		}
+		if a.Eligible {
+			return true, true
+		}
+		listed = true
+	}
+	return false, listed
+}

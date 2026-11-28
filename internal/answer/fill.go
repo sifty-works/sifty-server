@@ -65,13 +65,6 @@ type FillResponse struct {
 	Open    string       `json:"open"`
 }
 
-var formKinds = map[string]string{
-	"text": formread.KindShortText, "email": "email", "tel": "phone", "url": "link", "number": "number",
-	"date": "date", "textarea": "long_text", "select": formread.KindChoice, "radio": formread.KindChoice,
-	"combobox": formread.KindChoice, "checkboxes": formread.KindMultipleChoice, "checkbox": formread.KindYesNo, "yesno": formread.KindYesNo,
-	"file": formread.KindFile,
-}
-
 func Apply(ctx context.Context, database *db.DB, a Answerer, v Vacancy, vacancy int64, f formread.Form) (int, []formread.Field, error) {
 	have := Answers{}
 	for _, fl := range f.Fields {
@@ -127,7 +120,7 @@ func fill(ctx context.Context, database *db.DB, a Answerer, canonical func(strin
 		for j, o := range pf.Options {
 			options[j] = o.Label
 		}
-		fields[i] = formread.Field{ID: pf.Key, Label: pf.Label, Kind: cmp.Or(formKinds[pf.Kind], formread.KindShortText), Required: pf.Required, Options: options}
+		fields[i] = formread.Field{ID: pf.Key, Label: pf.Label, Kind: cmp.Or(pf.Kind, formread.KindShortText), Required: pf.Required, Options: options}
 	}
 	vac := Vacancy{Title: subject.Title, Company: subject.Company}
 	if subject.ID > 0 {

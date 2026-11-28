@@ -10,7 +10,7 @@
 # A deviation of today's code is one line "<package> -> <import or database/sql>" or "<file> -> sql" with "# until: <change>",
 # the change that removes it; a line nothing uses any more is reported; remove it. New lines need the owner's decision.
 
-mechanism: internal/apperr internal/config internal/db internal/facts internal/fetch internal/fetch/fetchtest internal/models internal/runner internal/server internal/text
+mechanism: internal/apperr internal/config internal/db internal/facts internal/fetch internal/fetch/fetchtest internal/models internal/runner internal/server internal/server/servertest internal/text
 sql: internal/db internal/models internal/runner
 
 module collection: internal/catalog internal/collect internal/listing internal/source

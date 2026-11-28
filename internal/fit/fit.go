@@ -361,22 +361,17 @@ func restriction(auths []candidate.WorkAuthorization, ps []places.Place, open, k
 	for _, pl := range ps {
 		restricted = append(restricted, pl.Countries...)
 	}
-	out, listed := na, false
+	out := na
 	if len(auths) > 0 && len(restricted) > 0 {
 		out = 0
 	}
+	var have []places.Authorization
 	for _, a := range auths {
-		eligible := a.Status == "eligible"
-		covers := places.Codes(a.Country)
-		if eligible {
-			covers = places.FreeMovement(covers)
-		}
-		if overlap(covers, restricted) == 1 {
-			if eligible {
-				return 1, true
-			}
-			listed = true
-		}
+		have = append(have, places.Authorization{Country: a.Country, Eligible: a.Status == "eligible"})
+	}
+	eligible, listed := places.Authorized(have, restricted)
+	if eligible {
+		return 1, true
 	}
 	return out, listed
 }

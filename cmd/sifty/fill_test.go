@@ -65,8 +65,8 @@ func TestExtensionFillAnswersFromMyDataForTheVacancyOfAPageAndNeverForAnotherPag
 	insertFullVacancy(t, d, "https://boards.example.test/acme/jobs/4002", "Data Engineer", "Acme")
 	fields := []map[string]any{
 		fillField("email", "Email", "email"),
-		fillField("auth", "Are you legally authorized to work in Germany?", "yesno", "Yes", "No"),
-		fillField("story", "Tell us about a hard project", "textarea"),
+		fillField("auth", "Are you legally authorized to work in Germany?", "yes_no", "Yes", "No"),
+		fillField("story", "Tell us about a hard project", "long_text"),
 	}
 
 	got := fillAt(t, base, "https://www.boards.example.test/acme/jobs/4001/?utm_source=feed&gh_src=x", fields...)
@@ -174,13 +174,13 @@ func TestEditedAnswerSurvivesAPartialFillAFullFillAndANewPreparation(t *testing.
 		}
 	}
 
-	partial := fillAt(t, f.base, page, fillField("notice", "Notice period", "text"))
+	partial := fillAt(t, f.base, page, fillField("notice", "Notice period", "short_text"))
 	if _, ok := leftKeys(partial)["notice"]; !ok || len(partial["answers"].([]any)) != 0 {
 		t.Errorf("partial fill = %v", partial)
 	}
 	assertKept("a fill that does not post the field")
 
-	full := fillAt(t, f.base, page, fillField("why", "Why Stackworks?", "textarea"))
+	full := fillAt(t, f.base, page, fillField("why", "Why Stackworks?", "long_text"))
 	if v, s := answerOf(t, full, "why"); v != "Mine" || s != "user" {
 		t.Errorf("fill answered %q from %q, want the edit", v, s)
 	}

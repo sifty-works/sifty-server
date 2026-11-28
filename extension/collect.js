@@ -4,6 +4,10 @@ var SiftyCollect = (() => {
   const { isSubmitLike, norm } = SiftyPlan;
   const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'image', 'reset', 'password', 'color', 'range']);
   const TEXT_TYPES = new Set(['email', 'tel', 'url', 'number']);
+  const KINDS = {
+    text: 'short_text', email: 'email', tel: 'phone', url: 'link', number: 'number', date: 'date', textarea: 'long_text',
+    select: 'choice', radio: 'choice', combobox: 'choice', checkboxes: 'multiple_choice', checkbox: 'yes_no', yesno: 'yes_no', file: 'file',
+  };
   const MARK = /\s*([*✱]+|\(required\))\s*$/i;
   const PLACEHOLDER_OPTION = /^(select|choose|please)\b|^[-–—.\s]+$/i;
   const DATE_FORMAT = /^(?=.*(yyyy|yy))(?=.*mm)(?=.*dd).+$/i;
@@ -98,7 +102,7 @@ var SiftyCollect = (() => {
       const base = n.attr('name') || n.attr('id') || 'field-' + (fields.length + 1);
       let key = base;
       for (let i = 2; handles[key]; i++) key = base + '#' + i;
-      fields.push({ key, ...field });
+      fields.push({ key, ...field, kind: KINDS[field.kind], control: field.kind });
       at.set(key, controls.indexOf(n));
       handles[key] = handle;
     };

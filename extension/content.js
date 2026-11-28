@@ -57,7 +57,7 @@
 
   const ask = async (msg) => (await chrome.runtime.sendMessage(msg).catch(() => null)) || { error: 'unreachable' };
   const started = Date.now();
-  let res = await ask({ kind: 'ask', body: { url: location.href, title: document.title, text: SiftyDom.mainText(document), fields } });
+  let res = await ask({ kind: 'ask', body: { url: location.href, title: document.title, text: SiftyDom.mainText(document), fields: fields.map(({ control, ...f }) => f) } });
 
   while (!closed) {
     if (res.error) {

@@ -20,7 +20,7 @@ fail=0
 printf "%-40s %10s %10s\n" "Measure" "Actual" "Budget"
 printf "%-40s %10s %10s\n" "-------" "------" "------"
 
-be=$(files '*.go' | grep -v '_test\.go$' | grep -v -e '^internal/models/fake\.go$' -e '^internal/fetch/fetchtest/' -e '^cmd/uncomment/' | count)
+be=$(files '*.go' | grep -v '_test\.go$' | grep -v -e '^internal/models/fake\.go$' -e '^internal/fetch/fetchtest/' -e '^internal/server/servertest/' -e '^cmd/uncomment/' | count)
 be_test=$(files '*_test.go' | count)
 
 ext=$(files 'extension/*.js' | grep -v '\.test\.js$' | count)

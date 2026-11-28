@@ -36,7 +36,7 @@ var SiftyPlan = (() => {
 
   const entryFor = (f, a, leftReason) => {
     const base = { key: f.key, label: f.label };
-    if (f.kind === 'file') return { ...base, action: 'attach', reason: 'Attach this yourself' };
+    if (f.control === 'file') return { ...base, action: 'attach', reason: 'Attach this yourself' };
     if (isConsent(f)) return { ...base, action: 'consent', reason: 'Your consent' };
     if (hasValue(f)) return { ...base, action: 'kept', reason: 'left as the page filled it' };
     if (!a) return leftReason === undefined ? { ...base, action: 'pending' } : { ...base, action: 'left', reason: leftReason };
@@ -44,13 +44,13 @@ var SiftyPlan = (() => {
     const wanted = a.values && a.values.length ? a.values : [a.value];
     const choose = () => ({ ...got, action: 'choose', reason: 'Choose: ' + wanted.join(', ') });
     if (wanted.every((w) => norm(w) === '')) return { ...base, action: 'left', reason: a.note || 'No answer' };
-    if (TEXT.has(f.kind)) return { ...got, action: 'fill', value: formatDate(a.value, f.format) };
-    if (f.kind === 'combobox') return { ...got, action: 'combo', value: a.value };
-    if (f.kind === 'yesno') {
+    if (TEXT.has(f.control)) return { ...got, action: 'fill', value: formatDate(a.value, f.format) };
+    if (f.control === 'combobox') return { ...got, action: 'combo', value: a.value };
+    if (f.control === 'yesno') {
       const v = norm(a.value);
       return YES.test(v) || NO.test(v) ? { ...got, action: 'press', option: YES.test(v) ? 'yes' : 'no', value: a.value } : choose();
     }
-    if (f.kind === 'checkbox') {
+    if (f.control === 'checkbox') {
       const v = norm(a.value);
       if (NO.test(v)) return { ...base, action: 'left', reason: 'Answer: No' };
       return { ...got, action: 'check', options: [f.options[0].value], picks: [0], value: a.value };
@@ -58,14 +58,14 @@ var SiftyPlan = (() => {
     const found = wanted.map((w) => match(f.options, w));
     if (found.some((o) => !o)) return choose();
     const picks = found.map((o) => f.options.indexOf(o));
-    if (f.kind === 'checkboxes') return { ...got, action: 'check', options: found.map((o) => o.value), picks, value: found.map((o) => o.label).join(', ') };
+    if (f.control === 'checkboxes') return { ...got, action: 'check', options: found.map((o) => o.value), picks, value: found.map((o) => o.label).join(', ') };
     return { ...got, action: 'select', options: [found[0].value], picks, value: found[0].label };
   };
 
   const plan = (fields, response) => {
     const answers = new Map((response.answers || []).map((a) => [a.key, a]));
     const left = new Map((response.left || []).map((l) => [l.key, l.reason]));
-    return fields.filter((f) => f.kind !== 'submit').map((f) => entryFor(f, answers.get(f.key), left.get(f.key)));
+    return fields.filter((f) => f.control !== 'submit').map((f) => entryFor(f, answers.get(f.key), left.get(f.key)));
   };
 
   return { plan, isSubmitLike, isConsent, formatDate, norm };
