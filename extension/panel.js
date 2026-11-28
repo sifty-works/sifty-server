@@ -10,6 +10,8 @@ var SiftyPanel = (() => {
     .filled{background:#4b44a8}.left{background:#b36b00}
   `;
   const TONES = { filled: '#4b44a8', left: '#b36b00' };
+  const SOURCES = { my_data: 'My data', qa: 'Questions & Answers', drafted: 'drafted', user: 'your answer' };
+  const short = (s) => (s.length > 90 ? s.slice(0, 88).trimEnd() + '…' : s);
 
   const create = (onClose) => {
     const host = document.createElement('div');
@@ -37,7 +39,7 @@ var SiftyPanel = (() => {
       el('h4', title, box);
       const ul = el('ul', '', box);
       for (const [label, detail] of items) {
-        const li = el('li', label, ul);
+        const li = el('li', short(label), ul);
         if (detail) el('span', ' — ' + detail, li);
       }
     };
@@ -58,7 +60,7 @@ var SiftyPanel = (() => {
       el('button', '×', head).addEventListener('click', () => close());
       if (model.vacancy) el('div', [model.vacancy.title, model.vacancy.company].filter(Boolean).join(' — '), box);
       if (model.status) el('div', model.status, box);
-      list('Filled', model.entries.filter((e) => SiftyFill.DOING.has(e.action)).map((e) => [e.label, e.source]));
+      list('Filled', model.entries.filter((e) => SiftyFill.DOING.has(e.action)).map((e) => [e.label, SOURCES[e.source] || e.source]));
       list('For you', model.entries.filter((e) => !SiftyFill.DOING.has(e.action) && e.action !== 'pending').map((e) => [e.label, e.reason]));
       if (model.open) {
         const a = el('a', 'Open in Sifty', el('div', '', box));
