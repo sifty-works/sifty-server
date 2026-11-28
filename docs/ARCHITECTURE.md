@@ -116,7 +116,7 @@ type TextSource interface { Text(ctx context.Context, body []byte) (string, erro
 
 ```go
 type Locator    interface { Locate(ctx context.Context, v Vacancy, deep bool) (Link, error) } // listing link, boards, then web search
-type WebSearch  interface { Search(ctx context.Context, q string) ([]Result, error) }       // Brave, Tavily, Firecrawl, or none
+type WebSearch  interface { Search(ctx context.Context, q string) ([]Result, error) }       // Brave, Firecrawl, Tavily, or none
 type FormReader interface { Read(ctx context.Context, url string) (Form, error) }            // applicant tracking system public data or the page's HTML; PasteReader has the same shape
 type Answerer   interface { Answer(ctx context.Context, v Vacancy, f Form, have Answers) (Answers, error) } // Profile → Classifier → Drafter
 ```
