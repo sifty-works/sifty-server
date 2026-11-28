@@ -1,6 +1,6 @@
 # Application and background work
 
-What the user gets: when a vacancy enters Shortlist, the application finds the employer's own page for it, reads its application form and prepares a draft of every answer. Code fills the fields My data can answer; one model call writes the open answers. The user copies the answers into the form; the application never fills or submits a form itself. Background work never blocks the user, and the user always sees what it is doing.
+What the user gets: when a vacancy enters Shortlist, the application finds the employer's own page for it, reads its application form and prepares a draft of every answer. Code fills the fields My data can answer; one model call writes the open answers. The browser extension fills the answers into the form on the employer's page when the user presses its button, or the user copies them; the application never submits a form. Background work never blocks the user, and the user always sees what it is doing.
 
 ## Entering Shortlist
 
@@ -28,7 +28,7 @@ A page found later by a manual search is read again and the draft is updated; an
 
 ## Application tab
 
-**Reading the form.** The form is read without a browser and without a model, the way collection reads a vacancy: by the address of the page and that site's description. The description is a template: either the address of the system's public data with where its questions, labels, required marks, types and options sit in it (Greenhouse, Ashby, Gem, Workable, Paylocity, Recruitee, Rippling, BambooHR), or where the form, its fields, labels and options sit in the page's HTML (Lever, Teamtailor, JazzHR). A site without a description is read from its HTML with the general template, when the form is written in the page and not built by scripts. A site whose form is not in its public data (Workday) or that blocks automated reading (SmartRecruiters) is not worked around; the tab offers Paste. A new site is taught by a line of its description, not by code (see `collection.md`). A form built by scripts or behind sign-in (Workday, Work at a Startup, Wellfound, LinkedIn) is not read; the tab offers Paste. The tab shows the state in words: "Reading the application form…", "This site's form can't be read here → Paste the form", "Sign-in required → Paste the form", "The <system> form could not be read → Paste the form", "No questions to answer → Apply directly", or the error. A form of a known system whose answer could not be parsed is never shown as an empty form. Fields that are not part of the application (site search, filters, newsletter sign-up) are left out. Requests are spaced per site like collection's requests, and a site that blocked is left alone like a blocked domain in collection.
+**Reading the form.** The form is read without a browser and without a model, the way collection reads a vacancy: by the address of the page and that system's form template (`forms.yaml`, embedded; the user may override or extend it in `<data>/vocab/forms.yaml`). The template is either the address of the system's public data with where its questions, labels, required marks, types and options sit in it (Greenhouse, Ashby, Gem, Workable, Paylocity, Recruitee, Rippling, BambooHR), or where the form, its fields, labels and options sit in the page's HTML (Lever, Teamtailor, JazzHR). A site without a description is read from its HTML with the general template, when the form is written in the page and not built by scripts. A site whose form is not in its public data (Workday) or that blocks automated reading (SmartRecruiters) is not worked around; the tab offers Paste. A new system is taught by a template, not by code; a template fixes the host it requests, and the page's address only fills the path. A form built by scripts or behind sign-in (Workday, Work at a Startup, Wellfound, LinkedIn) is not read; the tab offers Paste. The tab shows the state in words: "Reading the application form…", "This site's form can't be read here → Paste the form", "Sign-in required → Paste the form", "The <system> form could not be read → Paste the form", "No questions to answer → Apply directly", or the error. A form of a known system whose answer could not be parsed is never shown as an empty form. Fields that are not part of the application (site search, filters, newsletter sign-up) are left out. Requests are spaced per site like collection's requests, and a site that blocked is left alone like a blocked domain in collection.
 
 **Reading the form again** keeps the answers: a field is matched by its id, or by its label when the label is unique. A question whose requirements changed is marked "Question requirements changed". A field that disappeared from the form is kept with the mark "removed" only when the user filled it; otherwise it is dropped. Questions the user added by hand are kept.
 
@@ -58,6 +58,18 @@ A page found later by a manual search is read again and the draft is updated; an
 
 Diagnostic panels (questionnaire coverage, the technical record of form reading, preparation provenance) are shown only in debug mode (see `settings-and-data.md`).
 
+## Browser extension
+
+What the user gets: on the employer's page, one button fills the application form with the prepared answers; the user checks them, attaches files and submits.
+
+- The extension is a folder shipped with each release (`extension/`), loaded in Chrome as an unpacked extension. Its options hold the address of Sifty, `http://127.0.0.1:8080` by default. Its origin is fixed by the key in its manifest, and the server accepts requests from that origin only.
+- **Fill with Sifty** (the toolbar button) reads the form of the open page: every visible text field, text area, choice list, radio group and checkbox with its label, required mark and options, the page's title and address, and its main text. Nothing is read or sent before the button is pressed.
+- Sifty finds the vacancy by the page's address: its found employer page, its apply address or its original address, compared after the canonical cleaning. The form becomes that vacancy's application form. A page that matches no vacancy is answered with its own text as the vacancy and kept under its address alone.
+- Sifty answers the fields the way the Application tab prepares them (answers from My data by code, the rest drafted, an answer the user edited kept), and the extension fills them: text, choice lists, radio groups, checkboxes that are not consent, dates. A field the user already filled is not overwritten. Each filled field gets an outline and a small "Sifty" mark.
+- File fields and consent boxes are never filled; they are outlined with "Attach this yourself" or "Your consent". The extension never presses a submit control and never sends the form.
+- A panel lists the fields: filled (with where each answer came from), left to the user (file, consent, no answer, with the reason), and "Open in Sifty" for the vacancy. While Sifty drafts, the panel reads "Drafting N answers…".
+- When Sifty does not answer: "Sifty is not running on this computer". A page without a form: "No form found on this page".
+
 ## Background work
 
 | Work | Started by | What the user sees | Model calls |
@@ -70,6 +82,7 @@ Diagnostic panels (questionnaire coverage, the technical record of form reading,
 | Shortlist check | entering Shortlist; opening a shortlisted vacancy whose check is outdated (see `assessment.md`) | the check on the vacancy page | 1 |
 | Employer's page | entering Shortlist, the Apply button, startup | the Apply button's state | 0–1 to choose among search results; at most two web searches per search |
 | Form reading and drafting | entering Shortlist, opening the tab when nothing was prepared, Retry preparation | the Application tab's states | 0–1 to classify labels, 1 to draft |
+| Fill with Sifty | the extension's button on the employer's page | the extension's panel | as preparation: 0–1 to classify labels, 1 to draft |
 | Write, Paste | the buttons on the Application tab | the Application tab's states | Write 1; Paste 0–1 |
 | Document analysis | Analyze or Retry (see `profiles.md`) | the document's state | 1 per chunk |
 | Provider check | "Check" in Settings (see `settings-and-data.md`) | the answer of the check | 1 |

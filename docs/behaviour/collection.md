@@ -6,7 +6,7 @@ What the user gets from collection: vacancies from the sites they chose appear i
 
 A source is a name, a public http(s) address and an enabled switch, on by default. The user manages sources on the Sources page: a table of name, address, enabled switch and a remove action, and a form to add a source. Removing a source has no confirmation; the source can be added again. The address is required; the form shows the server's error text when the address is not accepted. The form clears on success. The address of an existing source cannot be edited; the user removes the source and adds it again.
 
-Collection visits the enabled sources. Each source is recognised by its address. The description of known sites — which module reads each, its list address, content selector and link pattern, and how its application form is read — is embedded in the application; the user may override or extend it by placing a `sites.yaml` in `<data>/vocab/`. An entry in the override file replaces the embedded entry of the same host or adds a new host; the other embedded entries stay. See `settings-and-data.md` for what happens when the file fails to load.
+Collection visits the enabled sources. Each source is recognised by its address. The description of known sites — which module reads each, its list address, content selector and link pattern — is embedded in the application; the user may override or extend it by placing a `sites.yaml` in `<data>/vocab/`. An entry in the override file replaces the embedded entry of the same host or adds a new host; the other embedded entries stay. See `settings-and-data.md` for what happens when the file fails to load.
 
 | Kind of source | How it is read | Requests per run |
 |---|---|---|
