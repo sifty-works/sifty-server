@@ -16,6 +16,11 @@ type Field struct {
 	Kind     string   `json:"kind"`
 	Required bool     `json:"required"`
 	Options  []string `json:"options"`
+	Values   []string `json:"values"`
+	Source   string   `json:"source"`
+	Note     string   `json:"note"`
+	Evidence string   `json:"evidence"`
+	Revision int64    `json:"revision"`
 }
 
 type Form struct {

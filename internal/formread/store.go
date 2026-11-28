@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/db"
+	fold "github.com/sifty-works/sifty-server/internal/text"
 )
 
 const (
@@ -18,7 +20,10 @@ const (
 	StateUnsupported = "unsupported"
 )
 
-const Kind = "prepare"
+const (
+	Kind       = "prepare"
+	SourceUser = "user"
+)
 
 type Stored struct {
 	Form
@@ -58,19 +63,19 @@ func Load(ctx context.Context, database *db.DB, vacancy int64) (Stored, bool, er
 		return Stored{}, false, fmt.Errorf("formread: load: %w", err)
 	}
 	rows, err := database.QueryContext(ctx,
-		`SELECT key, label, kind, required, options FROM application_field WHERE form=? ORDER BY position`, vacancy)
+		`SELECT key, label, kind, required, options, answer, source, note, evidence, revision FROM application_field WHERE form=? ORDER BY position`, vacancy)
 	if err != nil {
 		return Stored{}, false, fmt.Errorf("formread: load fields: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var f Field
-		var options string
-		if err := rows.Scan(&f.ID, &f.Label, &f.Kind, &f.Required, &options); err != nil {
+		var options, values string
+		if err := rows.Scan(&f.ID, &f.Label, &f.Kind, &f.Required, &options, &values, &f.Source, &f.Note, &f.Evidence, &f.Revision); err != nil {
 			return Stored{}, false, fmt.Errorf("formread: load fields: %w", err)
 		}
-		if err := json.Unmarshal([]byte(options), &f.Options); err != nil {
-			return Stored{}, false, fmt.Errorf("formread: decode options: %w", err)
+		if err := errors.Join(json.Unmarshal([]byte(options), &f.Options), json.Unmarshal([]byte(values), &f.Values)); err != nil {
+			return Stored{}, false, fmt.Errorf("formread: decode field: %w", err)
 		}
 		s.Fields = append(s.Fields, f)
 	}
@@ -88,8 +93,9 @@ func Save(ctx context.Context, database *db.DB, vacancy int64, f Form, state, re
 	}
 	_, err = tx.ExecContext(ctx,
 		`INSERT INTO application_form (vacancy, url, system, state, reason, read_at) VALUES (?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(vacancy) DO UPDATE SET url=excluded.url, system=excluded.system, state=excluded.state, reason=excluded.reason, read_at=excluded.read_at`,
-		vacancy, f.URL, f.System, state, reason, at.UTC().Format(time.RFC3339))
+		 ON CONFLICT(vacancy) DO UPDATE SET url=excluded.url, system=excluded.system, state=excluded.state, reason=excluded.reason, read_at=excluded.read_at
+		 WHERE application_form.system<>? OR excluded.state=?`,
+		vacancy, f.URL, f.System, state, reason, at.UTC().Format(time.RFC3339), SystemPage, StateRead)
 	if err == nil && (state == StateRead || state == StateEmpty) {
 		err = saveFields(ctx, tx, vacancy, f.Fields)
 	}
@@ -115,13 +121,19 @@ func saveFields(ctx context.Context, tx *sql.Tx, vacancy int64, fields []Field) 
 	}
 	rows.Close()
 	keys := matchKeys(old, fields)
-	if _, err := tx.ExecContext(ctx, `DELETE FROM application_field WHERE form=?`, vacancy); err != nil {
-		return err
+	for _, key := range keys {
+		delete(old, key)
+	}
+	for key := range old {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM application_field WHERE form=? AND key=? AND source<>?`, vacancy, key, SourceUser); err != nil {
+			return err
+		}
 	}
 	for i, field := range fields {
 		options, _ := json.Marshal(append([]string{}, field.Options...))
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO application_field (form, key, position, label, kind, required, options) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO application_field (form, key, position, label, kind, required, options) VALUES (?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(form, key) DO UPDATE SET position=excluded.position, label=excluded.label, kind=excluded.kind, required=excluded.required, options=excluded.options`,
 			vacancy, keys[i], i, field.Label, field.Kind, field.Required, string(options)); err != nil {
 			return err
 		}
@@ -132,17 +144,19 @@ func saveFields(ctx context.Context, tx *sql.Tx, vacancy int64, fields []Field) 
 func matchKeys(old map[string]string, fields []Field) []string {
 	byLabel, oldCount, newCount, exact := map[string]string{}, map[string]int{}, map[string]int{}, map[string]bool{}
 	for key, label := range old {
+		label = fold.Fold(label)
 		byLabel[label] = key
 		oldCount[label]++
 	}
 	for _, f := range fields {
-		newCount[f.Label]++
+		newCount[fold.Fold(f.Label)]++
 		_, exact[f.ID] = old[f.ID]
 	}
 	keys := make([]string, len(fields))
 	for i, f := range fields {
 		keys[i] = f.ID
-		if k := byLabel[f.Label]; !exact[f.ID] && !exact[k] && oldCount[f.Label] == 1 && newCount[f.Label] == 1 {
+		label := fold.Fold(f.Label)
+		if k := byLabel[label]; !exact[f.ID] && !exact[k] && oldCount[label] == 1 && newCount[label] == 1 {
 			keys[i] = k
 		}
 	}

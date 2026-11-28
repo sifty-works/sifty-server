@@ -23,7 +23,7 @@ func TestAnswersUseTheActiveProfileCompensationTheLegalNameAndFreeMovementOfWork
 		}
 		return out
 	}
-	send(http.MethodPatch, "/api/me", map[string]any{"legalName": "Rowan Quill", "displayName": "Ro", "workAuthorizations": []map[string]any{{"country": "DE", "status": "eligible"}, {"country": "CA", "status": "need_visa"}}})
+	send(http.MethodPatch, "/api/me", map[string]any{"legalName": "Rowan Quill", "displayName": "Ro", "workAuthorizations": []map[string]any{{"country": "DE", "status": "eligible"}, {"country": "CA", "status": "need_visa"}}, "demographics": map[string]any{"gender": "man"}})
 	send(http.MethodPatch, "/api/profiles/1", map[string]any{"compensation": map[string]any{"cashMin": 50000, "cashTarget": 60000, "currency": "EUR", "period": "year"}})
 	second := send(http.MethodPost, "/api/profiles", map[string]any{"name": "Second"})
 	id := int64(second["id"].(float64))
@@ -38,12 +38,13 @@ func TestAnswersUseTheActiveProfileCompensationTheLegalNameAndFreeMovementOfWork
 		{ID: "spain", Label: "Are you legally authorized to work in Spain?", Kind: "yes_no"},
 		{ID: "us", Label: "Are you legally authorized to work in the U.S.?", Kind: "yes_no"},
 		{ID: "ussp", Label: "Will you require visa sponsorship to work in the United States?", Kind: "yes_no"},
+		{ID: "gender", Label: "Gender", Kind: "choice", Options: []string{"Female", "Male"}},
 		{ID: "based", Label: "Are you authorized to work in the country in which this job is based?", Kind: "yes_no"},
 	}}, nil)
 	if err != nil {
 		t.Fatalf("answer: %v", err)
 	}
-	for id, want := range map[string]string{"salary": "5000 USD per month", "name": "Rowan Quill", "why": "I like the product.", "spain": "Yes", "us": "No", "ussp": "Yes"} {
+	for id, want := range map[string]string{"salary": "5000 USD per month", "name": "Rowan Quill", "why": "I like the product.", "spain": "Yes", "us": "No", "ussp": "Yes", "gender": "Male"} {
 		if got := out[id].Values; len(got) != 1 || got[0] != want {
 			t.Errorf("%s = %v, want %q", id, got, want)
 		}

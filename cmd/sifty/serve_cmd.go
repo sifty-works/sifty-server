@@ -17,6 +17,7 @@ import (
 	siftyapi "github.com/sifty-works/sifty-server/api"
 	"github.com/sifty-works/sifty-server/extension"
 	"github.com/sifty-works/sifty-server/internal/analysis"
+	"github.com/sifty-works/sifty-server/internal/answer"
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/collect"
@@ -453,7 +454,7 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 	r.Register(runner.Kind{
 		Name: formread.Kind,
 		Run: func(runCtx context.Context, j *runner.Job) error {
-			return runPrepare(runCtx, j, database, forms, now)
+			return runPrepare(runCtx, j, database, forms, answer.Coded{Data: answerData{database}}, now)
 		},
 	})
 

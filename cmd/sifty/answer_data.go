@@ -18,6 +18,8 @@ type answerData struct{ database *db.DB }
 
 type knownValues map[string][]answer.Value
 
+var choiceSynonyms = map[string][]string{"man": {"male"}, "woman": {"female"}}
+
 func (k knownValues) put(key, text string, match ...string) {
 	if text = strings.TrimSpace(text); text != "" {
 		k[key] = append(k[key], answer.Value{Text: text, Match: match})
@@ -38,7 +40,7 @@ func (k knownValues) putChoice(key string, options []candidate.OptionItem, value
 	if value == "self_describe" && description != "" {
 		text = description
 	}
-	k[key] = append(k[key], answer.Value{Text: text, Match: []string{value, label}})
+	k[key] = append(k[key], answer.Value{Text: text, Match: append([]string{value, label}, choiceSynonyms[value]...)})
 }
 
 func (d answerData) Known(ctx context.Context) (answer.Known, error) {

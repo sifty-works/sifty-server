@@ -263,10 +263,6 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-type NotImplemented struct{ Message string }
-
-func (e NotImplemented) Error() string { return e.Message }
-
 func MapError(w http.ResponseWriter, err error, logger *slog.Logger) bool {
 	if err == nil {
 		return false
@@ -280,8 +276,6 @@ func MapError(w http.ResponseWriter, err error, logger *slog.Logger) bool {
 		writeError(w, http.StatusConflict, e.Message)
 	case apperr.Busy:
 		writeError(w, http.StatusLocked, e.Message)
-	case NotImplemented:
-		writeError(w, http.StatusNotImplemented, e.Message)
 	default:
 		id := counter.Add(1)
 		logger.Error("internal error", "id", id, "error", err)

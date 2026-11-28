@@ -12,6 +12,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/fit"
 	"github.com/sifty-works/sifty-server/internal/inbox"
+	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/server"
@@ -95,5 +96,5 @@ func registerAllRoutes(
 	candidate.RegisterRoutes(mux, database, filesDir, readers, logger, recomputeFit, enqueue)
 	server.Handle(mux, "POST /api/documents/{id}/cancel", logger, candidate.CancelAnalysisHandler(database, cancel))
 	col.RegisterRoutes(mux)
-	answer.RegisterExtensionRoutes(mux, logger)
+	answer.RegisterExtensionRoutes(mux, logger, database, answer.Coded{Data: answerData{database}}, listing.Canonical)
 }

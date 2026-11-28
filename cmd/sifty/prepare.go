@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/sifty-works/sifty-server/internal/answer"
 	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/fetch"
@@ -17,7 +19,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/server"
 )
 
-func runPrepare(ctx context.Context, j *runner.Job, database *db.DB, reader formread.FormReader, now func() time.Time) error {
+func runPrepare(ctx context.Context, j *runner.Job, database *db.DB, reader formread.FormReader, answerer answer.Answerer, now func() time.Time) error {
 	vacancy, err := strconv.ParseInt(j.Subject, 10, 64)
 	if err != nil {
 		return runner.Permanent(err)
@@ -48,7 +50,18 @@ func runPrepare(ctx context.Context, j *runner.Job, database *db.DB, reader form
 			}
 			return err
 		}
-		return formread.Save(ctx, database, vacancy, form, formread.StateRead, "", now())
+		if err := formread.Save(ctx, database, vacancy, form, formread.StateRead, "", now()); err != nil {
+			return err
+		}
+		stored, _, err := formread.Load(ctx, database, vacancy)
+		if err != nil {
+			return err
+		}
+		answered, _, err := answer.Apply(ctx, database, answerer, answer.Vacancy{}, vacancy, stored.Form)
+		if err == nil {
+			j.Progress(answered, len(stored.Fields), fmt.Sprintf("Answered %d of %d field(s)", answered, len(stored.Fields)))
+		}
+		return err
 	}
 	return formread.Save(ctx, database, vacancy, formread.Form{}, formread.StateUnsupported, "", now())
 }
@@ -65,6 +78,11 @@ func queuePrepare(ctx context.Context, database *db.DB, enqueue func(runner.Spec
 	return err
 }
 
+type fieldEdit struct {
+	Values   []string `json:"values"`
+	Revision int64    `json:"revision"`
+}
+
 func registerApplicationRoutes(mux *http.ServeMux, logger *slog.Logger, database *db.DB, enqueue func(kind, subject string) (int64, error)) {
 	vacancyOf := func(r *http.Request) (int64, error) {
 		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -75,6 +93,16 @@ func registerApplicationRoutes(mux *http.ServeMux, logger *slog.Logger, database
 	}
 	server.Handle(mux, "GET /api/vacancies/{id}/application", logger, func(r *http.Request, _ struct{}) (formread.ApplicationView, error) {
 		vacancy, err := vacancyOf(r)
+		if err != nil {
+			return formread.ApplicationView{}, err
+		}
+		return formread.ViewOf(r.Context(), database, vacancy)
+	})
+	server.Handle(mux, "PATCH /api/vacancies/{id}/application/fields/{field}", logger, func(r *http.Request, body fieldEdit) (formread.ApplicationView, error) {
+		vacancy, err := vacancyOf(r)
+		if err == nil {
+			err = formread.Edit(r.Context(), database, vacancy, r.PathValue("field"), body.Values, body.Revision)
+		}
 		if err != nil {
 			return formread.ApplicationView{}, err
 		}

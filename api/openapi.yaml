@@ -525,11 +525,15 @@ components:
             type: object
         Field:
             properties:
+                evidence:
+                    type: string
                 key:
                     type: string
                 kind:
                     type: string
                 label:
+                    type: string
+                note:
                     type: string
                 options:
                     items:
@@ -537,12 +541,26 @@ components:
                     type: array
                 required:
                     type: boolean
+                revision:
+                    format: int64
+                    type: integer
+                source:
+                    type: string
+                values:
+                    items:
+                        type: string
+                    type: array
             required:
                 - key
                 - label
                 - kind
                 - required
                 - options
+                - values
+                - source
+                - note
+                - evidence
+                - revision
             type: object
         FillAnswer:
             properties:
@@ -1908,6 +1926,19 @@ components:
             required:
                 - force
             type: object
+        fieldEdit:
+            properties:
+                revision:
+                    format: int64
+                    type: integer
+                values:
+                    items:
+                        type: string
+                    type: array
+            required:
+                - values
+                - revision
+            type: object
         logAttr:
             properties:
                 key:
@@ -3024,6 +3055,24 @@ paths:
     /api/vacancies/{id}/application:
         get:
             operationId: getApiVacanciesIdApplication
+            responses:
+                4XX:
+                    $ref: '#/components/responses/Error'
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApplicationView'
+                    description: OK
+    /api/vacancies/{id}/application/fields/{field}:
+        patch:
+            operationId: patchApiVacanciesIdApplicationFieldsField
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/fieldEdit'
+                required: true
             responses:
                 4XX:
                     $ref: '#/components/responses/Error'
