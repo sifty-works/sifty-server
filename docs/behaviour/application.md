@@ -28,7 +28,7 @@ A page found later by a manual search is read again and the draft is updated; an
 
 ## Application tab
 
-**Reading the form.** The form is read without a browser and without a model, from the public data of Greenhouse, Ashby or Workable, or from the page itself when the form is written in its HTML (Lever, and an employer's own page that does not build its form with scripts). A form built by scripts or behind sign-in (Workday, Work at a Startup, Wellfound, LinkedIn) is not read; the tab offers Paste. The tab shows the state in words: "Reading the application form…", "This site's form can't be read here → Paste the form", "Sign-in required → Paste the form", "The <system> form could not be read → Paste the form", "No questions to answer → Apply directly", or the error. A form of a known system whose answer could not be parsed is never shown as an empty form. Fields that are not part of the application (site search, filters, newsletter sign-up) are left out. Requests are spaced per site like collection's requests, and a site that blocked is left alone like a blocked domain in collection.
+**Reading the form.** The form is read without a browser and without a model, the way collection reads a vacancy: by the address of the page and that site's description. The description names how its form is read: from the public data of Greenhouse, Ashby or Workable, or from the page's HTML with the site's template of where the form, its fields, labels and options are (Lever). A site without a description is read from its HTML with the general template, when the form is written in the page and not built by scripts. A new site is taught by a line of its description, not by code (see `collection.md`). A form built by scripts or behind sign-in (Workday, Work at a Startup, Wellfound, LinkedIn) is not read; the tab offers Paste. The tab shows the state in words: "Reading the application form…", "This site's form can't be read here → Paste the form", "Sign-in required → Paste the form", "The <system> form could not be read → Paste the form", "No questions to answer → Apply directly", or the error. A form of a known system whose answer could not be parsed is never shown as an empty form. Fields that are not part of the application (site search, filters, newsletter sign-up) are left out. Requests are spaced per site like collection's requests, and a site that blocked is left alone like a blocked domain in collection.
 
 **Reading the form again** keeps the answers: a field is matched by its id, or by its label when the label is unique. A question whose requirements changed is marked "Question requirements changed". A field that disappeared from the form is kept with the mark "removed" only when the user filled it; otherwise it is dropped. Questions the user added by hand are kept.
 
@@ -52,7 +52,7 @@ A page found later by a manual search is read again and the draft is updated; an
 **Other actions:**
 
 - **Write** drafts a cover letter when the form does not ask for one.
-- **Paste** takes a form that could not be read, copied from the page. Code finds its questions without a model: from the copied HTML the way a page is read, and from plain text by its lines, where a line that ends with a question mark or a required mark, or a known label, is a question and the short lines after it are its options. The user corrects the list, and the questions are prepared like read ones.
+- **Paste** takes a form that could not be read, copied from the page. Code finds its questions first: from the copied HTML with the template of the site the vacancy is on, or the general one, and from plain text by its lines, where a line that ends with a question mark or a required mark, or a known label, is a question and the short lines after it are its options. Only when code finds no question does one model call extract them. The user corrects the list, and the questions are prepared like read ones.
 - **Add a question** adds one by hand.
 - **Retry preparation** appears after a failed or interrupted preparation.
 
@@ -70,7 +70,7 @@ Diagnostic panels (questionnaire coverage, the technical record of form reading,
 | Shortlist check | entering Shortlist; opening a shortlisted vacancy whose check is outdated (see `assessment.md`) | the check on the vacancy page | 1 |
 | Employer's page | entering Shortlist, the Apply button, startup | the Apply button's state | 0–1 to choose among search results; web searches within their daily limit |
 | Form reading and drafting | entering Shortlist, opening the tab when nothing was prepared, Retry preparation | the Application tab's states | 0–1 to classify labels, 1 to draft |
-| Write, Paste | the buttons on the Application tab | the Application tab's states | Write 1; Paste none |
+| Write, Paste | the buttons on the Application tab | the Application tab's states | Write 1; Paste 0–1 |
 | Document analysis | Analyze or Retry (see `profiles.md`) | the document's state | 1 per chunk |
 | Provider check | "Check" in Settings (see `settings-and-data.md`) | the answer of the check | 1 |
 
@@ -104,4 +104,4 @@ The reason of a failure is a sentence made from the kind of error when the job f
 - Answers kept as separate files that only a self-check read. Corrections written on a vacancy move to Confirmed by you (see `profiles.md`).
 - Diagnostic panels shown to the user outside debug mode.
 - Form reading by a browser, which needed Node.js and Playwright installed on the machine.
-- A model call that extracted the questions of a pasted form; code finds them.
+- A model call for every pasted form; code finds the questions first.

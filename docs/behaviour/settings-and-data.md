@@ -44,7 +44,7 @@ The reason of a refused settings file is the sentence the settings screen gives 
 - **Exclusions:** the one list of exclusions (see `inbox.md`).
 - **Models:**
   - the providers, each marked local, free or paid;
-  - a provider for each kind of model work: **Reading** (facts of profile documents, and the domain of a company read from its vacancies; the rest of a vacancy is read by code), **Shortlist check**, and **Preparation** (form labels, drafts, cover letters);
+  - a provider for each kind of model work: **Reading** (facts of profile documents, and the domain of a company read from its vacancies; the rest of a vacancy is read by code), **Shortlist check**, and **Preparation** (form labels, drafts, cover letters, pasted forms code could not read);
   - the state of each provider and a "Check" button that sends a fixed test prompt with no user data;
   - "Allow paid bulk work", off by default;
   - "Precise reading", with the line "Reads every new vacancy's company with the Reading model; uses your local machine or a paid provider. Off: only vacancies you open are read." Until the user sets it, it is on when the Reading provider is marked local, and off when it is marked free or paid or there is none; once the user sets it, that choice stays whatever the provider is. Off, only the vacancies the user opens are read. With no Reading provider nothing is read and the switch says so; with a paid Reading provider and "Allow paid bulk work" off, only opened vacancies are read, and the switch says it needs that permission;
