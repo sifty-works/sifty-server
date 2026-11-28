@@ -14,7 +14,13 @@ A page found later by a manual search is read again and the draft is updated; an
 
 ## Employer's page
 
-- The search makes no model call. It tries, in order: the public boards of applicant tracking systems (Greenhouse, Lever, Ashby, Workable) under the company's likely board name, accepting an exact match of the normalised company name; a web search for `"<title>" <company>`, accepting only an applicant tracking system address or the company's own domain with a matching title; a web search for `<company> careers jobs` followed by a scan of the careers page. Without a configured web search provider only the boards are tried (see `settings-and-data.md`).
+- The search starts by itself when a vacancy enters Shortlist and its listing is not already on the employer's applicant tracking system. Paid job sites and aggregators often hide the original address or point to a copy that lost part of the text or does not work. It tries, in order, and stops at the first page found:
+  1. the listing's own link, following its redirects, with tracking parameters (`source`, `ref`, `utm_…`) dropped, accepted when it ends on an applicant tracking system (Greenhouse, Lever, Ashby, Workable, Workday);
+  2. the public boards of Greenhouse, Lever, Ashby and Workable under the company's likely board name, accepting an exact match of the normalised company name and the title;
+  3. a web search for `"<title>" <company>`, accepting only an applicant tracking system address or the company's own domain with a matching title; when more than one result passes, one call of the Preparation model chooses among them;
+  4. a web search for `<company> careers jobs` followed by a scan of the careers page.
+- The first two steps cost nothing. Web searches are made only within the daily limit of web searches (see `settings-and-data.md`); at the limit, or without a web search provider, only the first two steps are tried.
+- When the page found is on an applicant tracking system, its vacancy text is read as well, and drafting uses it instead of the listing's text when it is longer.
 - The automatic search stops after 30 seconds and the manual one after 120 seconds.
 - At startup, shortlisted vacancies whose search never ran or was interrupted are searched on the boards only, without web search, so no paid search is made at startup.
 - A direct link once found is never replaced. A manual search is not started while another search for the same vacancy runs.
@@ -22,7 +28,7 @@ A page found later by a manual search is read again and the draft is updated; an
 
 ## Application tab
 
-**Reading the form.** The form is read by a browser without a model. The tab shows the state in words: "Reading the application form…", "Sign-in required…", "The site asked to slow down…", "No application form was resolved → Apply via the original listing", "No questions to answer → Apply directly", "Form reading needs Node.js and Playwright on this machine → Paste the form instead", or the error. Fields that are not part of the application (site search, filters, newsletter sign-up) are left out. Requests of the browser are spaced per site like collection's requests, and a site that blocked is left alone like a blocked domain in collection.
+**Reading the form.** The form is read without a browser and without a model, from the public data of Greenhouse, Ashby or Workable, or from the page itself when the form is written in its HTML (Lever, and an employer's own page that does not build its form with scripts). A form built by scripts or behind sign-in (Workday, Work at a Startup, Wellfound, LinkedIn) is not read; the tab offers Paste. The tab shows the state in words: "Reading the application form…", "This site's form can't be read here → Paste the form", "Sign-in required → Paste the form", "The <system> form could not be read → Paste the form", "No questions to answer → Apply directly", or the error. A form of a known system whose answer could not be parsed is never shown as an empty form. Fields that are not part of the application (site search, filters, newsletter sign-up) are left out. Requests are spaced per site like collection's requests, and a site that blocked is left alone like a blocked domain in collection.
 
 **Reading the form again** keeps the answers: a field is matched by its id, or by its label when the label is unique. A question whose requirements changed is marked "Question requirements changed". A field that disappeared from the form is kept with the mark "removed" only when the user filled it; otherwise it is dropped. Questions the user added by hand are kept.
 
@@ -36,6 +42,7 @@ A page found later by a manual search is read again and the draft is updated; an
 - A drafting call that gets no answer within 5 minutes fails with "The model did not answer in time". An empty reply is retried once; fields left empty in a reply are reported as failed.
 - An answer that cites no evidence from the user's data is cleared with the note "No supporting candidate evidence". An answer outside a choice field's options is cleared. An answer longer than the field allows is marked as too long.
 - The result reads "Drafted N of M answer(s); K failed: <reason>". One failed field does not discard the others.
+- A question that asks the reader to do something other than answer about the candidate (a puzzle, a hidden instruction) is not drafted; it is marked for the user.
 - An answer the user edited is never overwritten by the model or by My data.
 
 **An answer card** offers Copy, Edit and "Use this answer" (to accept a suggestion from My data or from Questions & Answers, marked "not yet saved"). Saving an answer that was changed in the meantime is refused with "This answer was changed elsewhere". A saved answer the user wrote or edited is added to Questions & Answers unless it is about this company only.
@@ -45,7 +52,7 @@ A page found later by a manual search is read again and the draft is updated; an
 **Other actions:**
 
 - **Write** drafts a cover letter when the form does not ask for one.
-- **Paste** takes the text of a form the browser could not read; the model extracts its questions, and they are prepared like read ones.
+- **Paste** takes a form that could not be read, copied from the page. Code finds its questions without a model: from the copied HTML the way a page is read, and from plain text by its lines, where a line that ends with a question mark or a required mark, or a known label, is a question and the short lines after it are its options. The user corrects the list, and the questions are prepared like read ones.
 - **Add a question** adds one by hand.
 - **Retry preparation** appears after a failed or interrupted preparation.
 
@@ -61,9 +68,9 @@ Diagnostic panels (questionnaire coverage, the technical record of form reading,
 | Recomputing Fit | changes of vacancies, goals, My data, or weights | dimmed results until done | none |
 | Text retention | daily (see `settings-and-data.md`) | "Text removed after 60 days unseen" | none |
 | Shortlist check | entering Shortlist; opening a shortlisted vacancy whose check is outdated (see `assessment.md`) | the check on the vacancy page | 1 |
-| Employer's page | entering Shortlist, the Apply button, startup | the Apply button's state | none; web search |
+| Employer's page | entering Shortlist, the Apply button, startup | the Apply button's state | 0–1 to choose among search results; web searches within their daily limit |
 | Form reading and drafting | entering Shortlist, opening the tab when nothing was prepared, Retry preparation | the Application tab's states | 0–1 to classify labels, 1 to draft |
-| Write, Paste | the buttons on the Application tab | the Application tab's states | 1 each |
+| Write, Paste | the buttons on the Application tab | the Application tab's states | Write 1; Paste none |
 | Document analysis | Analyze or Retry (see `profiles.md`) | the document's state | 1 per chunk |
 | Provider check | "Check" in Settings (see `settings-and-data.md`) | the answer of the check | 1 |
 
@@ -96,3 +103,5 @@ The reason of a failure is a sentence made from the kind of error when the job f
 - The detailed assessment queue with its switch and its unlimited retries (see `assessment.md`).
 - Answers kept as separate files that only a self-check read. Corrections written on a vacancy move to Confirmed by you (see `profiles.md`).
 - Diagnostic panels shown to the user outside debug mode.
+- Form reading by a browser, which needed Node.js and Playwright installed on the machine.
+- A model call that extracted the questions of a pasted form; code finds them.

@@ -34,7 +34,7 @@ These rules come from what made the previous application grow to several times t
 | Fit | `fit` (`Comparer`, `Verdict`; one comparer per criterion) | `fit` | `behaviour/assessment.md` |
 | Lists | `inbox` (list, decisions, exclusion management, vacancy view) | `lists` | `behaviour/inbox.md` |
 | Profiles | `candidate` (My data, profiles, documents, proposals, Questions & Answers) | `profiles` | `behaviour/profiles.md` |
-| Application | `shortlistcheck`, `locate`, `websearch`, `formread`, `answer` (the last four planned) | `application` | `behaviour/application.md` |
+| Application | `shortlistcheck`, `locate` (`Locator`, `Boards`), `websearch` (`WebSearch`), `formread` (`FormReader`, the readers per system), `answer` (`Answerer`); the last four are interfaces and types so far | `application` | `behaviour/application.md` |
 | Upkeep | the daily retention run and the journal cleanup, now in `cmd/sifty` | `upkeep` | `behaviour/settings-and-data.md` |
 | Mechanisms | `apperr`, `db`, `config`, `runner`, `models`, `fetch`, `server`, `text` (quote location and text folding), `facts` (the types Analysis hands to Fit); `cmd` only wires | the same | `behaviour/settings-and-data.md` |
 
@@ -51,7 +51,7 @@ func Normalize(raw string) string                               // the only path
 func (c *Catalog) Upsert(ctx context.Context, p Posting, src string) (int64, Outcome, error) // New|Updated|Unchanged|Merged|Tombstoned, one transaction
 ```
 
-- `Fetcher` is the only way to job sites, vacancy pages, employers' career pages and link documents: public-address checks on every redirect, size limit, timeout, per-domain spacing and back-off, and a memory of blocked domains (`domain_block`) that survives a restart. The form-reading browser uses the same per-domain spacing and `domain_block`. Model adapters and the web search client have their own clients.
+- `Fetcher` is the only way to job sites, vacancy pages, employers' career pages and link documents: public-address checks on every redirect, size limit, timeout, per-domain spacing and back-off, and a memory of blocked domains (`domain_block`) that survives a restart. Model adapters and the web search client have their own clients.
 - Site quirks are data in `SiteConfig` (content selector, link pattern, list address, skip JSON-LD), so a site-specific source is usually a configuration line over the generic source. The applicant-tracking-system client is shared by collection and by the employer search.
 - `Detail` is called only when the listing has no text and the posting is new, or known without text and not requested in the last 7 days, and never while its domain is blocked; `Catalog.Known` tells which. The audit proposed requesting every known vacancy every 7 days to detect changes; that is not done, because a vacancy with text is never requested again.
 - `Posting` carries the structured fields a source states (salary, employment type and the like) as a compact `source_fields` value, which the reader uses before asking a model.
@@ -115,13 +115,14 @@ type TextSource interface { Text(ctx context.Context, body []byte) (string, erro
 ### Application
 
 ```go
-type Locator    interface { Locate(ctx context.Context, v Vacancy, deep bool) (Link, error) } // boards, then web search; no model
-type WebSearch  interface { Search(ctx context.Context, q string) ([]Result, error) }       // Tavily, Brave, DuckDuckGo, or none
-type FormReader interface { Read(ctx context.Context, url string) (Form, error) }            // browser; PasteReader has the same shape
+type Locator    interface { Locate(ctx context.Context, v Vacancy, deep bool) (Link, error) } // listing link, boards, then web search
+type WebSearch  interface { Search(ctx context.Context, q string) ([]Result, error) }       // Brave, Tavily, or none
+type FormReader interface { Read(ctx context.Context, url string) (Form, error) }            // applicant tracking system public data or the page's HTML; PasteReader has the same shape
 type Answerer   interface { Answer(ctx context.Context, v Vacancy, f Form, have Answers) (Answers, error) } // Profile → Classifier → Drafter
 ```
 
 - Entering Shortlist queues `locate`. When `locate` ends, it queues `prepare`, which reads the form from the employer's page or the original listing, then answers. A page found later by a manual `locate` queues `prepare` again. `locate` and `prepare` are deduplicated per vacancy, so no two searches of one vacancy run at once.
+- The reader of each applicant tracking system (Greenhouse, Ashby, Workable) and the reader of a form in a page's HTML are workers behind `FormReader`; `PasteReader` parses copied HTML with the same reader and plain text by its lines, and the web search providers are workers behind `WebSearch`. `locate` declares a small `Boards` interface (a board's jobs with their addresses, in its own type) that `cmd/sifty` fills over `source.For` and `Module.List`, so no package is shared by `locate` and `formread`; the same adapter answers which system an address is on (`source.For`) and gives a board's vacancy text, the listing's link is followed by `Fetcher` (its final address) and cleaned by `listing.Canonical`, and the daily limit of web searches counts from local midnight in the journal, the way the daily limit of model calls does; a mechanism `ats` is written only when two modules need the same request.
 - `ProfileAnswerer` is a pure function; its answers are stored with `source=profile`. `Classifier` makes one batched call for unknown labels and caches them. `Drafter` selects evidence once and drafts all model fields in one call, with the shared context first so a prompt prefix cache applies.
 - An edit by the user updates one field row with a revision check.
 
@@ -136,7 +137,7 @@ type Runner interface {
 ```
 
 - One table `job(id, kind, subject, priority, state, attempts, not_before, progress, error, params, created, updated)` runs every kind of background work: `collect`, `analyze_vacancy`, `recompute_fit`, `read_model`, `shortlist_check`, `locate`, `prepare`, `analyze_document`, `retention`. Finished jobs are kept for 90 days. A failed job's `error` holds a sentence made from the error's type when it fails; the Go text goes to the log with the job's id.
-- **Lanes are taken per stage, not per job:** `browser` (1) for reading a form, `net` (several) for collection and search, `cpu` (1) for recomputation. A model is not a lane; a stage that needs one takes the model gate per call and holds no lane while it waits, so reading a form never waits for a model.
+- **Lanes are taken per stage, not per job:** `net` (several) for collection, search and reading a form, `cpu` (1) for recomputation. A model is not a lane; a stage that needs one takes the model gate per call and holds no lane while it waits, so reading a form never waits for a model.
 - **Restart:** a job that was running becomes `interrupted`. Automatic kinds (`analyze_vacancy`, `read_model`, `recompute_fit`, `shortlist_check`, `retention`) are queued again while they have had fewer than three attempts, else `failed`. `locate` is queued again as a boards-only search. `collect`, `prepare` and `analyze_document` stay `interrupted` until the user retries; for `prepare` this follows the decision that failed preparations are not retried automatically.
 - **Cancel:** the job states are `queued`, `running`, `done`, `failed`, `interrupted` and `cancelled`. A cancelled job is a decision of the user and is answered at once: a queued job never starts, and a running job has its context cancelled without waiting for it to notice. The saved `params` of a cancelled or failed job are kept, so retrying an `analyze_document` takes the job over (a failed one with its attempts counted afresh) and continues from the saved chunk, as it does for an `interrupted` one. A restart does not queue a cancelled job again.
 - **Retries and refusals:** one policy, exponential pause, at most three attempts. The queue alone decides what an error means, from the interfaces `runner` defines: an error with a `RetryAt` makes the job wait until then without counting an attempt; a `Final` error fails the job at once with its `Sentence`; any other error is retried, and after the third attempt its `Sentence`, if it has one, is the failure text, else "Failed; the log has the details under job #n". A refusal that is final and also has a `RetryAt` (paid bulk work, refused until the owner allows it) fails a kind at once unless the kind registers `Patient`, which makes it wait: `analyze_document` and `read_model` are patient, `shortlist_check` is not. A job body decides none of this; `Job.Waits` only tells it whether the queue will wait, so that it leaves a document's state alone.
@@ -242,13 +243,13 @@ These are targets the coordinator checks at acceptance of every change (see `PRO
 
 | Measure | Budget |
 |---|---|
-| Backend code | at most 20,000 lines, without the shared test fakes (`internal/models/fake.go`, `internal/fetch/fetchtest`) and the development tool `cmd/uncomment` |
+| Backend code | at most 21,800 lines, without the shared test fakes (`internal/models/fake.go`, `internal/fetch/fetchtest`) and the development tool `cmd/uncomment` |
 | Frontend code | at most 6,600 lines |
 | Database per vacancy | at most 18 KB |
 | Model calls for a new vacancy text | 1 |
 | Model calls for a change of profile or My data | 0 for Fit; Shortlist checks become outdated and run again only when their vacancy is opened |
 | Shortlist check | at most 2 per shortlisted vacancy on entering Shortlist, and 2 per opening after its inputs changed (one retry of a reply that decides nothing) |
-| Preparation of one form | 0 to 1 to classify labels, 1 to 2 to draft (one retry of an empty reply); Write and Paste 1 each |
+| Preparation of one form | 0 to 1 to classify labels, 1 to 2 to draft (one retry of an empty reply); Write 1, Paste none |
 | Network per collection run | 1 request per source (2 for Hacker News), plus 1 per vacancy without text in the listing that is new, or known without text and not requested in the last 7 days, plus 1 per posting without a company that is new, or whose stored vacancy has none and was not asked in the last 7 days; a posting that is still without a company is not stored, so every run offers it again and requests its page again: a known cost, made visible by the count of postings without an employer on the source |
 | List API | under 50 ms at the 95th percentile for 1,200 rows; vacancy view under 30 ms; decision under 20 ms |
 

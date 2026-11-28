@@ -4,6 +4,8 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Applications (planned): the description of how applications will work no longer needs a browser on the machine. Forms are read from the public data of Greenhouse, Ashby and Workable and from the page itself (Lever and employers' own pages); other forms are pasted and their questions found without a model. The employer's page is looked for from the listing's link, then the public boards, then a web search (Brave or Tavily) within a daily limit. The backend code budget rises from 20,000 to 21,800 lines for this stage.
+
 ## 0.22.0
 
 - Key facts: Location reads each place of a list on its own ("Canada Only, Poland, and Bulgaria", "SF, NYC, SEA"), a "City, CA" is never Canada, and places come from "geo-locked" country lists, a city line under the title and "attend our London office"; a company's "Headquarters:" line counts only when nothing else states a place or work mode. Work mode: office days inside a hybrid sentence, a denied office demand, onboarding in person and a "hybrid role across…" no longer add onsite or hybrid, and "in person from the office" is onsite. Languages: Italian and Chinese names, "Languages:" lines in any section, and "German required, French is a plus" reads French as preferred. Stored postings are read again.

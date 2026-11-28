@@ -146,7 +146,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 
 	cat := catalog.New(database, time.Now)
-	r := runner.New(database, map[string]int{"browser": 1, "net": 4, "cpu": 1}, time.Now, logger)
+	r := runner.New(database, map[string]int{"net": 4, "cpu": 1}, time.Now, logger)
 	r.SetPause(gate.IsPaused)
 
 	registerJobKinds(r, database, store, gate, cat, logger, offline, time.Now)

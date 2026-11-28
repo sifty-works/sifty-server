@@ -4,11 +4,11 @@ What the user gets: the application is one program that starts on an empty data 
 
 ## Where data lives
 
-- Everything the application stores lives in one folder, chosen by `--data-dir`, then the `SIFTY_DATA_DIR` environment variable, then a `data` folder beside the working folder when one is already there, and otherwise the application folder of this user: `Library/Application Support/Sifty` on macOS and `.config/sifty` elsewhere. The path is made absolute. The folder is created with access for the user who runs the application only. The browser that reads application forms uses its own installation outside this folder.
+- Everything the application stores lives in one folder, chosen by `--data-dir`, then the `SIFTY_DATA_DIR` environment variable, then a `data` folder beside the working folder when one is already there, and otherwise the application folder of this user: `Library/Application Support/Sifty` on macOS and `.config/sifty` elsewhere. The path is made absolute. The folder is created with access for the user who runs the application only.
 - Only a browser on this machine can use the application; other web pages cannot make it act. A second copy started on the same data folder refuses to start.
 - **What leaves the machine:**
   - requests to the job sites of the sources, and to the pages of vacancies;
-  - requests to public applicant tracking boards and to employers' sites, including application forms read by the browser;
+  - requests to public applicant tracking boards and to employers' sites, including the public data of applicant tracking systems read for application forms;
   - requests to the web search provider the user configured;
   - requests to pages the user adds as link documents;
   - prompts to the model providers the user configured.
@@ -16,7 +16,7 @@ What the user gets: the application is one program that starts on an empty data 
 
 ## First start
 
-The application is one program to run; reading application forms additionally needs Node.js and Playwright on the machine (see `application.md`), and reading the text of a PDF needs poppler (`pdftotext`), which a document card names with its install command when it is missing. It starts on an empty data folder without copying any template. Every key of the settings file is optional; a missing key takes its default. The first run shows empty lists and a hint to add sources, and model work shows "Configure a provider" until one is set.
+The application is one program to run; reading the text of a PDF needs poppler (`pdftotext`), which a document card names with its install command when it is missing. It starts on an empty data folder without copying any template. Every key of the settings file is optional; a missing key takes its default. The first run shows empty lists and a hint to add sources, and model work shows "Configure a provider" until one is set.
 
 ## Where settings live
 
@@ -44,12 +44,12 @@ The reason of a refused settings file is the sentence the settings screen gives 
 - **Exclusions:** the one list of exclusions (see `inbox.md`).
 - **Models:**
   - the providers, each marked local, free or paid;
-  - a provider for each kind of model work: **Reading** (facts of profile documents, and the domain of a company read from its vacancies; the rest of a vacancy is read by code), **Shortlist check**, and **Preparation** (form labels, drafts, cover letters, pasted forms);
+  - a provider for each kind of model work: **Reading** (facts of profile documents, and the domain of a company read from its vacancies; the rest of a vacancy is read by code), **Shortlist check**, and **Preparation** (form labels, drafts, cover letters);
   - the state of each provider and a "Check" button that sends a fixed test prompt with no user data;
   - "Allow paid bulk work", off by default;
   - "Precise reading", with the line "Reads every new vacancy's company with the Reading model; uses your local machine or a paid provider. Off: only vacancies you open are read." Until the user sets it, it is on when the Reading provider is marked local, and off when it is marked free or paid or there is none; once the user sets it, that choice stays whatever the provider is. Off, only the vacancies the user opens are read. With no Reading provider nothing is read and the switch says so; with a paid Reading provider and "Allow paid bulk work" off, only opened vacancies are read, and the switch says it needs that permission;
   - a switch that pauses background work, and a daily limit of background model calls. While it is paused, scheduled collection does not start and every queued job waits, including the jobs that a decision, a skill answer, a retry or opening a vacancy queues; jobs that are already running finish. Collect now still collects; everything else waits until background work is turned on again.
-- **Web search:** the provider used to find employers' pages (Tavily, Brave, DuckDuckGo, or none), with its key taken from the environment or the secrets file. With none, the employer search uses only applicant tracking boards.
+- **Web search:** the provider used to find employers' pages (Brave, Tavily, or none) and the daily limit of web searches, 40 by default. The key is taken from the environment or the secrets file; the page shows whether it was found and the name of the variable to set, never the key. With none, the employer search uses only the listing's link and the applicant tracking boards.
 - **Monitor › Background work:** what is running, and what is waiting and why (see `application.md`).
 - **Monitor › Logs:** the jobs that failed in the last 7 days, each with its reason as a sentence (see `application.md`), and the last 200 warnings and errors of the server log, newest first, each with its time, level, message and attributes as written. "see log #N" and "job #N" are found here by the `id` or `job` attribute. The log is written as JSON lines in the data folder (`logs/sifty.log`, then `logs/sifty.log.1` when the current file holds fewer than 200); a line that cannot be read is skipped. The value of every API key the application holds, from the environment or the secrets file, is shown as `***` in the message and in each attribute. The number in "see log #N" starts from the time the application started, so it does not repeat after a restart.
 - **Advanced:** the settings file in a text editor, next to the forms. Saving checks the file first and keeps a backup of the saved content in the data folder; the last ten backups are kept, and the editor names the folder where they are. A change made in a form keeps the comments of the settings file.

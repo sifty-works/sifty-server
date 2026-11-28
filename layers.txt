@@ -6,7 +6,7 @@
 #   SQL calls and database/sql are for the packages listed after sql and for files named repo*.go or store*.go.
 # One line per kind: "mechanism:", "module <name>:", "worker:", "sql:", "wiring:", "outside:" and their packages.
 # The packages of a module are those of today that go into the package of that name; upkeep (the daily retention run and the
-# model-call journal cleanup, now in cmd/sifty) has none yet and application has only the Shortlist check so far (locate, web search, form reading and answers are not written).
+# model-call journal cleanup, now in cmd/sifty) has none yet; application holds the Shortlist check and the interfaces of locating, web search, form reading and answers.
 # A deviation of today's code is one line "<package> -> <import or database/sql>" or "<file> -> sql" with "# until: <change>",
 # the change that removes it; a line nothing uses any more is reported; remove it. New lines need the owner's decision.
 
@@ -19,7 +19,7 @@ module fit: internal/fit
 module lists: internal/inbox
 module profiles: internal/candidate
 module upkeep:
-module application: internal/shortlistcheck
+module application: internal/shortlistcheck internal/locate internal/websearch internal/formread internal/answer
 
 worker: internal/places internal/skills internal/source
 
