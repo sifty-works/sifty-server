@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"unicode"
 
 	"gopkg.in/yaml.v3"
 
@@ -25,6 +24,7 @@ var vocab = func() (v struct {
 	sensitive   map[string]bool
 	drafted     map[string]bool
 	ethnicity   []string
+	legal       map[string]bool
 	raceOptions []string
 }) {
 	var raw struct {
@@ -35,6 +35,7 @@ var vocab = func() (v struct {
 		Drafted          []string
 		EthnicityOptions []string `yaml:"ethnicity_options"`
 		RaceOptions      []string `yaml:"race_options"`
+		LegalSuffixes    []string `yaml:"legal_suffixes"`
 		Contains         map[string][]string
 		Keys             map[string][]string
 	}
@@ -43,14 +44,14 @@ var vocab = func() (v struct {
 	}
 	norms := func(list []string) (out []string) {
 		for _, w := range list {
-			out = append(out, " "+norm(w)+" ")
+			out = append(out, " "+text.Key(w)+" ")
 		}
 		return out
 	}
 	v.phrases = map[string]string{}
 	for key, list := range raw.Keys {
 		for _, p := range list {
-			n := norm(p)
+			n := text.Key(p)
 			if other, dup := v.phrases[n]; dup {
 				panic(fmt.Sprintf("answer: phrasing %q is under %s and %s", p, other, key))
 			}
@@ -70,26 +71,15 @@ var vocab = func() (v struct {
 	for _, k := range raw.Drafted {
 		v.drafted[k] = true
 	}
+	v.legal = map[string]bool{}
+	for _, w := range raw.LegalSuffixes {
+		v.legal[w] = true
+	}
 	return v
 }()
 
-func norm(s string) string {
-	var b strings.Builder
-	space := true
-	for _, r := range strings.ToLower(text.Fold(s)) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
-			space = false
-		} else if !space {
-			b.WriteByte(' ')
-			space = true
-		}
-	}
-	return strings.TrimRight(b.String(), " ")
-}
-
 func AsksResidence(label string) bool {
-	return containsAny(" "+norm(label)+" ", vocab.residence)
+	return containsAny(" "+text.Key(label)+" ", vocab.residence)
 }
 
 func containsAny(padded string, phrases []string) bool {
@@ -97,7 +87,7 @@ func containsAny(padded string, phrases []string) bool {
 }
 
 func keyOf(label, kind string, options []string) string {
-	padded := " " + norm(label) + " "
+	padded := " " + text.Key(label) + " "
 	found := map[string]bool{}
 	var sensitive []string
 	for key, list := range vocab.contains {
@@ -113,7 +103,7 @@ func keyOf(label, kind string, options []string) string {
 		return sensitive[0]
 	case len(sensitive) > 1:
 		if len(sensitive) == 2 && found["race"] && found["ethnicity"] {
-			joined := " " + norm(strings.Join(options, " ")) + " "
+			joined := " " + text.Key(strings.Join(options, " ")) + " "
 			if containsAny(joined, vocab.ethnicity) && !containsAny(joined, vocab.raceOptions) {
 				return "ethnicity"
 			}
@@ -173,13 +163,13 @@ func pick(kind string, options []string, vals []Value) ([]string, bool) {
 func matchOption(options []string, v Value) (string, bool) {
 	var wants []string
 	for _, w := range append([]string{v.Text}, v.Match...) {
-		if n := norm(w); n != "" {
+		if n := text.Key(w); n != "" {
 			wants = append(wants, n)
 		}
 	}
 	for _, prefix := range []bool{false, true} {
 		for _, o := range options {
-			n := norm(o)
+			n := text.Key(o)
 			for _, w := range wants {
 				if n == w || (prefix && strings.HasPrefix(n, w+" ")) {
 					return o, true

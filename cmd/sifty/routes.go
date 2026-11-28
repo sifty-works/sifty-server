@@ -48,6 +48,7 @@ func registerAllRoutes(
 	logPath string,
 	heldKeys func() []string,
 	rd *reading,
+	source modelSource,
 ) {
 	enqueue := func(kind, subject string) (int64, error) {
 		if r == nil {
@@ -92,7 +93,7 @@ func registerAllRoutes(
 	server.Handle(mux, "PUT /api/secrets/{name}", logger, models.PutSecretHandler(gate))
 	server.Handle(mux, "DELETE /api/secrets/{name}", logger, models.DeleteSecretHandler(gate))
 	inbox.RegisterRoutes(mux, database, now, logger, collectActive, sourceNames, rules, recomputeFit, enqueueWork, rd.opened)
-	registerApplicationRoutes(mux, logger, database, enqueue)
+	registerApplicationRoutes(mux, logger, database, enqueue, source, now)
 	candidate.RegisterRoutes(mux, database, filesDir, readers, logger, recomputeFit, enqueue)
 	server.Handle(mux, "POST /api/documents/{id}/cancel", logger, candidate.CancelAnalysisHandler(database, cancel))
 	col.RegisterRoutes(mux)

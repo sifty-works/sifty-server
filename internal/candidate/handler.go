@@ -115,6 +115,7 @@ type QAItem struct {
 	Answer    string `json:"answer"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+	Company   string `json:"-"`
 }
 
 type QAListResp struct {

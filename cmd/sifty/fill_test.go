@@ -107,8 +107,8 @@ func TestExtensionFillAnswersFromMyDataForTheVacancyOfAPageAndNeverForAnotherPag
 		if v, _ := answerOf(t, other, "email"); v != "rowan@example.test" {
 			t.Errorf("fill from %s: email = %q, want the My data answer", page, v)
 		}
-		if v, _ := answerOf(t, other, "story"); v != "" {
-			t.Errorf("fill from %s: story = %q, an edited answer of another page leaked", page, v)
+		if v, s := answerOf(t, other, "story"); v != "Mine" || s != "qa" {
+			t.Errorf("fill from %s: story = %q from %q, want the saved answer of Questions & Answers and never the vacancy's own edit", page, v, s)
 		}
 	}
 	if kept, _ := apiGet(t, base, fmt.Sprintf("/api/extension/fill/%d", vacancy)); !reflect.DeepEqual(kept["answers"], append(got["answers"].([]any)[:2:2], map[string]any{"key": "story", "value": "Mine", "values": []any{"Mine"}, "source": "user", "note": ""})) {

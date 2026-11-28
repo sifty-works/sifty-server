@@ -143,7 +143,7 @@ func (d answerData) Known(ctx context.Context) (answer.Known, error) {
 	}
 	known := answer.Known{Contacts: []string{me.Email, me.Phone, me.LinkedIn, me.GitHub, me.X, me.Website}, Names: []string{me.LegalName, me.DisplayName}, Values: k, Evidence: candidate.EvidenceText(me, prof, docs), Authorized: authorized(me.WorkAuthorizations, residence)}
 	for _, q := range items {
-		known.QA = append(known.QA, answer.QA{Question: q.Question, Answer: q.Answer})
+		known.QA = append(known.QA, answer.QA{Question: q.Question, Answer: q.Answer, Company: q.Company})
 	}
 	return known, nil
 }

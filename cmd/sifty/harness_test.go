@@ -108,13 +108,15 @@ func registerKindsFetching(t *testing.T, r *runner.Runner, d *db.DB, m models.Mo
 	registerKindsOn(t, r, d, func(*db.DB, *config.Store) modelSource { return fixedModel{m} }, filepath.Join(t.TempDir(), "sifty.yaml"), cat, now, f)
 }
 
-func registerKindsOn(t *testing.T, r *runner.Runner, d *db.DB, source func(*db.DB, *config.Store) modelSource, settings string, cat *catalog.Catalog, now func() time.Time, f fetch.Fetcher) {
+func registerKindsOn(t *testing.T, r *runner.Runner, d *db.DB, source func(*db.DB, *config.Store) modelSource, settings string, cat *catalog.Catalog, now func() time.Time, f fetch.Fetcher) modelSource {
 	t.Helper()
 	store, _, err := config.Open(settings)
 	if err != nil {
 		t.Fatalf("open settings: %v", err)
 	}
-	registerJobKinds(r, d, store, source(d, store), cat, f, slog.New(slog.NewTextHandler(io.Discard, nil)), false, now, formread.NewReader(f, formread.Embedded()))
+	src := source(d, store)
+	registerJobKinds(r, d, store, src, cat, f, slog.New(slog.NewTextHandler(io.Discard, nil)), false, now, formread.NewReader(f, formread.Embedded()))
+	return src
 }
 
 func newRouteServer(t *testing.T, d *db.DB, r *runner.Runner) string {
@@ -129,6 +131,11 @@ func newRouteServerWithReaders(t *testing.T, d *db.DB, r *runner.Runner, readers
 
 func newRouteServerWithReading(t *testing.T, d *db.DB, r *runner.Runner, readers candidate.Readers, rd *reading) string {
 	t.Helper()
+	return newRouteServerOn(t, d, r, readers, rd, nil)
+}
+
+func newRouteServerOn(t *testing.T, d *db.DB, r *runner.Runner, readers candidate.Readers, rd *reading, source modelSource) string {
+	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
@@ -141,7 +148,7 @@ func newRouteServerWithReading(t *testing.T, d *db.DB, r *runner.Runner, readers
 		Logger:            logger,
 		BinaryUploadPaths: []string{"/api/documents"},
 	}, func(mux *http.ServeMux) {
-		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, enqueueRecomputeFit(d, r, logger, rd), t.TempDir(), readers, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r, nil, filepath.Join(t.TempDir(), logFileName), nil, rd)
+		registerAllRoutes(mux, logger, nil, d, time.Now, nil, nil, nil, enqueueRecomputeFit(d, r, logger, rd), t.TempDir(), readers, collect.New(nil, nil, nil, nil, nil, false, nil, logger), r, nil, filepath.Join(t.TempDir(), logFileName), nil, rd, source)
 	})
 	ts := httptest.NewUnstartedServer(h)
 	ts.Listener = l

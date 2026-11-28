@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/db"
@@ -72,8 +73,8 @@ func newFormFixOn(t *testing.T, pageURL, dataPrefix string, source func(*db.DB, 
 	d := openTestDB(t)
 	r := runner.New(d, nil, time.Now, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	site := &formSite{prefix: dataPrefix, status: 200}
-	registerKindsOn(t, r, d, source, settings, catalog.New(d, time.Now), time.Now, site)
-	base := newRouteServer(t, d, r)
+	src := registerKindsOn(t, r, d, source, settings, catalog.New(d, time.Now), time.Now, site)
+	base := newRouteServerOn(t, d, r, candidate.Readers{PDF: candidate.ProgramText{Program: filepath.Join(t.TempDir(), "absent")}}, nil, src)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go r.Start(ctx)

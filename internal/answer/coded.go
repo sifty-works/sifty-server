@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sifty-works/sifty-server/internal/formread"
+	"github.com/sifty-works/sifty-server/internal/text"
 )
 
 const (
@@ -26,7 +27,7 @@ func (c Coded) Answer(ctx context.Context, v Vacancy, f formread.Form, have Answ
 	if err != nil {
 		return nil, err
 	}
-	saved := savedQA(known)
+	saved := savedQA(known, v.Company)
 	out := Answers{}
 	var left []formread.Field
 	for _, fl := range f.Fields {
@@ -69,21 +70,34 @@ func fromMyData(fl formread.Field, key string, vals []Value, note string) Answer
 	return Answer{Note: "Profile says " + joinTexts(vals) + "; none of the options match"}
 }
 
-func savedQA(known Known) map[string]QA {
+func savedQA(known Known, company string) map[string]QA {
 	saved := map[string]QA{}
 	for _, q := range known.QA {
-		if n := norm(q.Question); n != "" && strings.TrimSpace(q.Answer) != "" {
+		if n := text.Key(q.Question); n != "" && strings.TrimSpace(q.Answer) != "" && !aboutOtherCompany(q, company) {
 			saved[n] = q
 		}
 	}
 	return saved
 }
 
-func Open(fl formread.Field, known Known) bool {
+func companyName(company string) string {
+	words := strings.Fields(text.Key(company))
+	for len(words) > 1 && vocab.legal[words[len(words)-1]] {
+		words = words[:len(words)-1]
+	}
+	return strings.Join(words, " ")
+}
+
+func aboutOtherCompany(q QA, company string) bool {
+	own := companyName(q.Company)
+	return own != "" && own != companyName(company) && strings.Contains(" "+text.Key(q.Answer)+" ", " "+own+" ")
+}
+
+func Open(fl formread.Field, known Known, company string) bool {
 	if fl.Source == string(SourceMyData) {
 		return false
 	}
-	_, _, open := answerField(fl, known, savedQA(known))
+	_, _, open := answerField(fl, known, savedQA(known, company))
 	return open
 }
 
@@ -115,7 +129,7 @@ func answerField(fl formread.Field, known Known, saved map[string]QA) (a Answer,
 	if len(vals) > 0 {
 		return fromMyData(fl, key, vals, authNote), false, false
 	}
-	if q, ok := saved[norm(fl.Label)]; ok && !vocab.sensitive[key] {
+	if q, ok := saved[text.Key(fl.Label)]; ok && !vocab.sensitive[key] {
 		val := Value{Text: strings.TrimSpace(q.Answer)}
 		evidence := "Questions & Answers: " + q.Question
 		if !isChoice(fl.Kind, fl.Options) {

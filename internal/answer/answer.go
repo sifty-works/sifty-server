@@ -38,6 +38,7 @@ type Value struct {
 type QA struct {
 	Question string
 	Answer   string
+	Company  string
 }
 
 type Known struct {

@@ -226,7 +226,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			}
 			return m
 		}
-		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r, gate.Ready, filepath.Join(dataDir, logDir, logFileName), keys, rd)
+		registerAllRoutes(mux, logger, gate, database, time.Now, collectActive, sourceNames, rules, recomputeFit, filesDir, candidate.Readers{PDF: candidate.ProgramText{Program: "pdftotext", Args: []string{"-", "-"}}, Pages: fetcher}, col, r, gate.Ready, filepath.Join(dataDir, logDir, logFileName), keys, rd, gate)
 	})
 
 	srv := &http.Server{

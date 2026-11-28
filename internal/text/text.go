@@ -30,6 +30,21 @@ func normRune(r rune) rune {
 
 func Fold(s string) string { return fold(s).str }
 
+func Key(s string) string {
+	var b strings.Builder
+	space := true
+	for _, r := range strings.ToLower(Fold(s)) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+			space = false
+		} else if !space {
+			b.WriteByte(' ')
+			space = true
+		}
+	}
+	return strings.TrimRight(b.String(), " ")
+}
+
 func fold(text string) folded {
 	var sb strings.Builder
 	var offsets []int

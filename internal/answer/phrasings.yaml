@@ -5,6 +5,7 @@ sensitive: [gender, race, ethnicity, disability, veteran, criminal_record, sensi
 drafted: [cover_letter, years_experience, work_authorization, sponsorship]
 ethnicity_options: [hispanic, latino]
 race_options: [white]
+legal_suffixes: [inc, incorporated, ltd, limited, llc, llp, plc, corp, corporation, co, gmbh, ag, sa, bv, nv, srl, oy, ab, pty]
 contains:
   work_authorization: [authorized to work, authorised to work, eligible to work, legally allowed to work, legally permitted to work, permitted to work, right to work, legally entitled to work, work authorization, work authorisation, work permit]
   how_heard: [how did you hear, how did you find out about, referral source]

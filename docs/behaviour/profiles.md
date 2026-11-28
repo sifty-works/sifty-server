@@ -91,7 +91,7 @@ Files (with a badge counting suggestions to review), Profile (opened by default)
 
 ## Questions & Answers tab
 
-A list of questions with their answers, shared by all profiles: Edit, Delete and "Add an answer". Application preparation writes to the same list (see `application.md`).
+A list of questions with their answers, shared by all profiles: Edit, Delete and "Add an answer". Application preparation writes to the same list (see `application.md`). An item written by preparation remembers the company of the vacancy it was saved for; the list does not show it, and it only keeps an answer that names its company out of another company's form.
 
 ## Recomputation and model calls
 

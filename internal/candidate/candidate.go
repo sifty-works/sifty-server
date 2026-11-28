@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -12,6 +13,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/listing"
+	"github.com/sifty-works/sifty-server/internal/text"
 )
 
 type ProfileData struct {
@@ -474,11 +476,30 @@ func createQA(ctx context.Context, database *db.DB, req QACreateReq) (QAItem, er
 	}
 	a := strings.TrimSpace(req.Answer)
 	now := time.Now().UTC().Format(time.RFC3339)
-	id, err := insertQA(ctx, database, q, a, now)
+	id, err := insertQA(ctx, database, q, a, "", now)
 	if err != nil {
 		return QAItem{}, err
 	}
 	return QAItem{ID: id, Question: q, Answer: a, CreatedAt: now, UpdatedAt: now}, nil
+}
+
+func SaveQA(ctx context.Context, database *db.DB, question, answer, company string, at time.Time) error {
+	question, answer = strings.TrimSpace(question), strings.TrimSpace(answer)
+	if text.Key(question) == "" || answer == "" {
+		return nil
+	}
+	items, err := selectQAs(ctx, database)
+	if err != nil {
+		return err
+	}
+	now := at.UTC().Format(time.RFC3339)
+	if i := slices.IndexFunc(items, func(it QAItem) bool { return text.Key(it.Question) == text.Key(question) }); i >= 0 {
+		it := items[i]
+		it.Answer, it.Company, it.UpdatedAt = answer, company, now
+		return updateQA(ctx, database, it)
+	}
+	_, err = insertQA(ctx, database, question, answer, company, now)
+	return err
 }
 
 func patchQA(ctx context.Context, database *db.DB, req QAPatchReq) (QAItem, error) {

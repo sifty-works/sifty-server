@@ -164,9 +164,9 @@ func deleteProfileCascade(ctx context.Context, tx *sql.Tx, id int64) error {
 }
 
 func selectQAs(ctx context.Context, database *db.DB) ([]QAItem, error) {
-	return queryAll(ctx, database, "list qa", `SELECT id, question, answer, created_at, updated_at FROM qa ORDER BY id`, func(r rowScanner) (QAItem, error) {
+	return queryAll(ctx, database, "list qa", `SELECT id, question, answer, created_at, updated_at, company FROM qa ORDER BY id`, func(r rowScanner) (QAItem, error) {
 		var it QAItem
-		err := r.Scan(&it.ID, &it.Question, &it.Answer, &it.CreatedAt, &it.UpdatedAt)
+		err := r.Scan(&it.ID, &it.Question, &it.Answer, &it.CreatedAt, &it.UpdatedAt, &it.Company)
 		return it, err
 	})
 }
@@ -174,20 +174,20 @@ func selectQAs(ctx context.Context, database *db.DB) ([]QAItem, error) {
 func selectQA(ctx context.Context, database *db.DB, id int64) (QAItem, error) {
 	var it QAItem
 	err := lookup(database.QueryRowContext(ctx,
-		`SELECT id, question, answer, created_at, updated_at FROM qa WHERE id=?`, id).
-		Scan(&it.ID, &it.Question, &it.Answer, &it.CreatedAt, &it.UpdatedAt), "load qa", apperr.NotFound{Message: "Q&A entry not found."})
+		`SELECT id, question, answer, created_at, updated_at, company FROM qa WHERE id=?`, id).
+		Scan(&it.ID, &it.Question, &it.Answer, &it.CreatedAt, &it.UpdatedAt, &it.Company), "load qa", apperr.NotFound{Message: "Q&A entry not found."})
 	return it, err
 }
 
-func insertQA(ctx context.Context, database *db.DB, question, answer, now string) (int64, error) {
+func insertQA(ctx context.Context, database *db.DB, question, answer, company, now string) (int64, error) {
 	return insertRow(ctx, database, "create qa",
-		`INSERT INTO qa (question, answer, created_at, updated_at) VALUES (?, ?, ?, ?)`,
-		question, answer, now, now)
+		`INSERT INTO qa (question, answer, company, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+		question, answer, company, now, now)
 }
 
 func updateQA(ctx context.Context, database *db.DB, it QAItem) error {
 	_, err := run(ctx, database, "update qa",
-		`UPDATE qa SET question=?, answer=?, updated_at=? WHERE id=?`, it.Question, it.Answer, it.UpdatedAt, it.ID)
+		`UPDATE qa SET question=?, answer=?, company=?, updated_at=? WHERE id=?`, it.Question, it.Answer, it.Company, it.UpdatedAt, it.ID)
 	return err
 }
 
