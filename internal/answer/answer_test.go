@@ -19,7 +19,7 @@ type countingRest struct {
 	fields []string
 }
 
-func (r *countingRest) Complete(_ context.Context, _ answer.Vacancy, f formread.Form, _ answer.Answers) (answer.Answers, error) {
+func (r *countingRest) Complete(_ context.Context, _ answer.Vacancy, _ answer.Known, f formread.Form, _ answer.Answers) (answer.Answers, error) {
 	r.calls++
 	out := answer.Answers{}
 	for _, fl := range f.Fields {

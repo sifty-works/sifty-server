@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sifty-works/sifty-server/internal/catalog"
+	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/fetch"
 	"github.com/sifty-works/sifty-server/internal/models"
@@ -50,12 +51,28 @@ type formFix struct {
 	vacancy int64
 }
 
+type noDrafts struct{}
+
+func (noDrafts) Complete(context.Context, models.Request) (models.Response, error) {
+	return models.Response{Text: `{"answers":[]}`}, nil
+}
+
 func newFormFix(t *testing.T, pageURL, dataPrefix string) formFix {
+	t.Helper()
+	return newFormFixWith(t, pageURL, dataPrefix, noDrafts{})
+}
+
+func newFormFixWith(t *testing.T, pageURL, dataPrefix string, m models.Model) formFix {
+	t.Helper()
+	return newFormFixOn(t, pageURL, dataPrefix, func(*db.DB, *config.Store) modelSource { return fixedModel{m} }, filepath.Join(t.TempDir(), "sifty.yaml"))
+}
+
+func newFormFixOn(t *testing.T, pageURL, dataPrefix string, source func(*db.DB, *config.Store) modelSource, settings string) formFix {
 	t.Helper()
 	d := openTestDB(t)
 	r := runner.New(d, nil, time.Now, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	site := &formSite{prefix: dataPrefix, status: 200}
-	registerKindsFetching(t, r, d, &models.FakeModel{}, catalog.New(d, time.Now), time.Now, site)
+	registerKindsOn(t, r, d, source, settings, catalog.New(d, time.Now), time.Now, site)
 	base := newRouteServer(t, d, r)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -124,7 +141,6 @@ func TestShortlistedAshbyVacancyGetsItsFormReadWithRequiredMarksAndOptions(t *te
 		t.Fatalf("state = %v, view %v", view["state"], view)
 	}
 	want := []string{
-		"_systemfield_name|Name|short_text|true|",
 		"team|Team preference|choice|false|Platform,Product",
 		"story|Tell us about a hard project|long_text|true|",
 	}
@@ -153,7 +169,7 @@ const greenhouseFirst = `{"questions":[
 ]}`
 
 const greenhouseSecond = `{"questions":[
-{"label":"Salary expectations","required":true,"fields":[{"name":"question_2","type":"multi_value_single_select","values":[{"label":"Below 50k","value":1},{"label":"Above 50k","value":2}]}]},
+{"label":"Which team fits you best?","required":true,"fields":[{"name":"question_2","type":"multi_value_single_select","values":[{"label":"Below 50k","value":1},{"label":"Above 50k","value":2}]}]},
 {"label":"Why Stackworks?","required":false,"fields":[{"name":"question_9","type":"textarea","values":[]}]}
 ]}`
 
@@ -170,7 +186,7 @@ func TestReadingAgainKeepsAFieldByItsUniqueLabelAndDropsOneThatVanished(t *testi
 	}
 	view := f.settled(t)
 	want := []string{
-		"question_2|Salary expectations|choice|true|Below 50k,Above 50k",
+		"question_2|Which team fits you best?|choice|true|Below 50k,Above 50k",
 		"question_1|Why Stackworks?|long_text|false|",
 	}
 	if got := fieldLines(view); !reflect.DeepEqual(got, want) {

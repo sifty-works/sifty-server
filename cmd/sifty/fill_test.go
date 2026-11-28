@@ -120,7 +120,7 @@ func TestExtensionFillAnswersFromMyDataForTheVacancyOfAPageAndNeverForAnotherPag
 	if err := formread.Save(context.Background(), d, vacancy, formread.Form{}, formread.StateUnsupported, "", time.Now()); err != nil {
 		t.Fatalf("a preparation that finds no template: %v", err)
 	}
-	if kept, _ := apiGet(t, base, fmt.Sprintf("/api/vacancies/%d/application", vacancy)); len(kept["fields"].([]any)) != 3 {
+	if kept, _ := apiGet(t, base, fmt.Sprintf("/api/vacancies/%d/application", vacancy)); len(kept["fields"].([]any)) != 1 {
 		t.Errorf("a preparation without a template dropped the form the page sent: %v", kept)
 	}
 }

@@ -21,6 +21,7 @@ var vocab = func() (v struct {
 	contains    map[string][]string
 	leads       []string
 	consent     []string
+	residence   []string
 	sensitive   map[string]bool
 	drafted     map[string]bool
 	ethnicity   []string
@@ -29,6 +30,7 @@ var vocab = func() (v struct {
 	var raw struct {
 		Leads            []string
 		Consent          []string
+		Residence        []string
 		Sensitive        []string
 		Drafted          []string
 		EthnicityOptions []string `yaml:"ethnicity_options"`
@@ -59,7 +61,7 @@ var vocab = func() (v struct {
 	for key, list := range raw.Contains {
 		v.contains[key] = norms(list)
 	}
-	v.leads, v.consent = norms(raw.Leads), norms(raw.Consent)
+	v.leads, v.consent, v.residence = norms(raw.Leads), norms(raw.Consent), norms(raw.Residence)
 	v.ethnicity, v.raceOptions = norms(raw.EthnicityOptions), norms(raw.RaceOptions)
 	v.sensitive, v.drafted = map[string]bool{}, map[string]bool{}
 	for _, k := range raw.Sensitive {
@@ -84,6 +86,10 @@ func norm(s string) string {
 		}
 	}
 	return strings.TrimRight(b.String(), " ")
+}
+
+func AsksResidence(label string) bool {
+	return containsAny(" "+norm(label)+" ", vocab.residence)
 }
 
 func containsAny(padded string, phrases []string) bool {

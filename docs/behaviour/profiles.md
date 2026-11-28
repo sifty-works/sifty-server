@@ -97,7 +97,7 @@ A list of questions with their answers, shared by all profiles: Edit, Delete and
 
 - A change that enters Fit (goals, skills, skills the user does not have, Confirmed by you, experience, languages, location, authorizations) recomputes Fit of the affected profiles in the background, by code (see `assessment.md`). A change of search fields changes only what the profile sees. A change of name, headline, photo, contacts, application form answers, availability or other requirements changes no score.
 - **Analyze or Retry** on a document is the only model call of this area. It uses the provider chosen for reading in Settings, one call per chunk of the document, at most 100 facts, with a timeout of 120 seconds. A fact's quote must match the document text exactly. Headline and application form answers are never proposed.
-- What a model receives in the Shortlist check and in application preparation: the accepted data of My data and the profile, and the text of documents marked "Use as evidence". Contacts, legal name and application form answers are never sent to a model.
+- What a model receives in the Shortlist check and in application preparation: the accepted data of My data and the profile, and the text of documents marked "Use as evidence"; application preparation also receives the user's Questions & Answers. Contacts, legal name and application form answers are never sent to a model, and the contacts and legal name of My data are removed from the text of documents and answers before it is sent.
 
 ## Not carried over
 

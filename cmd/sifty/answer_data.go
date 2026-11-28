@@ -60,6 +60,10 @@ func (d answerData) Known(ctx context.Context) (answer.Known, error) {
 	if err != nil {
 		return answer.Known{}, err
 	}
+	docs, err := candidate.EvidenceDocuments(ctx, d.database)
+	if err != nil {
+		return answer.Known{}, err
+	}
 	k := knownValues{}
 	legal := strings.Fields(orElse(me.LegalName, me.DisplayName))
 	if len(legal) > 0 {
@@ -133,7 +137,11 @@ func (d answerData) Known(ctx context.Context) (answer.Known, error) {
 		k.putChoice("veteran", o.VeteranStatus, dm.VeteranStatus, "")
 		k.putChoice("criminal_record", o.CriminalRecord, dm.CriminalRecord, "")
 	}
-	known := answer.Known{Values: k, Authorized: authorized(me.WorkAuthorizations)}
+	residence := ""
+	if loc := me.CurrentLocation; loc != nil {
+		residence = loc.Country
+	}
+	known := answer.Known{Contacts: []string{me.Email, me.Phone, me.LinkedIn, me.GitHub, me.X, me.Website}, Names: []string{me.LegalName, me.DisplayName}, Values: k, Evidence: candidate.EvidenceText(me, prof, docs), Authorized: authorized(me.WorkAuthorizations, residence)}
 	for _, q := range items {
 		known.QA = append(known.QA, answer.QA{Question: q.Question, Answer: q.Answer})
 	}
@@ -151,12 +159,17 @@ func orElse(a, b string) string {
 	return b
 }
 
-func authorized(auths []candidate.WorkAuthorization) func(label string) (bool, string, bool) {
+func authorized(auths []candidate.WorkAuthorization, residence string) func(label string) (bool, string, bool) {
 	return func(label string) (bool, string, bool) {
 		auths := slices.DeleteFunc(slices.Clone(auths), func(a candidate.WorkAuthorization) bool {
 			return a.Status != "eligible" && a.Status != "need_visa"
 		})
 		name, named := placesIn(label)
+		if name == "" && answer.AsksResidence(label) {
+			if name, named = strings.TrimSpace(residence), places.Codes(residence); len(named) == 0 {
+				return false, "", false
+			}
+		}
 		if name == "" {
 			return len(auths) == 1 && auths[0].Status == "eligible", "", len(auths) == 1
 		}

@@ -454,7 +454,10 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 	r.Register(runner.Kind{
 		Name: formread.Kind,
 		Run: func(runCtx context.Context, j *runner.Job) error {
-			return runPrepare(runCtx, j, database, forms, answer.Coded{Data: answerData{database}}, now)
+			return runPrepare(runCtx, j, database, forms, func(vacancy int64) answer.Answerer {
+				model := gate.For(models.NamedTask("draft_answers").Work, "background", vacancy)
+				return answer.Coded{Data: answerData{database}, Rest: answer.Drafter{Model: model}}
+			}, now)
 		},
 	})
 

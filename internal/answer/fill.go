@@ -68,13 +68,13 @@ type FillResponse struct {
 func Apply(ctx context.Context, database *db.DB, a Answerer, v Vacancy, vacancy int64, f formread.Form) (int, []formread.Field, error) {
 	have := Answers{}
 	for _, fl := range f.Fields {
-		if fl.Source == formread.SourceUser {
-			have[fl.ID] = Answer{Values: fl.Values, Source: SourceUser, Note: fl.Note, Evidence: fl.Evidence}
+		if fl.Source == formread.SourceUser || fl.Source == string(SourceDrafted) || fl.Source == string(SourceMyData) {
+			have[fl.ID] = Answer{Values: fl.Values, Source: Source(fl.Source), Note: fl.Note, Evidence: fl.Evidence}
 		}
 	}
-	got, err := a.Answer(ctx, v, f, have)
-	if err != nil {
-		return 0, nil, err
+	got, askErr := a.Answer(ctx, v, f, have)
+	if got == nil && askErr != nil {
+		return 0, nil, askErr
 	}
 	answered, out := 0, make([]formread.Field, len(f.Fields))
 	for i, fl := range f.Fields {
@@ -85,9 +85,11 @@ func Apply(ctx context.Context, database *db.DB, a Answerer, v Vacancy, vacancy 
 		out[i] = formread.Field{ID: fl.ID, Values: g.Values, Source: string(g.Source), Note: g.Note, Evidence: g.Evidence}
 	}
 	if vacancy > 0 {
-		err = formread.SaveAnswers(ctx, database, vacancy, out)
+		if err := formread.SaveAnswers(ctx, database, vacancy, out); err != nil {
+			return answered, out, err
+		}
 	}
-	return answered, out, err
+	return answered, out, askErr
 }
 
 func RegisterExtensionRoutes(mux *http.ServeMux, logger *slog.Logger, database *db.DB, a Answerer, canonical func(string) (string, error)) {

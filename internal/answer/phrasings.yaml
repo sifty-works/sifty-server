@@ -1,5 +1,6 @@
 leads: [what is the name of your, your, please enter your, please enter, enter your, please provide your, please provide, what is your, what s your, what are your, your current]
-consent: [i agree, i consent, i accept, i acknowledge, i have read, i understand, i authorize, i authorise, privacy policy, privacy notice, terms and conditions, terms of use, data processing, processing of personal data, personal data, data privacy, gdpr, consent to, agree to the]
+consent: [i agree, i consent, i accept, i acknowledge, i have read, i understand, i authorize, i authorise, privacy policy, privacy notice, terms and conditions, terms of use, data processing, processing of personal data, personal data, data privacy, gdpr, consent to, agree to the, email me about, future job openings, keep me informed, contact me about future, receive updates]
+residence: [where you reside, where you currently reside, where you live, where you currently live, where you are based, where you are currently based, where you are located, in which you reside, in which you currently reside, in which you live, you reside in, you currently reside in, you live in, you currently live in, country of residence, country of residency]
 sensitive: [gender, race, ethnicity, disability, veteran, criminal_record, sensitive]
 drafted: [cover_letter, years_experience, work_authorization, sponsorship]
 ethnicity_options: [hispanic, latino]

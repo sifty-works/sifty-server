@@ -105,11 +105,16 @@ func registerKindsAt(t *testing.T, r *runner.Runner, d *db.DB, m models.Model, c
 
 func registerKindsFetching(t *testing.T, r *runner.Runner, d *db.DB, m models.Model, cat *catalog.Catalog, now func() time.Time, f fetch.Fetcher) {
 	t.Helper()
-	store, _, err := config.Open(filepath.Join(t.TempDir(), "sifty.yaml"))
+	registerKindsOn(t, r, d, func(*db.DB, *config.Store) modelSource { return fixedModel{m} }, filepath.Join(t.TempDir(), "sifty.yaml"), cat, now, f)
+}
+
+func registerKindsOn(t *testing.T, r *runner.Runner, d *db.DB, source func(*db.DB, *config.Store) modelSource, settings string, cat *catalog.Catalog, now func() time.Time, f fetch.Fetcher) {
+	t.Helper()
+	store, _, err := config.Open(settings)
 	if err != nil {
 		t.Fatalf("open settings: %v", err)
 	}
-	registerJobKinds(r, d, store, fixedModel{m}, cat, f, slog.New(slog.NewTextHandler(io.Discard, nil)), false, now, formread.NewReader(f, formread.Embedded()))
+	registerJobKinds(r, d, store, source(d, store), cat, f, slog.New(slog.NewTextHandler(io.Discard, nil)), false, now, formread.NewReader(f, formread.Embedded()))
 }
 
 func newRouteServer(t *testing.T, d *db.DB, r *runner.Runner) string {

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/source"
@@ -781,6 +782,17 @@ func (c *Catalog) VacancyTexts(ctx context.Context, after int64, limit int) ([]V
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+func (c *Catalog) VacancyText(ctx context.Context, id int64) (VacancyText, error) {
+	batch, err := c.VacancyTexts(ctx, id-1, 1)
+	if err != nil {
+		return VacancyText{}, err
+	}
+	if len(batch) == 0 || batch[0].ID != id {
+		return VacancyText{}, apperr.NotFound{Message: "Role not found."}
+	}
+	return batch[0], nil
 }
 
 func IsFKError(err error) bool {

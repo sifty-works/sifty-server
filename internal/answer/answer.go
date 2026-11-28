@@ -43,6 +43,9 @@ type QA struct {
 type Known struct {
 	Values     map[string][]Value
 	QA         []QA
+	Evidence   string
+	Contacts   []string
+	Names      []string
 	Authorized func(label string) (eligible bool, note string, ok bool)
 }
 
@@ -51,7 +54,7 @@ type Data interface {
 }
 
 type Rest interface {
-	Complete(ctx context.Context, v Vacancy, f formread.Form, have Answers) (Answers, error)
+	Complete(ctx context.Context, v Vacancy, k Known, f formread.Form, have Answers) (Answers, error)
 }
 
 type Answerer interface {

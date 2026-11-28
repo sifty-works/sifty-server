@@ -6,20 +6,23 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
 	"github.com/sifty-works/sifty-server/internal/answer"
 	"github.com/sifty-works/sifty-server/internal/apperr"
+	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
 	"github.com/sifty-works/sifty-server/internal/fetch"
 	"github.com/sifty-works/sifty-server/internal/formread"
 	"github.com/sifty-works/sifty-server/internal/inbox"
+	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/server"
 )
 
-func runPrepare(ctx context.Context, j *runner.Job, database *db.DB, reader formread.FormReader, answerer answer.Answerer, now func() time.Time) error {
+func runPrepare(ctx context.Context, j *runner.Job, database *db.DB, reader formread.FormReader, answerer func(vacancy int64) answer.Answerer, now func() time.Time) error {
 	vacancy, err := strconv.ParseInt(j.Subject, 10, 64)
 	if err != nil {
 		return runner.Permanent(err)
@@ -57,13 +60,42 @@ func runPrepare(ctx context.Context, j *runner.Job, database *db.DB, reader form
 		if err != nil {
 			return err
 		}
-		answered, _, err := answer.Apply(ctx, database, answerer, answer.Vacancy{}, vacancy, stored.Form)
+		subject, err := vacancyForAnswers(ctx, database, vacancy)
+		if err != nil {
+			return err
+		}
+		answered, _, err := answer.Apply(ctx, database, answerer(vacancy), subject, vacancy, stored.Form)
 		if err == nil {
 			j.Progress(answered, len(stored.Fields), fmt.Sprintf("Answered %d of %d field(s)", answered, len(stored.Fields)))
 		}
 		return err
 	}
 	return formread.Save(ctx, database, vacancy, formread.Form{}, formread.StateUnsupported, "", now())
+}
+
+func vacancyForAnswers(ctx context.Context, database *db.DB, id int64) (answer.Vacancy, error) {
+	t, err := catalog.New(database, nil).VacancyText(ctx, id)
+	if err != nil {
+		return answer.Vacancy{}, err
+	}
+	html, err := catalog.Body(t.Body)
+	if err != nil {
+		return answer.Vacancy{}, err
+	}
+	return answer.Vacancy{Title: t.Title, Company: t.Company, Text: listing.PlainText(html)}, nil
+}
+
+func applicationView(ctx context.Context, database *db.DB, vacancy int64) (formread.ApplicationView, error) {
+	v, err := formread.ViewOf(ctx, database, vacancy)
+	if err != nil || len(v.Fields) == 0 {
+		return v, err
+	}
+	known, err := answerData{database}.Known(ctx)
+	if err != nil {
+		return formread.ApplicationView{}, err
+	}
+	v.Fields = slices.DeleteFunc(v.Fields, func(f formread.Field) bool { return !answer.Open(f, known) })
+	return v, nil
 }
 
 func queuePrepare(ctx context.Context, database *db.DB, enqueue func(runner.Spec) (int64, error), subject string) error {
@@ -96,7 +128,7 @@ func registerApplicationRoutes(mux *http.ServeMux, logger *slog.Logger, database
 		if err != nil {
 			return formread.ApplicationView{}, err
 		}
-		return formread.ViewOf(r.Context(), database, vacancy)
+		return applicationView(r.Context(), database, vacancy)
 	})
 	server.Handle(mux, "PATCH /api/vacancies/{id}/application/fields/{field}", logger, func(r *http.Request, body fieldEdit) (formread.ApplicationView, error) {
 		vacancy, err := vacancyOf(r)
@@ -106,7 +138,7 @@ func registerApplicationRoutes(mux *http.ServeMux, logger *slog.Logger, database
 		if err != nil {
 			return formread.ApplicationView{}, err
 		}
-		return formread.ViewOf(r.Context(), database, vacancy)
+		return applicationView(r.Context(), database, vacancy)
 	})
 	server.Handle(mux, "POST /api/vacancies/{id}/application/retry", logger, func(r *http.Request, _ struct{}) (formread.ApplicationView, error) {
 		vacancy, err := vacancyOf(r)
@@ -116,6 +148,6 @@ func registerApplicationRoutes(mux *http.ServeMux, logger *slog.Logger, database
 		if _, err := enqueue(formread.Kind, strconv.FormatInt(vacancy, 10)); err != nil {
 			return formread.ApplicationView{}, err
 		}
-		return formread.ViewOf(r.Context(), database, vacancy)
+		return applicationView(r.Context(), database, vacancy)
 	})
 }

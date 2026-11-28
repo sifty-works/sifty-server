@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sifty-works/sifty-server/internal/analysis"
+	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/db"
@@ -19,11 +20,13 @@ import (
 
 func loadForAnalysis(database *db.DB) analysis.Loader {
 	return func(ctx context.Context, id int64) (*analysis.Doc, int64, bool, error) {
-		batch, err := catalog.New(database, nil).VacancyTexts(ctx, id-1, 1)
-		if err != nil || len(batch) == 0 || batch[0].ID != id || listing.TextState(batch[0].TextState) != listing.TextFull {
+		t, err := catalog.New(database, nil).VacancyText(ctx, id)
+		if errors.As(err, new(apperr.NotFound)) || (err == nil && listing.TextState(t.TextState) != listing.TextFull) {
+			return nil, 0, false, nil
+		}
+		if err != nil {
 			return nil, 0, false, err
 		}
-		t := batch[0]
 		body, err := catalog.Body(t.Body)
 		if err != nil {
 			return nil, 0, false, fmt.Errorf("analysis: vacancy %d: %w", id, err)
