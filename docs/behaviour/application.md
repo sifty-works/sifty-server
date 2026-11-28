@@ -19,7 +19,7 @@ A page found later by a manual search is read again and the draft is updated; an
   2. the public boards of Greenhouse, Lever, Ashby and Workable under the company's likely board name, accepting an exact match of the normalised company name and the title;
   3. a web search for `"<title>" <company>`, accepting only an applicant tracking system address or the company's own domain with a matching title; when more than one result passes, one call of the Preparation model chooses among them;
   4. a web search for `<company> careers jobs` followed by a scan of the careers page.
-- The first two steps cost nothing. Web searches are made only within the daily limit of web searches (see `settings-and-data.md`); at the limit, or without a web search provider, only the first two steps are tried.
+- The first two steps cost nothing. A vacancy is searched automatically once, when it enters Shortlist, and again only when the user asks, so no search repeats by itself. Without a web search provider only the first two steps are tried. When the provider refuses because its quota is used up, the vacancy and the status bar say so ("Web search: the Brave quota is used up"), and the Apply button offers to search again and Paste; nothing waits silently for another day.
 - When the page found is on an applicant tracking system, its vacancy text is read as well, and drafting uses it instead of the listing's text when it is longer.
 - The automatic search stops after 30 seconds and the manual one after 120 seconds.
 - At startup, shortlisted vacancies whose search never ran or was interrupted are searched on the boards only, without web search, so no paid search is made at startup.
@@ -68,7 +68,7 @@ Diagnostic panels (questionnaire coverage, the technical record of form reading,
 | Recomputing Fit | changes of vacancies, goals, My data, or weights | dimmed results until done | none |
 | Text retention | daily (see `settings-and-data.md`) | "Text removed after 60 days unseen" | none |
 | Shortlist check | entering Shortlist; opening a shortlisted vacancy whose check is outdated (see `assessment.md`) | the check on the vacancy page | 1 |
-| Employer's page | entering Shortlist, the Apply button, startup | the Apply button's state | 0–1 to choose among search results; web searches within their daily limit |
+| Employer's page | entering Shortlist, the Apply button, startup | the Apply button's state | 0–1 to choose among search results; at most two web searches per search |
 | Form reading and drafting | entering Shortlist, opening the tab when nothing was prepared, Retry preparation | the Application tab's states | 0–1 to classify labels, 1 to draft |
 | Write, Paste | the buttons on the Application tab | the Application tab's states | Write 1; Paste 0–1 |
 | Document analysis | Analyze or Retry (see `profiles.md`) | the document's state | 1 per chunk |
