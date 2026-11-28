@@ -1,8 +1,19 @@
 # Sifty Server
 
-Sifty is a personal job-search application that runs on your own machine. It collects vacancies from the job sites you choose, shows each one once with clean readable text, scores how well it fits the goals of each of your search profiles, and prepares draft answers for the application forms of the vacancies you shortlist. You copy the answers into the form yourself; Sifty never submits anything.
+Sifty is a personal job-search application that runs on your own machine. It collects vacancies from the job sites you choose, shows each one once with clean readable text, scores how well it fits the goals of each of your search profiles, and prepares draft answers for the application forms of the vacancies you shortlist. Its browser extension puts the answers into the form on the employer's page; you attach files, give consent and submit. Sifty never submits anything.
 
 Your data stays in one folder on your machine. Sifty sends requests only to the job sites you list, to the web search providers you configure, and to the model providers you choose: a local model through Ollama or any OpenAI-compatible server, a remote OpenAI-compatible service with your own API key, or the Claude or opencode command-line tools. Scoring is done by code; a model is used only to read the requirements of a vacancy once, to check a shortlisted vacancy, and to draft application answers.
+
+## Why Sifty
+
+Sifty exists for two jobs.
+
+1. **Finding and navigating vacancies.** One list of vacancies from many sites, each shown once, with clean text and a score of how well it fits what you are looking for.
+2. **Writing the hard answers.** Application forms ask questions such as "Why do you want to work for us?", "Describe your experience with technology X" or "What interests you most in your work?". A good answer rests on your real experience and on what this employer is looking for, as the vacancy describes it.
+
+Today people write these answers in a general chat assistant: they paste the vacancy into the chat, get a generic first draft, then go back and forth to remove the filler, add facts about themselves and narrow the focus. Sifty brings this work into one place. It already holds the vacancy and your data, drafts an answer from both, and lets you correct it. Every answer you finish is kept, together with what it says about your experience, values and way of working, so each next question, for the next company, starts from more of what is true about you.
+
+Filling names, e-mail addresses and links is not the point: the browser already does that.
 
 ## Repositories
 
