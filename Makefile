@@ -67,7 +67,7 @@ rollback:
 
 check: build
 	@echo "--- gofmt ---"
-	@gofmt_out=$$(gofmt -l cmd internal api web); \
+	@gofmt_out=$$(gofmt -l cmd internal api web extension); \
 	 if [ -n "$$gofmt_out" ]; then \
 	   echo "Files not formatted:"; echo "$$gofmt_out"; exit 1; \
 	 fi
@@ -77,6 +77,8 @@ check: build
 	@bash scripts/layers.sh
 	@echo "--- go test ---"
 	go test ./...
+	@echo "--- extension tests ---"
+	@if command -v node >/dev/null 2>&1; then node --test 'extension/*.test.js'; else echo "node is not installed; extension tests skipped"; fi
 	@echo "--- openapi ---"
 	@tmp=$$(mktemp); \
 	 $(BINARY) gen-api --out "$$tmp"; \

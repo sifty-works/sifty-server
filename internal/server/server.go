@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -85,6 +86,7 @@ type Options struct {
 	ModelsStatus      func() *models.ModelsStatus
 	BinaryUploadPaths []string
 	Recovered         []RecoveredFile
+	ExtensionOrigin   string
 }
 
 func New(opts Options, routes func(*http.ServeMux)) http.Handler {
@@ -139,7 +141,7 @@ func chain(h http.Handler, opts Options) http.Handler {
 		}
 
 		if origin := r.Header.Get("Origin"); origin != "" {
-			if !allowedOrigin(origin, opts.Port) {
+			if !allowedOrigin(origin, opts.Port) && !extensionRequest(origin, r.URL.Path, opts.ExtensionOrigin) {
 				writeError(w, http.StatusForbidden,
 					"This address may only be opened from this computer.")
 				return
@@ -207,6 +209,10 @@ func allowedOrigin(origin string, port int) bool {
 	return origin == "http://127.0.0.1:"+portStr || origin == "http://localhost:"+portStr
 }
 
+func extensionRequest(origin, urlPath, extensionOrigin string) bool {
+	return extensionOrigin != "" && origin == extensionOrigin && strings.HasPrefix(path.Clean(urlPath), "/api/extension/")
+}
+
 func isMutating(method string) bool {
 	switch method {
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
@@ -257,6 +263,10 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
+type NotImplemented struct{ Message string }
+
+func (e NotImplemented) Error() string { return e.Message }
+
 func MapError(w http.ResponseWriter, err error, logger *slog.Logger) bool {
 	if err == nil {
 		return false
@@ -270,6 +280,8 @@ func MapError(w http.ResponseWriter, err error, logger *slog.Logger) bool {
 		writeError(w, http.StatusConflict, e.Message)
 	case apperr.Busy:
 		writeError(w, http.StatusLocked, e.Message)
+	case NotImplemented:
+		writeError(w, http.StatusNotImplemented, e.Message)
 	default:
 		id := counter.Add(1)
 		logger.Error("internal error", "id", id, "error", err)

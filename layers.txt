@@ -24,7 +24,7 @@ module application: internal/shortlistcheck internal/locate internal/websearch i
 worker: internal/places internal/skills internal/source
 
 wiring: cmd/sifty
-outside: api cmd/uncomment web
+outside: api cmd/uncomment extension web
 
 never internal/runner -> internal/models
 

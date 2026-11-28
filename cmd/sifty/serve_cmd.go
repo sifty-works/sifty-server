@@ -15,6 +15,7 @@ import (
 	"time"
 
 	siftyapi "github.com/sifty-works/sifty-server/api"
+	"github.com/sifty-works/sifty-server/extension"
 	"github.com/sifty-works/sifty-server/internal/analysis"
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/catalog"
@@ -187,6 +188,11 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 
 	filesDir := filepath.Join(dataDir, filesDirName)
 
+	extensionOrigin, err := extension.Origin()
+	if err != nil {
+		return err
+	}
+
 	handler := server.New(server.Options{
 		Version:           version,
 		APISha256:         siftyapi.Sha256(),
@@ -199,6 +205,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		ModelsStatus:      gate.Status,
 		BinaryUploadPaths: []string{"/api/me/photo", "/api/documents"},
 		Recovered:         recovered,
+		ExtensionOrigin:   extensionOrigin,
 	}, func(mux *http.ServeMux) {
 		sourceNames := func() map[string]string {
 			cfg := store.Get()

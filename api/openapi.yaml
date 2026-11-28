@@ -498,6 +498,135 @@ components:
                 - company
                 - title
             type: object
+        FillAnswer:
+            properties:
+                key:
+                    type: string
+                note:
+                    type: string
+                source:
+                    type: string
+                value:
+                    type: string
+                values:
+                    items:
+                        type: string
+                    type: array
+            required:
+                - key
+                - source
+                - note
+            type: object
+        FillField:
+            properties:
+                format:
+                    type: string
+                key:
+                    type: string
+                kind:
+                    type: string
+                label:
+                    type: string
+                options:
+                    items:
+                        $ref: '#/components/schemas/FillOption'
+                    type: array
+                required:
+                    type: boolean
+                value:
+                    type: string
+                values:
+                    items:
+                        type: string
+                    type: array
+            required:
+                - key
+                - label
+                - kind
+                - required
+                - options
+            type: object
+        FillLeft:
+            properties:
+                key:
+                    type: string
+                reason:
+                    type: string
+            required:
+                - key
+                - reason
+            type: object
+        FillOption:
+            properties:
+                label:
+                    type: string
+                value:
+                    type: string
+            required:
+                - value
+                - label
+            type: object
+        FillRequest:
+            properties:
+                fields:
+                    items:
+                        $ref: '#/components/schemas/FillField'
+                    type: array
+                text:
+                    type: string
+                title:
+                    type: string
+                url:
+                    type: string
+            required:
+                - url
+                - title
+                - text
+                - fields
+            type: object
+        FillResponse:
+            properties:
+                answers:
+                    items:
+                        $ref: '#/components/schemas/FillAnswer'
+                    type: array
+                form:
+                    format: int64
+                    type: integer
+                left:
+                    items:
+                        $ref: '#/components/schemas/FillLeft'
+                    type: array
+                open:
+                    type: string
+                state:
+                    type: string
+                vacancy:
+                    oneOf:
+                        - $ref: '#/components/schemas/FillVacancy'
+                        - type: "null"
+            required:
+                - form
+                - vacancy
+                - state
+                - answers
+                - left
+                - open
+            type: object
+        FillVacancy:
+            properties:
+                company:
+                    type: string
+                id:
+                    format: int64
+                    type: integer
+                title:
+                    type: string
+            required:
+                - id
+                - title
+                - company
+            type: object
         FitMark:
             properties:
                 brokenMust:
@@ -2273,6 +2402,36 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/PreviewResp'
+                    description: OK
+    /api/extension/fill:
+        post:
+            operationId: postApiExtensionFill
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/FillRequest'
+                required: true
+            responses:
+                4XX:
+                    $ref: '#/components/responses/Error'
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FillResponse'
+                    description: OK
+    /api/extension/fill/{form}:
+        get:
+            operationId: getApiExtensionFillForm
+            responses:
+                4XX:
+                    $ref: '#/components/responses/Error'
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FillResponse'
                     description: OK
     /api/logs:
         get:

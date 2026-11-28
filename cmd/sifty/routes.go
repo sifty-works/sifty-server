@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/sifty-works/sifty-server/internal/answer"
 	"github.com/sifty-works/sifty-server/internal/candidate"
 	"github.com/sifty-works/sifty-server/internal/collect"
 	"github.com/sifty-works/sifty-server/internal/db"
@@ -89,4 +90,5 @@ func registerAllRoutes(
 	candidate.RegisterRoutes(mux, database, filesDir, readers, logger, recomputeFit, enqueue)
 	server.Handle(mux, "POST /api/documents/{id}/cancel", logger, candidate.CancelAnalysisHandler(database, cancel))
 	col.RegisterRoutes(mux)
+	answer.RegisterExtensionRoutes(mux, logger)
 }

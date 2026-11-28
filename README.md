@@ -21,6 +21,17 @@ make dev            # server on port 7300 (offline, with a fixture data folder)
 1. Copy `release.local.example` to `release.local` (untracked) and set the data folder of the running application, the folder that holds builds and the checkout to release. The port is read from `sifty.yaml` in the data folder.
 2. `make release` builds, switches the running application to the new build and tags the release; `make rollback` returns to the previous build. `docs/PROCESS.md` describes both.
 
+## Browser extension
+
+Each release carries the Chrome extension in `extension/` beside the binary (in a checkout, the `extension/` folder of this repository). It fills the application form on the employer's page with the answers Sifty prepared; you attach files, give consent and submit.
+
+1. Open `chrome://extensions` and turn on Developer mode.
+2. Choose Load unpacked and select the `extension` folder.
+3. Open the extension's options and set the address of Sifty if it is not `http://127.0.0.1:8080`.
+4. Open an application page and press the Sifty button in the toolbar.
+
+The extension's id is fixed by the key in its manifest, so Sifty accepts it without any setting.
+
 ## Developing the web client against a local server
 
 1. Run `make dev` in this repository (starts the server on port 7300).

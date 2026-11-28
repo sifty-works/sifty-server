@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Sifty",
+  "version": "0.1.0",
+  "description": "Fills the application form on the open page with the answers Sifty prepared. You attach files, give consent and submit.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsG7l1iKt2hH64oZjk4aPwwbtZsT7Ef1lG8p5x1YLGLvlVU+Dg50cAt8amrY77V3hlgqNs8xPyR4FAc+O6NkiTIPoRunrcHlq8VvDcXIO7+5LysTHt6cAQCGEWI1X2fYpG+AFCOGldDtyHMkdpcyJmwzsK7IJKYseSzOjfmpyg5qL6TY/SkeS5MMadSLKpyAnDgJpP9PIWR/0pHtGMUZwbBmoIv1QEvRU/FviiwbsWUVWlUkOXjF6Bwk+kbKJrmdY3tXWozRC/gdVFNreR11Pl0GxSG9SFIwXThjavmxjSqVyUNH8zH6ky2TnUtvFRgREQPTzpVAw85EK/v/ZYbToHQIDAQAB",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "action": {"default_title": "Fill with Sifty"},
+  "background": {"service_worker": "worker.js"},
+  "options_ui": {"page": "options.html", "open_in_tab": true}
+}

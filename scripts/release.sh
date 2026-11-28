@@ -104,6 +104,8 @@ release() {
   [ ! -e "$rel/$ver" ] || die "Release refused: $rel/$ver exists; to finish that release run: bash scripts/release.sh publish $ver"
   mkdir -p "$rel/$ver"
   make build VERSION="$ver" BINARY="$rel/$ver/sifty" || { rm -rf "$rel/$ver"; die "Release refused: the build failed."; }
+  cp -R extension "$rel/$ver/extension"
+  find "$rel/$ver/extension" \( -name '*.test.js' -o -name '*.go' \) -delete
   sha=$(shasum -a 256 api/openapi.yaml | awk '{print $1}')
   prev=$(readlink "$rel/current" 2>/dev/null || true)
   prev=${prev##*/}
