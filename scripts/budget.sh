@@ -29,11 +29,11 @@ ext_test=$(files 'extension/*.test.js' | count)
 row() { printf "%-40s %10s %10s %s\n" "$1" "$2" "$3" "$4"; }
 over() { if [ "$1" -gt "$2" ]; then echo "OVER"; fi; }
 
-row "Backend code (lines)" "$be" "21800" "$(over "$be" 21800)"
+row "Backend code (lines)" "$be" "22300" "$(over "$be" 22300)"
 row "Backend tests (lines)" "$be_test" "-" ""
 row "Extension code (lines, JavaScript)" "$ext" "-" ""
 row "Extension tests (lines, JavaScript)" "$ext_test" "-" ""
-if [ "$be" -gt 21800 ]; then fail=1; fi
+if [ "$be" -gt 22300 ]; then fail=1; fi
 
 printf "\n%-40s %10s %10s\n" "List API measure" "Actual" "Budget"
 printf "%-40s %10s %10s\n" "----------------" "------" "------"

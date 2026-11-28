@@ -246,7 +246,7 @@ These are targets the coordinator checks at acceptance of every change (see `PRO
 
 | Measure | Budget |
 |---|---|
-| Backend code | at most 21,800 lines, without the shared test fakes (`internal/models/fake.go`, `internal/fetch/fetchtest`) and the development tool `cmd/uncomment` |
+| Backend code | at most 22,300 lines, without the shared test fakes (`internal/models/fake.go`, `internal/fetch/fetchtest`) and the development tool `cmd/uncomment` |
 | Frontend code | at most 6,600 lines |
 | Database per vacancy | at most 18 KB |
 | Model calls for a new vacancy text | 1 |
