@@ -452,6 +452,10 @@ func loadProfileDetail(ctx context.Context, database *db.DB, id int64, own Profi
 	}, nil
 }
 
+func QAItems(ctx context.Context, database *db.DB) ([]QAItem, error) {
+	return selectQAs(ctx, database)
+}
+
 func listQA(ctx context.Context, database *db.DB) (QAListResp, error) {
 	items, err := selectQAs(ctx, database)
 	if err != nil {

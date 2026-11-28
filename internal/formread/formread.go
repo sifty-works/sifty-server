@@ -2,6 +2,14 @@ package formread
 
 import "context"
 
+const (
+	KindShortText      = "short_text"
+	KindChoice         = "choice"
+	KindMultipleChoice = "multiple_choice"
+	KindYesNo          = "yes_no"
+	KindFile           = "file"
+)
+
 type Field struct {
 	ID       string   `json:"key"`
 	Label    string   `json:"label"`

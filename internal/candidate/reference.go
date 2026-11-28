@@ -65,3 +65,5 @@ func domainKeys() []string {
 	}
 	return keys
 }
+
+func Options() ReferenceOptions { return referenceData.Options }

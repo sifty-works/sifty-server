@@ -98,7 +98,7 @@ func (t *Template) kind(systemType string, hasOptions bool) string {
 		return k
 	}
 	if hasOptions {
-		return "choice"
+		return KindChoice
 	}
-	return "short_text"
+	return KindShortText
 }
