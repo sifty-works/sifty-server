@@ -76,7 +76,7 @@ func (s *Store) Update(fn func(c *Config) error) error {
 		}
 	}
 
-	if err := atomicWrite(s.path, buf.Bytes()); err != nil {
+	if err := AtomicWrite(s.path, buf.Bytes()); err != nil {
 		return fmt.Errorf("writing settings: %w", err)
 	}
 
@@ -346,9 +346,9 @@ func pruneBackups(dir string, keep int) error {
 	return nil
 }
 
-func atomicWrite(path string, data []byte) error {
+func AtomicWrite(path string, data []byte) error {
 	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".sifty-*.yaml.tmp")
+	tmp, err := os.CreateTemp(dir, ".sifty-*.tmp")
 	if err != nil {
 		return err
 	}

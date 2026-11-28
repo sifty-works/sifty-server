@@ -19,7 +19,7 @@ type Gate struct {
 	db      *db.DB
 	store   *config.Store
 	offline bool
-	secrets map[string]string
+	secrets *Secrets
 	logger  *slog.Logger
 	now     func() time.Time
 
@@ -56,9 +56,9 @@ func newEntry(m Model, modelName string) *providerEntry {
 const providerRetryDelay = 5 * time.Minute
 const requestFailuresBeforeHold = 3
 
-func NewGate(database *db.DB, store *config.Store, offline bool, secrets map[string]string, logger *slog.Logger) *Gate {
+func NewGate(database *db.DB, store *config.Store, offline bool, secrets *Secrets, logger *slog.Logger) *Gate {
 	if secrets == nil {
-		secrets = map[string]string{}
+		secrets = &Secrets{values: map[string]string{}}
 	}
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -329,13 +329,26 @@ func (g *Gate) getEntry(name string, pc config.ProviderConfig) (*providerEntry, 
 	if !ok {
 		return nil, fmt.Errorf("unknown provider type %q", pc.Type)
 	}
-	m, err := ctor(pc.Endpoint, pc.Model, pc.KeyEnv, int(time.Duration(pc.Timeout).Milliseconds()), pc.Context, g.secrets)
+	m, err := ctor(pc.Endpoint, pc.Model, pc.KeyEnv, int(time.Duration(pc.Timeout).Milliseconds()), pc.Context, g.secrets.Snapshot())
 	if err != nil {
 		return nil, err
 	}
 	e := newEntry(m, pc.Model)
 	g.entries[name] = e
 	return e, nil
+}
+
+func (g *Gate) Secrets() *Secrets { return g.secrets }
+
+func (g *Gate) forgetKey(name string) {
+	cfg := g.store.Get()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for provider, pc := range cfg.Providers {
+		if pc.KeyEnv == name {
+			delete(g.entries, provider)
+		}
+	}
 }
 
 func (g *Gate) Status() *ModelsStatus {

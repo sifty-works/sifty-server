@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"os"
 	"slices"
+	"strings"
 
 	"github.com/sifty-works/sifty-server/internal/apperr"
 	"github.com/sifty-works/sifty-server/internal/config"
@@ -142,5 +144,95 @@ func ModelsHandler(gate *Gate) func(*http.Request, struct{}) (modelsResp, error)
 func PatchModelsHandler(gate *Gate, changed func()) func(*http.Request, modelsPatch) (modelsResp, error) {
 	return func(r *http.Request, req modelsPatch) (modelsResp, error) {
 		return patchModels(r.Context(), gate, req, changed)
+	}
+}
+
+type secretView struct {
+	Name      string   `json:"name"`
+	Providers []string `json:"providers"`
+	Set       bool     `json:"set"`
+	Last4     string   `json:"last4"`
+	Source    string   `json:"source"`
+}
+
+type secretsResp struct {
+	Keys []secretView `json:"keys"`
+}
+
+type secretPut struct {
+	Value string `json:"value"`
+}
+
+const minShownLast4 = 8
+
+func getSecrets(gate *Gate) secretsResp {
+	out := secretsResp{Keys: []secretView{}}
+	if gate == nil {
+		return out
+	}
+	users := map[string][]string{}
+	for provider, pc := range gate.Store().Get().Providers {
+		if pc.KeyEnv != "" {
+			users[pc.KeyEnv] = append(users[pc.KeyEnv], provider)
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(users)) {
+		v := secretView{Name: name, Providers: slices.Sorted(slices.Values(users[name]))}
+		value := os.Getenv(name)
+		switch {
+		case value != "":
+			v.Source = "environment"
+		case gate.Secrets().Get(name) != "":
+			value, v.Source = gate.Secrets().Get(name), "file"
+		}
+		v.Set = value != ""
+		if len(value) >= minShownLast4 {
+			v.Last4 = value[len(value)-4:]
+		}
+		out.Keys = append(out.Keys, v)
+	}
+	return out
+}
+
+func changeSecret(gate *Gate, name string, value *string) (secretsResp, error) {
+	if gate == nil || !slices.ContainsFunc(getSecrets(gate).Keys, func(k secretView) bool { return k.Name == name }) {
+		return secretsResp{}, apperr.Invalid{Message: fmt.Sprintf("No provider uses a key called %s.", name)}
+	}
+	if os.Getenv(name) != "" {
+		return secretsResp{}, apperr.Conflict{Message: "This key comes from the environment; change it there."}
+	}
+	var err error
+	if value == nil {
+		err = gate.Secrets().Remove(name)
+	} else {
+		err = gate.Secrets().Set(name, *value)
+	}
+	if err != nil {
+		return secretsResp{}, err
+	}
+	gate.forgetKey(name)
+	return getSecrets(gate), nil
+}
+
+func SecretsHandler(gate *Gate) func(*http.Request, struct{}) (secretsResp, error) {
+	return func(*http.Request, struct{}) (secretsResp, error) { return getSecrets(gate), nil }
+}
+
+func PutSecretHandler(gate *Gate) func(*http.Request, secretPut) (secretsResp, error) {
+	return func(r *http.Request, req secretPut) (secretsResp, error) {
+		value := strings.TrimSpace(req.Value)
+		switch {
+		case strings.ContainsAny(value, "\r\n"):
+			return secretsResp{}, apperr.Invalid{Message: "A key is one line."}
+		case value == "":
+			return secretsResp{}, apperr.Invalid{Message: "Enter a key, or remove the saved one."}
+		}
+		return changeSecret(gate, r.PathValue("name"), &value)
+	}
+}
+
+func DeleteSecretHandler(gate *Gate) func(*http.Request, struct{}) (secretsResp, error) {
+	return func(r *http.Request, _ struct{}) (secretsResp, error) {
+		return changeSecret(gate, r.PathValue("name"), nil)
 	}
 }

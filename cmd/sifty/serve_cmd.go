@@ -72,10 +72,7 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	}
 	cfg := store.Get()
 
-	secrets, secretsErr := models.LoadSecrets(filepath.Join(dataDir, "secrets.env"))
-	if secretsErr != nil {
-		secrets = map[string]string{}
-	}
+	secrets, secretsErr := models.OpenSecrets(filepath.Join(dataDir, "secrets.env"))
 	keys := heldKeys(store, secrets)
 	scrubErr := scrubLogs(filepath.Join(dataDir, logDir), keys())
 

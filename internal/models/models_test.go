@@ -157,7 +157,9 @@ func TestOpenAISendsKeyAndParsesAnswer(t *testing.T) {
 	cfg.Work = config.WorkConfig{"reading": "remote"}
 	cfg.AllowPaidBulk = true
 	store := openTestStore(t, cfg)
-	secrets := map[string]string{"TESTPROVIDER_KEY": "sk-test-key"}
+	secretsPath := filepath.Join(t.TempDir(), "secrets.env")
+	os.WriteFile(secretsPath, []byte("TESTPROVIDER_KEY=sk-test-key\n"), 0600)
+	secrets, _ := models.OpenSecrets(secretsPath)
 	gate := models.NewGate(openTestDB(t), store, false, secrets, nil)
 	defer gate.Stop(context.Background())
 
@@ -511,12 +513,12 @@ func TestOllamaSendsFormatAndThink(t *testing.T) {
 func TestSecretsFileLoaded(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "secrets.env"), []byte("MYHOST_KEY=secret123\n"), 0600)
-	secrets, err := models.LoadSecrets(filepath.Join(dir, "secrets.env"))
+	secrets, err := models.OpenSecrets(filepath.Join(dir, "secrets.env"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if secrets["MYHOST_KEY"] != "secret123" {
-		t.Errorf("MYHOST_KEY: got %q", secrets["MYHOST_KEY"])
+	if secrets.Get("MYHOST_KEY") != "secret123" {
+		t.Errorf("MYHOST_KEY: got %q", secrets.Get("MYHOST_KEY"))
 	}
 }
 

@@ -1864,6 +1864,43 @@ components:
                 - interval
                 - max_age_months
             type: object
+        secretPut:
+            properties:
+                value:
+                    type: string
+            required:
+                - value
+            type: object
+        secretView:
+            properties:
+                last4:
+                    type: string
+                name:
+                    type: string
+                providers:
+                    items:
+                        type: string
+                    type: array
+                set:
+                    type: boolean
+                source:
+                    type: string
+            required:
+                - name
+                - providers
+                - set
+                - last4
+                - source
+            type: object
+        secretsResp:
+            properties:
+                keys:
+                    items:
+                        $ref: '#/components/schemas/secretView'
+                    type: array
+            required:
+                - keys
+            type: object
         toggleSourceReq:
             properties:
                 enabled:
@@ -2534,6 +2571,47 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ReferenceResp'
+                    description: OK
+    /api/secrets:
+        get:
+            operationId: getApiSecrets
+            responses:
+                4XX:
+                    $ref: '#/components/responses/Error'
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/secretsResp'
+                    description: OK
+    /api/secrets/{name}:
+        delete:
+            operationId: deleteApiSecretsName
+            responses:
+                4XX:
+                    $ref: '#/components/responses/Error'
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/secretsResp'
+                    description: OK
+        put:
+            operationId: putApiSecretsName
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/secretPut'
+                required: true
+            responses:
+                4XX:
+                    $ref: '#/components/responses/Error'
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/secretsResp'
                     description: OK
     /api/sources:
         delete:

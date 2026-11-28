@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/db"
+	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
 )
 
@@ -45,9 +45,9 @@ type logsResp struct {
 	Entries []logEntry   `json:"entries"`
 }
 
-func heldKeys(store *config.Store, secrets map[string]string) func() []string {
+func heldKeys(store *config.Store, secrets *models.Secrets) func() []string {
 	return func() []string {
-		keys := slices.AppendSeq([]string(nil), maps.Values(secrets))
+		keys := secrets.Values()
 		for _, pc := range store.Get().Providers {
 			keys = append(keys, os.Getenv(pc.KeyEnv))
 		}

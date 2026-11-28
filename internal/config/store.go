@@ -50,7 +50,7 @@ func Open(path string) (*Store, OpenResult, error) {
 	cfg, data, backup := restoreSettings(path)
 	result.Backup = backup
 	if moved {
-		result.SaveErr = atomicWrite(path, data)
+		result.SaveErr = AtomicWrite(path, data)
 	}
 	return &Store{path: path, cfg: cfg}, result, nil
 }
