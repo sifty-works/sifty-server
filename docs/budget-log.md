@@ -2,6 +2,10 @@
 
 Every change of a budget in the Budgets table of `docs/ARCHITECTURE.md`, newest first. An entry says when the budget changed, which measure, from what to what, what the lines are spent on, and why the change was accepted instead of making the code smaller. Lines are counted the way `scripts/budget.sh` counts them, so this log and the measure cannot drift apart. An entry is never edited once written; a change that is later undone gets an entry of its own.
 
+## 2026-11-28 — the backend gets room for the user's own words
+
+The backend code budget goes from 22,300 lines to 22,450, counted the way `scripts/budget.sh` counts. Measured on this day: 22,289. The 150 lines are spent on keeping what the user tells the model in an answer conversation as the user's raw words: a table beside Questions & Answers, its store, two routes to list and delete them, and passing them to drafting and to the conversation as context. Conversations are deleted with their form, so the words need their own store to make every later draft start from more of what is true about the user. The rise is taken under the owner's standing permission of 2026-11-24.
+
 ## 2026-11-28 — the frontend budget corrected for a miscount
 
 The frontend budget goes from 6,900 lines to 7,200. The entry below measured 6,383 lines on the web client's main branch before the Application tab and the API key lines were merged into it; after those merges main measured 6,775, already over the 6,600 of that day, so the merge went over the budget, which the process does not allow. With the answer conversation (235 lines) the client measures 7,010. The 7,200 lines hold that figure and the planned room for keeping a finished answer's facts, about 50, plus about 140 of margin for the fixes the stage's acceptance will bring. It was accepted instead of making the client smaller for the same reason as the entry below: the profile editors, where the estimate expected lines to be recovered, are not being changed in this stage.
