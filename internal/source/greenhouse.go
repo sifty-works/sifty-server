@@ -29,7 +29,10 @@ func (s *greenhouseSource) List(ctx context.Context, f fetch.Fetcher, cfg Site) 
 		return nil, ErrNothingRecognised
 	}
 	board := boardSlug(boardURL)
-	apiURL := "https://" + s.Group(boardURL) + "/v1/boards/" + board + "/jobs?content=true"
+	apiURL := "https://" + s.Group(boardURL) + "/v1/boards/" + board + "/jobs"
+	if !cfg.TitlesOnly {
+		apiURL += "?content=true"
+	}
 	var body ghResponse
 	if err := fetchJSON(ctx, f, apiURL, &body); err != nil {
 		return nil, err

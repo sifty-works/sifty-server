@@ -16,13 +16,13 @@ A page found later by a manual search is read again and the draft is updated; an
 
 - The search starts by itself when a vacancy enters Shortlist and its listing is not already on the employer's applicant tracking system. Paid job sites and aggregators often hide the original address or point to a copy that lost part of the text or does not work. It tries, in order, and stops at the first page found:
   1. the listing's own link, following its redirects, with tracking parameters (`source`, `ref`, `utm_…`) dropped, accepted when it ends on an applicant tracking system with a site description, or on a company page that embeds a Greenhouse board (a `gh_jid` address resolves to that board's job);
-  2. the public boards of Greenhouse, Lever, Ashby and Workable under the company's likely board name, accepting an exact match of the normalised company name and the title;
+  2. the public boards of Greenhouse, Lever, Ashby and Workable under the company's likely board name, accepting an exact match of the normalised company name and the title, or a board title that is the listing's title followed by a separator and more words ("IT Department Lead - Remote") when it is the only such title on the board and none matches exactly;
   3. a web search for `"<title>" <company>`, accepting only an applicant tracking system address or the company's own domain with a matching title; when more than one result passes, one call of the Preparation model chooses among them;
   4. a web search for `<company> careers jobs` followed by a scan of the careers page.
 - The first two steps cost nothing. A vacancy is searched automatically once, when it enters Shortlist, and again only when the user asks, so no search repeats by itself. Without a web search provider only the first two steps are tried. When the provider refuses because its quota is used up, the vacancy and the status bar say so ("Web search: the Brave quota is used up"), and the Apply button offers to search again and Paste; nothing waits silently for another day.
 - When the page found is on an applicant tracking system, its vacancy text is read as well, and drafting uses it instead of the listing's text when it is longer.
 - The automatic search stops after 30 seconds and the manual one after 120 seconds.
-- At startup, shortlisted vacancies whose search never ran or was interrupted are searched on the boards only, without web search, so no paid search is made at startup.
+- At startup, shortlisted vacancies whose search never ran or was interrupted are searched from the listing's link and the boards only, without web search, so no paid search is made at startup.
 - A direct link once found is never replaced. A manual search is not started while another search for the same vacancy runs.
 - The Apply button shows the result: "via employer site", "search for employer site" (which starts a manual search) or "searching…". For an aggregator listing it explains "Opens the listing on <name>…". Apply itself and the confirmation of the application are described in `inbox.md`.
 

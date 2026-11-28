@@ -95,7 +95,7 @@ A vacancy has one stage per profile: Inbox (no decision yet), Shortlist, Applied
 | Applied | "Applied <date>", Undo (back to Shortlist), "Delete role…" |
 | Dismissed | "Dismissed — <reason>", "Restore to Inbox" (the reason is cleared), "Delete role…" |
 
-**Apply** opens the apply address, or the original address when there is none, in a window beside the current one; only http(s) addresses without credentials are opened. The Apply button shows where it leads: "via employer site", "search for employer site" or "searching…" (see `application.md`). Messages:
+**Apply** opens the employer's page when the search found one, else the apply address, or the original address when there is none, in a window beside the current one; only http(s) addresses without credentials are opened. The Apply button shows where it leads: "via employer site", "search for employer site" or "searching…" (see `application.md`). Messages:
 
 - no address: "No valid employer or original listing URL is available. The role stays in Shortlist.";
 - window blocked: "The application page was blocked. Allow popups and try Apply again. The role stays in Shortlist."

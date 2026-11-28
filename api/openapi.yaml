@@ -36,6 +36,8 @@ components:
                     items:
                         $ref: '#/components/schemas/Outcome'
                     type: array
+                search:
+                    type: boolean
                 to:
                     enum:
                         - inbox
@@ -44,6 +46,8 @@ components:
                         - dismissed
                     type: string
                 url:
+                    type: string
+                via:
                     type: string
             required:
                 - key
@@ -756,6 +760,14 @@ components:
             required:
                 - model
                 - startedAt
+            type: object
+        LocateReq:
+            properties:
+                profile:
+                    format: int64
+                    type: integer
+            required:
+                - profile
             type: object
         Location:
             properties:
@@ -2984,6 +2996,24 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/DecisionResp'
+                    description: OK
+    /api/vacancies/{id}/locate:
+        post:
+            operationId: postApiVacanciesIdLocate
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LocateReq'
+                required: true
+            responses:
+                4XX:
+                    $ref: '#/components/responses/Error'
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/VacancyView'
                     description: OK
     /api/vacancies/{id}/seen:
         post:

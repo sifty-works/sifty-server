@@ -18,6 +18,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/db"
+	"github.com/sifty-works/sifty-server/internal/fetch/fetchtest"
 	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
@@ -48,7 +49,7 @@ func newReadFix(t *testing.T, precise bool) readFix {
 	r := runner.New(d, nil, time.Now, logger)
 	fm := &models.FakeModel{}
 	cat := catalog.New(d, time.Now)
-	registerJobKinds(r, d, store, fixedModel{fm}, cat, logger, false, time.Now)
+	registerJobKinds(r, d, store, fixedModel{fm}, cat, fetchtest.NewMap(), logger, false, time.Now)
 	rd := &reading{database: d, store: store, runner: r}
 	base := newRouteServerWithReading(t, d, r, candidate.Readers{PDF: candidate.ProgramText{Program: filepath.Join(t.TempDir(), "absent")}}, rd)
 	return readFix{d: d, r: r, fm: fm, base: base, cat: cat, queue: enqueueRecomputeFit(d, r, logger, rd), logger: logger}

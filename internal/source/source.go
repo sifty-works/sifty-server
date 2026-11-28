@@ -26,6 +26,7 @@ type Site struct {
 	LinkPattern string `yaml:"link_pattern"`
 	ScriptVar   string `yaml:"script_var"`
 	SkipJSONLD  bool   `yaml:"skip_json_ld"`
+	TitlesOnly  bool   `yaml:"-"`
 }
 
 type Module interface {
@@ -69,17 +70,22 @@ func (b board) Vacancy(u *url.URL) (string, bool) {
 
 var apiModules = []Module{srcGreenhouse, srcLever, srcAshby, srcWorkable, srcHN}
 
-func ConcreteATS(raw string) (string, bool) {
+func Posting(raw string) (system, canon string, ok bool) {
 	if u, err := url.Parse(raw); err == nil {
 		for _, m := range apiModules {
-			if v, ok := m.(Vacancier); ok {
+			if v, isBoard := m.(Vacancier); isBoard {
 				if canon, ok := v.Vacancy(u); ok {
-					return canon, true
+					return m.Name(), canon, true
 				}
 			}
 		}
 	}
-	return "", false
+	return "", "", false
+}
+
+func ConcreteATS(raw string) (string, bool) {
+	_, canon, ok := Posting(raw)
+	return canon, ok
 }
 
 func canonHost(u *url.URL) string {

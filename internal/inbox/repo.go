@@ -322,6 +322,8 @@ func scanListRows(stage string, sqlRows *sql.Rows) ([]repoRow, error) {
 type viewData struct {
 	url       string
 	applyURL  string
+	employer  string
+	searching bool
 	textState string
 	body      []byte
 	sources   []string
@@ -337,7 +339,10 @@ func loadVacancyFull(ctx context.Context, database *db.DB, profileID, vacancyID 
 		       (SELECT applied_at FROM application WHERE vacancy=v.id ORDER BY applied_at DESC LIMIT 1),
 		       (SELECT profile_name FROM application WHERE vacancy=v.id ORDER BY applied_at DESC LIMIT 1),
 		       v.expires_at,
-		       v.url, v.apply_url, v.text_state, v.body, `+fit.Columns+`
+		       v.url, v.apply_url, v.text_state, v.body,
+		       COALESCE((SELECT url FROM employer_page WHERE vacancy=v.id),''),
+		       EXISTS (SELECT 1 FROM job WHERE kind='locate' AND subject=CAST(v.id AS TEXT) AND state IN ('queued','running')),
+		       `+fit.Columns+`
 		FROM vacancy v LEFT JOIN decision d ON d.vacancy=v.id AND d.profile=? `+fit.Join+`
 		WHERE v.id=? AND `+notExcludedFor,
 		profileID, profileID, vacancyID, profileID).Scan(append([]any{
@@ -346,7 +351,7 @@ func loadVacancyFull(ctx context.Context, database *db.DB, profileID, vacancyID 
 		&unread, &row.reason,
 		&appliedAt, &appliedName,
 		&row.expiresAt,
-		&vd.url, &vd.applyURL, &vd.textState, &vd.body}, row.fit.Dest()...)...)
+		&vd.url, &vd.applyURL, &vd.textState, &vd.body, &vd.employer, &vd.searching}, row.fit.Dest()...)...)
 	if err == sql.ErrNoRows {
 		return "", repoRow{}, viewData{}, apperr.NotFound{Message: "Role not found."}
 	}

@@ -70,13 +70,17 @@ func registerAllRoutes(
 		}
 		return nil
 	}
-	enqueueModelWork := func(kind, subject string) (int64, error) {
-		if modelReady != nil {
+	enqueueWork := func(kind, subject string) (int64, error) {
+		if modelReady != nil && jobKinds[kind].work != "" {
 			if err := modelReady(kind); err != nil {
 				return 0, err
 			}
 		}
-		return enqueue(kind, subject)
+		id, err := enqueue(kind, subject)
+		if err != nil {
+			logger.Warn("work not queued", "kind", kind, "subject", subject, "err", err)
+		}
+		return id, err
 	}
 	server.Handle(mux, "POST /api/providers/{name}/check", logger, models.CheckProviderHandler(gate))
 	server.Handle(mux, "GET /api/work", logger, workHandler(database, gate, r, now))
@@ -86,7 +90,7 @@ func registerAllRoutes(
 	server.Handle(mux, "GET /api/secrets", logger, models.SecretsHandler(gate))
 	server.Handle(mux, "PUT /api/secrets/{name}", logger, models.PutSecretHandler(gate))
 	server.Handle(mux, "DELETE /api/secrets/{name}", logger, models.DeleteSecretHandler(gate))
-	inbox.RegisterRoutes(mux, database, now, logger, collectActive, sourceNames, rules, recomputeFit, enqueueModelWork, rd.opened)
+	inbox.RegisterRoutes(mux, database, now, logger, collectActive, sourceNames, rules, recomputeFit, enqueueWork, rd.opened)
 	candidate.RegisterRoutes(mux, database, filesDir, readers, logger, recomputeFit, enqueue)
 	server.Handle(mux, "POST /api/documents/{id}/cancel", logger, candidate.CancelAnalysisHandler(database, cancel))
 	col.RegisterRoutes(mux)

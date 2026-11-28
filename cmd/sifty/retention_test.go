@@ -13,6 +13,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/catalog"
 	"github.com/sifty-works/sifty-server/internal/config"
 	"github.com/sifty-works/sifty-server/internal/db"
+	"github.com/sifty-works/sifty-server/internal/fetch/fetchtest"
 	"github.com/sifty-works/sifty-server/internal/listing"
 	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
@@ -49,7 +50,7 @@ func runRetentionJobWithLimit(t *testing.T, d *db.DB, cat *catalog.Catalog, now 
 	if err != nil {
 		t.Fatalf("open settings: %v", err)
 	}
-	registerJobKinds(r, d, store, fixedModel{&models.FakeModel{}}, cat, slog.New(slog.NewTextHandler(io.Discard, nil)), false, func() time.Time { return now })
+	registerJobKinds(r, d, store, fixedModel{&models.FakeModel{}}, cat, fetchtest.NewMap(), slog.New(slog.NewTextHandler(io.Discard, nil)), false, func() time.Time { return now })
 	r.Enqueue(runner.Spec{Kind: "retention"})
 	rCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()

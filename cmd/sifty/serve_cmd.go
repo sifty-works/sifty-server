@@ -25,6 +25,7 @@ import (
 	"github.com/sifty-works/sifty-server/internal/fetch"
 	"github.com/sifty-works/sifty-server/internal/fetch/fetchtest"
 	"github.com/sifty-works/sifty-server/internal/fit"
+	"github.com/sifty-works/sifty-server/internal/locate"
 	"github.com/sifty-works/sifty-server/internal/models"
 	"github.com/sifty-works/sifty-server/internal/runner"
 	"github.com/sifty-works/sifty-server/internal/server"
@@ -147,7 +148,8 @@ func cmdServe(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 	r := runner.New(database, map[string]int{"net": 4, "cpu": 1}, time.Now, logger)
 	r.SetPause(gate.IsPaused)
 
-	registerJobKinds(r, database, store, gate, cat, logger, offline, time.Now)
+	registerJobKinds(r, database, store, gate, cat, fetcher, logger, offline, time.Now)
+	queueUnsearched(ctx, database, r, logger)
 	if n, err := candidate.ResetInterruptedAnalyses(ctx, database); err != nil {
 		logger.Warn("interrupted analyses not reset", "err", err)
 	} else if n > 0 {
@@ -368,7 +370,7 @@ func fitRules(store *config.Store) func() fit.Rules {
 	return func() fit.Rules { c := store.Get(); return fit.Rules{Weights: c.Weights, Rates: c.Rates} }
 }
 
-func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, gate modelSource, cat *catalog.Catalog, logger *slog.Logger, offline bool, now func() time.Time) {
+func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, gate modelSource, cat *catalog.Catalog, fetcher fetch.Fetcher, logger *slog.Logger, offline bool, now func() time.Time) {
 	r.Register(runner.Kind{
 		Name:   "recompute_fit",
 		Resume: true,
@@ -413,6 +415,12 @@ func registerJobKinds(r *runner.Runner, database *db.DB, store *config.Store, ga
 					return gate.For(models.NamedTask("shortlist_check").Work, "background", vid)
 				}, now)
 		},
+	})
+
+	r.Register(runner.Kind{
+		Name:   locate.Kind,
+		Resume: true,
+		Run:    locate.Run(database, locate.Finder{Fetcher: fetcher, Boards: boardLists{fetcher}}, now),
 	})
 
 	r.Register(runner.Kind{

@@ -333,6 +333,9 @@ func applyDecision(ctx context.Context, database *db.DB, now func() time.Time, e
 	}
 	if to == string(StageShortlist) {
 		loadCheck(ctx, database, enqueue, profileID, vacancyID, to, true)
+		if enqueue != nil {
+			enqueue("locate", strconv.FormatInt(vacancyID, 10))
+		}
 	}
 	return rowAndCounts(ctx, database, now, profileID, vacancyID, r)
 }
@@ -445,6 +448,8 @@ type Action struct {
 	Label    string        `json:"label"`
 	To       Stage         `json:"to,omitempty"`
 	URL      string        `json:"url,omitempty"`
+	Via      string        `json:"via,omitempty"`
+	Search   bool          `json:"search,omitempty"`
 	Message  string        `json:"message,omitempty"`
 	Confirm  ConfirmDialog `json:"confirm,omitempty"`
 	Outcomes []Outcome     `json:"outcomes,omitempty"`
@@ -538,7 +543,7 @@ var outcomeButtons = []Outcome{
 	{Key: "applied", Label: "Yes, applied", To: StageApplied, Confirmed: true},
 }
 
-func stageActions(stage, vacURL, applyURL, company string) []Action {
+func stageActions(stage string, vd viewData, company string) []Action {
 	switch stage {
 	case "inbox":
 		out := make([]Action, 0, 3)
@@ -549,7 +554,7 @@ func stageActions(stage, vacURL, applyURL, company string) []Action {
 			Action{Key: "dismiss", Label: "Dismiss", To: StageDismissed},
 			Action{Key: "select", Label: "Select", To: StageShortlist})
 	case "shortlist":
-		apply := buildApplyAction(vacURL, applyURL)
+		apply := buildApplyAction(vd)
 		return []Action{
 			{Key: "inbox", Label: "Move to Inbox", To: StageInbox},
 			apply,
@@ -571,18 +576,24 @@ func stageActions(stage, vacURL, applyURL, company string) []Action {
 	return []Action{}
 }
 
-func buildApplyAction(vacURL, applyURL string) Action {
-	if validApplyURL(applyURL) {
-		return Action{Key: "apply", Label: "Apply", URL: applyURL, Confirm: ConfirmOutcome, Outcomes: outcomeButtons}
+func buildApplyAction(vd viewData) Action {
+	a := Action{Key: "apply", Label: "Apply", Confirm: ConfirmOutcome, Outcomes: outcomeButtons}
+	switch {
+	case vd.employer != "":
+		a.Via = "via employer site"
+	case vd.searching:
+		a.Via = "searching…"
+	default:
+		a.Via, a.Search = "search for employer site", true
 	}
-	if validApplyURL(vacURL) {
-		return Action{Key: "apply", Label: "Apply", URL: vacURL, Confirm: ConfirmOutcome, Outcomes: outcomeButtons}
+	for _, u := range []string{vd.employer, vd.applyURL, vd.url} {
+		if validApplyURL(u) {
+			a.URL = u
+			return a
+		}
 	}
-	return Action{Key: "apply", Label: "Apply",
-		Message:  "No valid employer or original listing URL is available. The role stays in Shortlist.",
-		Confirm:  ConfirmOutcome,
-		Outcomes: outcomeButtons,
-	}
+	a.Message = "No valid employer or original listing URL is available. The role stays in Shortlist."
+	return a
 }
 
 func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enqueue func(kind, subject string) (int64, error),
@@ -659,7 +670,7 @@ func vacancyView(ctx context.Context, database *db.DB, now func() time.Time, enq
 		Sources:  sources,
 		Original: vd.url,
 		Status:   statusText(stage, row.reason, row.appliedAt, t),
-		Actions:  stageActions(stage, vd.url, vd.applyURL, apiRow.Company),
+		Actions:  stageActions(stage, vd, apiRow.Company),
 		Listing:  lv,
 		Band:     band,
 		Check:    cs.view(f.Open(), queue, t),

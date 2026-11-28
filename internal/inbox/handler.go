@@ -46,6 +46,10 @@ type VacancyViewReq struct {
 	Profile int64 `json:"profile"`
 }
 
+type LocateReq struct {
+	Profile int64 `json:"profile"`
+}
+
 type DecisionReq struct {
 	Profile   int64  `json:"profile"`
 	From      Stage  `json:"from"`
@@ -221,6 +225,19 @@ func RegisterRoutes(mux *http.ServeMux, database *db.DB, now func() time.Time, l
 		}
 		if err := retryCheck(r.Context(), database, enqueue, pid, vacancyID); err != nil {
 			return VacancyView{}, err
+		}
+		return vacancyView(r.Context(), database, now, nil, vacancyID, pid, sourceNamesFor(), rules())
+	})
+
+	server.Handle(mux, "POST /api/vacancies/{id}/locate", logger, func(r *http.Request, req LocateReq) (VacancyView, error) {
+		vacancyID, pid, err := resolveRequestIDs(r, database, req.Profile)
+		if err != nil {
+			return VacancyView{}, err
+		}
+		if enqueue != nil {
+			if _, err := enqueue("locate", strconv.FormatInt(vacancyID, 10)); err != nil {
+				return VacancyView{}, err
+			}
 		}
 		return vacancyView(r.Context(), database, now, nil, vacancyID, pid, sourceNamesFor(), rules())
 	})
