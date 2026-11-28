@@ -4,6 +4,7 @@ Notable changes of Sifty, newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Key facts: Location reads each place of a list on its own ("Canada Only, Poland, and Bulgaria", "SF, NYC, SEA"), a "City, CA" is never Canada, and places come from "geo-locked" country lists, a city line under the title and "attend our London office"; a company's "Headquarters:" line counts only when nothing else states a place or work mode. Work mode: office days inside a hybrid sentence, a denied office demand, onboarding in person and a "hybrid role across…" no longer add onsite or hybrid, and "in person from the office" is onsite. Languages: Italian and Chinese names, "Languages:" lines in any section, and "German required, French is a plus" reads French as preferred. Stored postings are read again.
 - Analysis: an edit of any vocabulary or phrase list the analysis reads now re-reads stored postings by itself (locally, with no model call), so no posting keeps facts from an older list.
 - Skills: about forty more skills are recognised (F#, Redux, Dagster, pytest, Maven, ServiceNow, Qdrant, FinOps and others), a skill glued to the next sentence ("skills.Laravel") is found, and ordinary words no longer count as skills ("react quickly", "payment rails", "airflow management", "SOC" alone, "A/B failover", a company named Twilio in a sentence about careers). Stored postings are read again.
 

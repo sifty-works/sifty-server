@@ -61,6 +61,7 @@ var (
 	bandsOf     = map[string][]string{}
 	splitRe     *regexp.Regexp
 	abbrevRe    *regexp.Regexp
+	compoundRe  *regexp.Regexp
 	plusMinusRe = regexp.MustCompile(`^\s*±\s*\d+(?:\.\d+)?`)
 	offsetRe    = regexp.MustCompile(`(?i)(?:UTC|GMT)\s*([+\-])\s*(\d{1,2})(?::(\d{2}))?`)
 	widenRe     = regexp.MustCompile(`(?i)(?:±|[+\-]/?[+\-]?)\s*(\d+(?:\.\d+)?)\s*h(?:ours?)?`)
@@ -123,6 +124,14 @@ func init() {
 		abbrevs = append(abbrevs, k)
 	}
 	sort.Slice(abbrevs, func(i, j int) bool { return len(abbrevs[i]) > len(abbrevs[j]) })
+	var compounds []string
+	for k := range index {
+		if strings.Contains(k, " and ") {
+			compounds = append(compounds, regexp.QuoteMeta(k))
+		}
+	}
+	sort.Slice(compounds, func(i, j int) bool { return len(compounds[i]) > len(compounds[j]) })
+	compoundRe = regexp.MustCompile(`(?i)\b(?:` + strings.Join(compounds, "|") + `)\b`)
 	abbrevRe = regexp.MustCompile(`(?i)\b(` + strings.Join(abbrevs, "|") + `)\b`)
 	for _, b := range vocab.Bands {
 		bands = append(bands, ReferenceTimeZoneBand{b.Code, b.Label})
@@ -211,6 +220,13 @@ func Recognised(label string) bool {
 	}
 	return known
 }
+
+func HasCountries(label string) bool {
+	cs, ok := lookup(label)
+	return ok && len(cs) > 0
+}
+
+func Compounds(text string) [][]int { return compoundRe.FindAllStringIndex(text, -1) }
 
 func Codes(name string) []string {
 	cs, _ := lookup(name)

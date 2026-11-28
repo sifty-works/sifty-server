@@ -61,6 +61,8 @@ var (
 	markerRe                                            = regexp.MustCompile(`(?i)` + alt(currencyMarkers))
 	internTitleRe                                       = regexp.MustCompile(`(?i)\b(?:` + internWordPattern + `)s?\b\s*(?:$|[-–(,:|])`)
 	internRe                                            = regexp.MustCompile(`(?i)\b(?:` + internWordPattern + `)s?\b`)
+	flagRe                                              = regexp.MustCompile(`[\x{1F1E6}-\x{1F1FF}]{2}\s*`)
+	trailingOnlyRe                                      = regexp.MustCompile(`(?i)\s+only$`)
 	gluedLabelRe                                        = regexp.MustCompile(`[\p{Ll})\]](\p{Lu}[\p{L} ]*?):`)
 )
 
@@ -82,15 +84,19 @@ func ReadSite(doc *Doc) Site {
 			s.AddMode(m)
 		}
 	}
-	s.AddPlaces(doc.Location)
+	s.addPlaceList(doc.Location)
 	lines := textLines(doc.Original)
 	for k, line := range lines {
-		next := ""
-		if k+1 < len(lines) {
-			next, _, _ = strings.Cut(lines[k+1].Text, ". ")
+		n := k + 1
+		for n < len(lines) && strings.HasPrefix(lines[n].Text, "(") && strings.HasSuffix(lines[n].Text, ")") {
+			n++
 		}
-		if labels[labelKey(line.Text)] == "location" && placeList(next) {
-			line = Line{Text: line.Text + ": " + next, Start: line.Start, End: lines[k+1].Start + len(next)}
+		next := ""
+		if n < len(lines) {
+			next, _, _ = strings.Cut(lines[n].Text, ". ")
+		}
+		if cleaned := trailingOnlyRe.ReplaceAllString(strings.Trim(flagRe.ReplaceAllString(next, ", "), ", "), ""); labels[labelKey(line.Text)] == "location" && placeList(cleaned) {
+			line = Line{Text: line.Text + ": " + cleaned, Start: line.Start, End: lines[n].Start + len(next)}
 		}
 		i, width := strings.Index(line.Text, ":"), 1
 		if j := strings.Index(line.Text, " - "); j >= 0 && (i < 0 || j < i) {
@@ -115,16 +121,7 @@ func ReadSite(doc *Doc) Site {
 				}
 			}
 		case "location":
-			value = s.takeModes(value)
-			var parts []string
-			if items := placeItems(value); !places.Recognised(value) && len(items) > 0 {
-				for _, it := range items {
-					parts = append(parts, it.label)
-				}
-				s.AddPlaces(strings.Join(parts, "·"))
-			} else {
-				parts = s.AddPlaces(value)
-			}
+			parts := s.addPlaceList(value)
 			for _, p := range parts {
 				s.Stated[strings.ToLower(p)] = span
 			}
@@ -179,6 +176,25 @@ func placeList(text string) bool {
 }
 
 func labelKey(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
+
+func (s *Site) addPlaceList(value string) []string {
+	value = strings.Trim(flagRe.ReplaceAllString(value, ", "), ", ")
+	items := placeItems(value)
+	if len(items) == 0 || strings.ContainsAny(value, "·;|") || len(items) == 1 && value == items[0].label {
+		return s.AddPlaces(value)
+	}
+	var parts []string
+	for _, it := range items {
+		parts = append(parts, it.label)
+	}
+	for _, m := range modeWordRe.FindAllString(value, -1) {
+		if mode, ok := ParseMode(m); ok {
+			s.AddMode(mode)
+		}
+	}
+	s.AddPlaces(strings.Join(parts, "·"))
+	return parts
+}
 
 func (s *Site) AddPlaces(value string) []string {
 	var parts []string
@@ -284,12 +300,12 @@ func ParseEngagement(low string) string {
 
 func notPlace(label string) bool {
 	low := strings.ToLower(strings.TrimSpace(label))
-	if slices.Contains(vocab.Place["not_places"], low) || !strings.ContainsFunc(low, unicode.IsLetter) {
+	if zoneCueRe.MatchString(low) || slices.Contains(vocab.Place["not_places"], low) || !strings.ContainsFunc(low, unicode.IsLetter) {
 		return true
 	}
 	_, country := places.CountryName(low)
 	short := slices.ContainsFunc(vocab.Place["short_codes"], func(c string) bool { return strings.EqualFold(c, low) })
-	return len([]rune(low)) <= 2 && !country && !short
+	return len([]rune(low)) <= 2 && !country && !short && !places.IsCity(label)
 }
 
 func bareWorldwide(label string) bool {

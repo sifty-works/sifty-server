@@ -32,7 +32,7 @@ var (
 	distributedRe                                                                                   = regexp.MustCompile(`(?i)\b(?:` + alt(vocab.Mode["distributed"]) + `)\b`)
 	hybridRe                                                                                        = regexp.MustCompile(`(?i)\bhybrid\b(?:[- ]+(?:` + alt(vocab.Mode["hybrid_noise"]) + `))?`)
 	hybridNoiseRe                                                                                   = regexp.MustCompile(`(?i)^hybrid[- ]+(?:` + alt(vocab.Mode["hybrid_noise"]) + `)$`)
-	onsiteRe                                                                                        = regexp.MustCompile(`(?i)\b(?:on-?site|on site|in-person|in-office|in office|in the office|office-based|office based)\b`)
+	onsiteRe                                                                                        = regexp.MustCompile(`(?i)\b(?:on-?site|on site|in-person|in-office|in office|in the office|office-based|office based|in person\s+(?:at|in|from)\s+(?:the\s+|our\s+|\p{L}+['’]s\s+)[^.;]{0,40}?offices?)\b`)
 	onsiteNoiseRe                                                                                   = regexp.MustCompile(`(?i)^\s*(?:\w+\s+)?(?:` + altRe(vocab.Mode["onsite_noise"]) + `)\b`)
 	daysAfterRe, daysBeforeRe, shareBeforeRe, shareAfterRe, willingRe, cityOrRemoteRe, remoteDaysRe = daysPatterns()
 	contractRe, internRe2, employmentRe, smartRe, employmentContractRe                              = engagementPatterns()
@@ -42,11 +42,22 @@ var (
 	zoneOffsetRe                                                                                    = regexp.MustCompile(`(?i)\b(?:UTC|GMT)\s*[+\-]`)
 	placeCueRes, eligibilityRe, citizenRe, worldwideRe                                              = placePatterns()
 	basedOnlyRe                                                                                     = regexp.MustCompile(`\b(\p{Lu}[\p{L}'-]+(?: \p{Lu}[\p{L}'-]+)?),? based(?: only)?\b`)
-	placeLeadRe                                                                                     = regexp.MustCompile(`(?i)^(?:anywhere\s+(?:in|within)\s+)?(?:(?:the|our|an?|their|its)\s+)?`)
-	placeTailRe                                                                                     = regexp.MustCompile(`(?i)(?:,?\s*[^,]*\bpreferred\b.*|\s+(?:offices?|area|hub|hq|headquarters|only|based)|-based)$`)
+	placeLeadRe                                                                                     = regexp.MustCompile(`(?i)^(?:(?:anywhere\s+)?(?:in|within)\s+)?(?:(?:the|our|an?|their|its)\s+)?(?:greater\s+)?`)
+	placeTailRe                                                                                     = regexp.MustCompile(`(?i)(?:,?\s*[^,]*\bpreferred\b.*|\s+(?:(?:metro(?:politan)?\s+)?area(?:\s+of\s+[\p{L} ]+)?|offices?|hub|hq|headquarters|only|based)|-(?:based|hq))$`)
 	zoneWordRe                                                                                      = regexp.MustCompile(`(?i)time ?zones?`)
-	languageNoiseRe                                                                                 = regexp.MustCompile(`^\s+law\b`)
+	languageNoiseRe                                                                                 = regexp.MustCompile(`(?i)^\s+(?:law\b|(?:(?:is|are)\s+)?(?:not|never)\b)`)
+	categoryRe                                                                                      = regexp.MustCompile(`(?i)\b(?:` + alt(vocab.Mode["category_before"]) + `)\s+$`)
+	remotePeopleRe                                                                                  = regexp.MustCompile(`(?i)\bremote(?:ly)?\s+(?:` + alt(vocab.Mode["remote_people"]) + `)\b`)
+	headquartersBeforeRe                                                                            = regexp.MustCompile(`(?i)(?:^|\n)\s*(?:` + alt(vocab.Place["headquarters_labels"]) + `)\s*:?\s*$`)
+	headquartersRe                                                                                  = regexp.MustCompile(`(?i)^(?:` + alt(vocab.Place["headquarters_labels"]) + `)\s*:`)
+	onsiteNegatedRe                                                                                 = regexp.MustCompile(`(?i)\b(?:(?:do|does|will|would|is|are)(?:n['’]t| not)|not|never|no)\s+(?:\w+\s+){0,3}?(?:` + alt(vocab.Mode["demand_verbs"]) + `)\w*\b[^.;]{0,60}$`)
+	modeListRe                                                                                      = regexp.MustCompile(`(?i)\b(?:` + alt(vocab.Mode["list_phrases"]) + `)\b`)
+	languageClauseRe                                                                                = regexp.MustCompile(`(?i);|\b(?:` + alt(vocab.Language["clause_ends"]) + `)\s*,`)
+	languageLabelRe                                                                                 = regexp.MustCompile(`(?i)^(?:` + alt(vocab.Language["labels"]) + `)\s*:`)
+	languageNegatedRe                                                                               = regexp.MustCompile(`(?i)\b(?:no|not|without|neither|nor)\s+(?:[\w-]+\s+)?$`)
 	submitInRe                                                                                      = regexp.MustCompile(`(?i)\b(?:submit|send|apply|application|resume|cv|cover letter)\b[^.]{0,60}\bin\s*$`)
+	emptyParenRe                                                                                    = regexp.MustCompile(`\(\s*\)`)
+	wrappedRe                                                                                       = regexp.MustCompile(`^\(([^()]*)\)$`)
 	placeStopRe                                                                                     = regexp.MustCompile(`(?i)\s+(?:with|who|where|for|to|as|you|we|our|that|but|if|so|is|are|was|will|has|have|can|at|on)\b.*$`)
 	moneyCueRe                                                                                      = regexp.MustCompile(`(?i)\b(?:` + alt(vocab.Money["cue_words"]) + `|(?:per|a|an) (?:` + alt(vocab.Money["cue_periods"]) + `))\b|/\s?(?:` + alt(vocab.Money["cue_units"]) + `)\b`)
 	fundingRe                                                                                       = regexp.MustCompile(`(?i)\b(?:` + altRe(vocab.Money["funding"]) + `)\b`)
@@ -94,11 +105,13 @@ func loadLanguages() (*regexp.Regexp, map[string]string, *regexp.Regexp) {
 			words = append(words, regexp.QuoteMeta(w)+wordEnd(w))
 		}
 	}
-	sort.Strings(words)
+	sort.Slice(words, func(i, j int) bool {
+		return len(words[i]) > len(words[j]) || len(words[i]) == len(words[j]) && words[i] < words[j]
+	})
 	for _, p := range v.Proficiency {
 		prof = append(prof, regexp.QuoteMeta(p))
 	}
-	return regexp.MustCompile(`\b(` + strings.Join(words, "|") + `)`), names, regexp.MustCompile(`(?i)\b(?:` + strings.Join(prof, "|") + `)\b`)
+	return regexp.MustCompile(`\b(` + strings.Join(words, "|") + `)`), names, regexp.MustCompile(`(?i)\b(?:` + strings.Join(prof, "|") + `)\b|kenntnisse\b`)
 }
 
 func wordEnd(w string) string {
@@ -121,7 +134,7 @@ type conditions struct{}
 
 func (conditions) Name() string { return "conditions" }
 
-func (conditions) Version() int { return derivedVersion(16) }
+func (conditions) Version() int { return derivedVersion(21) }
 
 func (conditions) Produces() []facts.Kind {
 	return []facts.Kind{facts.Money, facts.WorkMode, facts.Engagement, facts.Place, facts.TimeZone, facts.Hours, facts.Language}
@@ -139,7 +152,8 @@ type modeCue struct {
 func (conditions) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 	var out []facts.Fact
 	skip := map[facts.Kind]bool{}
-	var strong, weak []modeCue
+	var strong, weak, hq []modeCue
+	var fallback []facts.Fact
 	languages := map[string]facts.Fact{}
 	engagements := map[string]bool{}
 	typeRows := 99
@@ -150,9 +164,16 @@ func (conditions) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 				out, skip[facts.Money] = append(out, f), true
 			}
 		}
+		headquarters := headquartersRe.MatchString(line.Text) || headquartersBeforeRe.MatchString(doc.Original[max(0, line.Start-40):line.Start])
+		modeLine := line
+		if section == SectionRequirements || section == SectionNiceToHave {
+			modeLine.Text = blank(remotePeopleRe, line.Text)
+		}
 		if section != SectionProcess && !skip[facts.WorkMode] {
-			for _, c := range modeCues(line) {
-				if section == SectionOffer || section == SectionCompany {
+			for _, c := range modeCues(modeLine) {
+				if headquarters {
+					hq = append(hq, c)
+				} else if section == SectionOffer || section == SectionCompany {
 					weak = append(weak, c)
 				} else {
 					strong = append(strong, c)
@@ -198,12 +219,20 @@ func (conditions) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 				out, skip[facts.TimeZone] = append(out, vocabFact(facts.TimeZone, line.Text[s:e], "", line.Start+s, line.Start+e)), true
 			}
 		}
-		out = append(out, linePlaces(line, section)...)
+		if headquarters {
+			fallback = append(fallback, linePlaces(line, section)...)
+		} else {
+			out = append(out, linePlaces(line, section)...)
+		}
 		for _, f := range languagesIn(line, section) {
 			if old, seen := languages[f.Value]; !seen || old.Flag == facts.Preferred && f.Flag == facts.Required {
 				languages[f.Value] = f
 			}
 		}
+	}
+	out = append(out, headerPlace(doc)...)
+	if !slices.ContainsFunc(out, func(f facts.Fact) bool { return f.Kind == facts.Place }) {
+		out = append(out, fallback...)
 	}
 	seenPlace := map[string]bool{}
 	unique := out[:0]
@@ -233,6 +262,9 @@ func (conditions) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 	if len(cues) == 0 {
 		cues = weak
 	}
+	if len(cues) == 0 {
+		cues = hq
+	}
 	seen := map[string]bool{}
 	for _, c := range cues {
 		if !seen[c.mode] {
@@ -251,6 +283,21 @@ func (conditions) Extract(_ context.Context, doc *Doc) ([]facts.Fact, error) {
 	return out, nil
 }
 
+func headerPlace(doc *Doc) []facts.Fact {
+	lines := textLines(doc.Original)
+	for i, l := range lines[:min(len(lines), 10)] {
+		if doc.Title != "" && strings.EqualFold(l.Text, strings.TrimSpace(doc.Title)) {
+			for _, n := range lines[i+1 : min(i+4, len(lines))] {
+				if len(n.Text) <= 60 && placeList(n.Text) {
+					return placeFacts(n, n.Text, 0)
+				}
+			}
+			break
+		}
+	}
+	return nil
+}
+
 func moneyIn(line Line) (facts.Fact, bool) {
 	text := line.Text
 	for _, loc := range moneyRe.FindAllStringIndex(text, -1) {
@@ -262,7 +309,7 @@ func moneyIn(line Line) (facts.Fact, bool) {
 			seg, loc[1] = typo+"0", loc[0]+len(typo)
 		}
 		sentence := sentenceAround(text, loc[0])
-		if moneyScaleRe.MatchString(text[loc[1]:]) || fundingRe.MatchString(sentence) || notPayRe.MatchString(clauseAround(text, loc[0], loc[1])) {
+		if moneyScaleRe.MatchString(text[loc[1]:]) || fundingRe.MatchString(sentence) || notPayRe.MatchString(clauseAround(clauseSepRe, text, loc[0], loc[1])) {
 			continue
 		}
 		m := ParseMoney(seg, sentence)
@@ -279,9 +326,9 @@ func moneyIn(line Line) (facts.Fact, bool) {
 	return facts.Fact{}, false
 }
 
-func clauseAround(text string, from, to int) string {
+func clauseAround(re *regexp.Regexp, text string, from, to int) string {
 	start, end := 0, len(text)
-	for _, sep := range clauseSepRe.FindAllStringIndex(text, -1) {
+	for _, sep := range re.FindAllStringIndex(text, -1) {
 		if sep[1] <= from {
 			start = sep[1]
 		} else if sep[0] >= to {
@@ -326,6 +373,9 @@ var dayCounts = map[string]string{"1": "hybrid", "2": "hybrid", "3": "hybrid", "
 
 func modeCues(line Line) []modeCue {
 	text := line.Text
+	if modeListRe.MatchString(text) {
+		return nil
+	}
 	var cues []modeCue
 	add := func(mode string, from, to int) {
 		if !remoteNotRe.MatchString(text[:from]) {
@@ -360,7 +410,7 @@ func modeCues(line Line) []modeCue {
 				continue
 			}
 			after := strings.ToLower(text[loc[1]:])
-			if !remoteNoiseRe.MatchString(text[loc[0]:loc[1]]) && !remoteNotRe.MatchString(text[:loc[0]]) && !strings.HasPrefix(after, "-friendly") && !strings.HasPrefix(after, " friendly") {
+			if !remoteNoiseRe.MatchString(text[loc[0]:loc[1]]) && !categoryRe.MatchString(text[:loc[0]]) && !remoteNotRe.MatchString(text[:loc[0]]) && !strings.HasPrefix(after, "-friendly") && !strings.HasPrefix(after, " friendly") {
 				add("remote", loc[0], loc[1])
 				break
 			}
@@ -374,7 +424,10 @@ func modeCues(line Line) []modeCue {
 	}
 	if !partial {
 		for _, loc := range onsiteRe.FindAllStringIndex(text, -1) {
-			if !onsiteNoiseRe.MatchString(text[loc[1]:]) && !onsiteBeforeNoiseRe.MatchString(text[:loc[0]]) && !perkRe.MatchString(text[:loc[0]]) && !remoteNotRe.MatchString(text[:loc[0]]) {
+			if hybrid && !strings.Contains(strings.ToLower(text[loc[0]:loc[1]]), "site") {
+				continue
+			}
+			if !onsiteNoiseRe.MatchString(text[loc[1]:]) && !onsiteNegatedRe.MatchString(text[:loc[0]]) && !onsiteBeforeNoiseRe.MatchString(text[:loc[0]]) && !perkRe.MatchString(text[:loc[0]]) && !remoteNotRe.MatchString(text[:loc[0]]) {
 				add("onsite", loc[0], loc[1])
 				break
 			}
@@ -438,13 +491,16 @@ func hasCityOrRemote(text string) bool {
 }
 
 func cleanPlace(label string) (string, int) {
-	label = strings.TrimSpace(placeStopRe.ReplaceAllString(label, ""))
+	label = strings.TrimSpace(emptyParenRe.ReplaceAllString(placeStopRe.ReplaceAllString(label, ""), ""))
 	lead := 0
+	if m := wrappedRe.FindStringSubmatch(label); m != nil {
+		lead, label = 1, m[1]
+	}
 	if loc := placeLeadRe.FindStringIndex(label); loc != nil {
-		lead, label = loc[1], label[loc[1]:]
+		lead, label = lead+loc[1], label[loc[1]:]
 	}
 	label = placeTailRe.ReplaceAllString(label, "")
-	label = strings.TrimRight(label, " ,")
+	label = strings.TrimRight(label, " ,-")
 	if trimmed := strings.TrimRight(label, "."); !strings.Contains(trimmed, ".") {
 		label = trimmed
 	}
@@ -579,7 +635,7 @@ func languagesIn(line Line, section string) []facts.Fact {
 	for _, loc := range languageRe.FindAllStringIndex(line.Text, -1) {
 		submit := submitInRe.MatchString(line.Text[:loc[0]])
 		skipped := section == SectionCompany || section == SectionOffer
-		if skipped && !submit || languageNoiseRe.MatchString(line.Text[loc[1]:]) {
+		if skipped && !submit && !languageLabelRe.MatchString(line.Text) || languageNoiseRe.MatchString(line.Text[loc[1]:]) || languageNegatedRe.MatchString(line.Text[:loc[0]]) {
 			continue
 		}
 		listed := (section == SectionRequirements || section == SectionNiceToHave) && onlyLanguages(line.Text)
@@ -587,7 +643,7 @@ func languagesIn(line Line, section string) []facts.Fact {
 			continue
 		}
 		flag := facts.Required
-		if section == SectionNiceToHave || preferredRe.MatchString(line.Text) {
+		if section == SectionNiceToHave || preferredRe.MatchString(clauseAround(languageClauseRe, line.Text, loc[0], loc[1])) {
 			flag = facts.Preferred
 		}
 		out = append(out, vocabFact(facts.Language, languageName[line.Text[loc[0]:loc[1]]], flag, line.Start+loc[0], line.Start+loc[1]))
@@ -596,10 +652,10 @@ func languagesIn(line Line, section string) []facts.Fact {
 }
 
 type vocabulary struct {
-	Engagement, Place, Mode, Money, Hours map[string][]string
-	Currencies                            map[string][]string
-	Floors                                map[string]float64
-	FloorWithoutPeriod                    float64 `yaml:"floor_without_period"`
+	Engagement, Place, Mode, Money, Hours, Language map[string][]string
+	Currencies                                      map[string][]string
+	Floors                                          map[string]float64
+	FloorWithoutPeriod                              float64 `yaml:"floor_without_period"`
 }
 
 var vocab = loadVocabulary()
@@ -637,10 +693,10 @@ func engagementPatterns() (contract, intern, employment, smart, employmentContra
 
 func daysPatterns() (after, before, shareBefore, shareAfter, willing, cityOrRemote, remoteDays *regexp.Regexp) {
 	n := `(\d|one|two|three|four|five)`
-	office := `(?:office|in[- ]person|on-?site)`
+	office := `(?:in[- ]office|office|in[- ]person|on-?site)`
 	perWeek := `\s*(?:a|per|each|every|/)\s*week`
-	after = regexp.MustCompile(`(?i)\b` + n + `\+?\s+days?(?:` + perWeek + `)?\s+(?:(?:in|at|from)\s+(?:the\s+|our\s+|an?\s+)?)?` + office + `\b`)
-	before = regexp.MustCompile(`(?i)\b` + office + `\b([^.;]{0,40}?)\b` + n + `\s+days?` + perWeek + `\b`)
+	after = regexp.MustCompile(`(?i)\b` + n + `\+?\s+(?:days?(?:` + perWeek + `)?\s+(?:(?:in|at|from)\s+(?:the\s+|our\s+|an?\s+)?)?` + office + `|` + office + `\s+days?)\b`)
+	before = regexp.MustCompile(`(?i)\b` + office + `\b([^.;]{0,40}?)\b` + n + `\s*(?:days?|x|times?)` + perWeek + `\b`)
 	shareBefore = regexp.MustCompile(`(?i)(\d{1,3})\s?%\s+(?:of\s+(?:the\s+|your\s+|their\s+|each\s+)?(?:time|week|working time|working hours|workweek|work week))?[^.;]{0,25}?\b` + office + `\b`)
 	shareAfter = regexp.MustCompile(`(?i)\b` + office + `\b[^.;]{0,40}?(\d{1,3})\s?%`)
 	willing = regexp.MustCompile(`(?i)\b(?:` + alt(vocab.Place["willing_cues"]) + `)\s+((?:the\s+|our\s+)?[\p{L}][\p{L} .,'-]{1,30})`)

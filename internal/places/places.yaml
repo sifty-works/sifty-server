@@ -60,7 +60,7 @@ countries:
   - {code: FM, name: Micronesia, bands: [oceania]}
   - {code: FR, name: France, bands: [europe_africa]}
   - {code: GA, name: Gabon, bands: [europe_africa]}
-  - {code: GB, name: United Kingdom, aliases: [UK, Great Britain], bands: [europe_africa]}
+  - {code: GB, name: United Kingdom, aliases: [UK, Great Britain, United Kingdom of Great Britain and Northern Ireland], bands: [europe_africa]}
   - {code: GD, name: Grenada, bands: [americas_east]}
   - {code: GE, name: Georgia, bands: [mideast_south_asia]}
   - {code: GF, name: French Guiana, bands: [americas_east]}
@@ -72,7 +72,7 @@ countries:
   - {code: GT, name: Guatemala, bands: [americas_west]}
   - {code: GW, name: Guinea-Bissau, bands: [europe_africa]}
   - {code: GY, name: Guyana, bands: [americas_east]}
-  - {code: HK, name: Hong Kong, bands: [east_se_asia]}
+  - {code: HK, name: Hong Kong, aliases: [Hong Kong SAR], bands: [east_se_asia]}
   - {code: HN, name: Honduras, bands: [americas_west]}
   - {code: HR, name: Croatia, bands: [europe_africa]}
   - {code: HT, name: Haiti, bands: [americas_east]}
@@ -442,7 +442,7 @@ cities:
   TR: [Istanbul, Ankara, Izmir]
   TW: [Taipei, Taichung]
   UA: [Kyiv, Kiev, Lviv, Kharkiv, Odesa, Dnipro]
-  US: [New York, New York City, NYC, San Francisco, SF, San Francisco Bay Area, Bay Area, Los Angeles, Seattle, Austin, Boston, Chicago, Denver, Atlanta, Miami, Washington DC, Washington D.C., Portland, San Diego, San Jose, Palo Alto, Mountain View, Menlo Park, Redwood City, Sunnyvale, Oakland, Brooklyn, Dallas, Houston, Philadelphia, Phoenix, Pittsburgh, Boulder, Raleigh, Nashville, Minneapolis, Salt Lake City, Detroit, Charlotte, Baltimore, Cambridge MA, Santa Monica, Irvine, Las Vegas, Columbus, Indianapolis, Kansas City, St. Louis, Tampa, Orlando, Cleveland, Madison, Ann Arbor, Durham]
+  US: [New York, New York City, NYC, San Francisco, SF, San Francisco Bay Area, Bay Area, Los Angeles, Seattle, Austin, Boston, Chicago, Denver, Atlanta, Miami, Washington DC, Washington D.C., Portland, San Diego, San Jose, Palo Alto, Mountain View, Menlo Park, Redwood City, Sunnyvale, Oakland, Brooklyn, Dallas, Houston, Philadelphia, Phoenix, Pittsburgh, Boulder, Raleigh, Nashville, Minneapolis, Salt Lake City, Detroit, Charlotte, Baltimore, Cambridge MA, Santa Monica, Irvine, Las Vegas, Columbus, Indianapolis, Kansas City, St. Louis, Tampa, Orlando, Cleveland, Madison, Ann Arbor, Durham, South San Francisco, San Carlos, San Mateo, Moses Lake, Cape Canaveral, SEA, CHI, Tacoma, Santa Clara, Cupertino, Berkeley]
   UY: [Montevideo]
   VN: [Ho Chi Minh City, Hanoi, Da Nang]
   ZA: [Cape Town, Johannesburg, Pretoria, Durban]

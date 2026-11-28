@@ -1,7 +1,7 @@
 labels:
   money: [salary, base salary, base pay, cash, cash compensation, compensation, annual salary,
     salary range, pay range, total cash]
-  location: [location, locations, work location, hiring location, hiring locations,
+  location: [location, locations, country, countries, job location, job locations, work location, hiring location, hiring locations,
     permitted location, permitted locations, permitted hiring location, permitted hiring locations,
     eligible location, eligible locations, eligible hiring locations, location eligibility,
     locations we hire in, location requirements, work eligibility]

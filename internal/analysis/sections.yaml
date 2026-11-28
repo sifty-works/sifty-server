@@ -44,6 +44,8 @@ headings:
   - {text: "who you are", kind: requirements}
   - {text: "about you", kind: requirements}
   - {text: "skills", kind: requirements}
+  - {text: "languages", kind: requirements}
+  - {text: "language skills", kind: requirements}
   - {text: "skills and experience", kind: requirements}
   - {text: "your profile", kind: requirements}
   - {text: "must have", kind: requirements}

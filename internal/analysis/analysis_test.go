@@ -95,6 +95,15 @@ func TestTermsOutsideRequirementSectionsAreNotRequired(t *testing.T) {
 		{"a language met only in the company section is not required",
 			`<h2>Requirements</h2><ul><li>Fluent German</li></ul><h2>About us</h2><p>Our founders speak fluent Mandarin.</p>`,
 			[]string{"language required German", "requirement required Fluent German"}},
+		{"a language that is not required is no requirement while the working language stays",
+			`<p>No German required; English is the working language.</p>`,
+			[]string{"language required English"}},
+		{"a language lesson in the benefits section is no language label",
+			`<h2>Benefits</h2><ul><li>Language lessons: fluent German, Spanish</li></ul>`,
+			nil},
+		{"a clause that follows a required language has its own level",
+			`<h2>Requirements</h2><ul><li>German required, French is a plus</li></ul>`,
+			[]string{"language preferred French", "language required German", "requirement required German required, French is a plus"}},
 		{"offer and process sections give no requirements",
 			`<h2>Benefits</h2><ul><li>You must love snacks</li></ul><h2>How to apply</h2><p>A CV is required.</p>`,
 			nil},
@@ -286,6 +295,8 @@ func TestPlaceIsReadOnlyFromWhatTheVacancyStates(t *testing.T) {
 		{"a company-wide worldwide line does not override a country in the site location", "", "Switzerland", `<p>All roles with Acme Labs are global and remote-based. Unless otherwise stated, we ask that you try to overlap some working hours with our team's time zone.</p>`, "Switzerland"},
 		{"a restriction in the text still overrides a country in the site location", "", "Switzerland", `<p>You must be based in Brazil.</p>`, "Brazil"},
 		{"a restriction in the title beats a softer text phrase", "Engineer (Remote - LATAM)", "", `<p>US / nearshore time zones preferred. You must be based in the US.</p>`, "LATAM"},
+		{"a company name that holds a city word under the title is no place", "Operations Analyst", "", `<p>Operations Analyst</p><p>Berlin and Partners</p><p>Apply</p>`, ""},
+		{"a headquarters place gives way to a restriction elsewhere in the text", "", "", `<p>Headquarters: Remote, US</p><p>You must be based in Poland.</p>`, "Poland"},
 		{"developers served in another region are no restriction", "", "", `<p>Communicate with external developers based in Asia pacific.</p>`, ""},
 	}
 	for _, tc := range cases {
@@ -315,6 +326,12 @@ func TestPlaceFieldsOfASiteSayOnlyWhatTheSiteStates(t *testing.T) {
 		{"a country code becomes its country name", facts.Aggregator, "PL", "", "Poland", ""},
 		{"a worldwide field beside a time-zone restriction is no place", facts.Employer, "Worldwide", "Time zone: CET (+/- 3 hours). We cannot consider other time zones.", "", ""},
 		{"a bare Location heading before a sentence is no place", facts.Employer, "", "Location\nOur offices are in Lisbon, Portugal and Porto.", "", ""},
+		{"a country label lists one place per item without the word only", facts.Employer, "", "Country\nCanada Only, Poland, and Bulgaria", "Canada; Poland; Bulgaria", ""},
+		{"a listing's own location list is one place per item", facts.Aggregator, "Chicago, Seattle, Denver", "", "Chicago; Seattle; Denver", ""},
+		{"a state code after an unknown city is never a country", facts.Aggregator, "Pinewood, CA", "", "Pinewood, CA", ""},
+		{"a city that is also a country does not join the next place", facts.Aggregator, "Singapore, United States of America", "", "Singapore; United States of America", ""},
+		{"a mode word in parentheses leaves just the place", facts.Aggregator, "Remote (US only)", "", "United States", "remote"},
+		{"an item about time zones is no place", facts.Aggregator, "PT to ET overlap preferred", "", "", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -370,6 +387,11 @@ func TestWorkModeIsNotOnsiteFromALookAlike(t *testing.T) {
 		{"a remote place restriction is remote only", `<p>Remote, US-based</p>`, "remote"},
 		{"hybrid financing in company prose is no work mode", `<p>We provide structured or hybrid financing to growing firms.</p>`, ""},
 		{"days in the office with a plus sign are hybrid only", `<p>HYBRID, 2+ days in office</p>`, "hybrid"},
+		{"in person at an office with remote participation ruled out is onsite only", `<p>This is in person at the Boston or Denver office; remote participation cannot be accommodated.</p>`, "onsite"},
+		{"a negated demand before the office is no onsite mode", `<p>For our hybrid roles, we're flexible — we don't expect or mandate that you're in the office every day.</p>`, "hybrid"},
+		{"a negation in another sentence does not blank an office requirement", `<p>We do not expect overtime. You will need to be in the office every day.</p>`, "onsite"},
+		{"a headquarters line gives way to a statement in any part of the text", `<p>Headquarters: Remote</p><h2>About us</h2><p>We believe in having our employees onsite three days a week.</p>`, "hybrid"},
+		{"an office phrase in a sentence that says hybrid adds no onsite mode", `<p>Hybrid model: most of us work in the office on Tuesdays.</p>`, "hybrid"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
