@@ -13,6 +13,7 @@ const (
 	noteHowHeard    = "Left to you"
 	noteFile        = "Attach this file to the form yourself"
 	noteCV          = "Attach your CV to the form yourself"
+	noteNoAnswerYet = "Sifty has no answer for this yet"
 )
 
 type Coded struct {
@@ -38,11 +39,9 @@ func (c Coded) Answer(ctx context.Context, v Vacancy, f formread.Form, have Answ
 			out[fl.ID] = h
 			continue
 		}
-		a, answered, toRest := answerField(fl, known, saved)
-		switch {
-		case answered:
-			out[fl.ID] = a
-		case toRest:
+		a, toRest := answerField(fl, known, saved)
+		out[fl.ID] = a
+		if toRest {
 			left = append(left, fl)
 		}
 	}
@@ -61,17 +60,17 @@ func (c Coded) Answer(ctx context.Context, v Vacancy, f formread.Form, have Answ
 	return out, nil
 }
 
-func answerField(fl formread.Field, known Known, saved map[string]QA) (a Answer, answered, toRest bool) {
+func answerField(fl formread.Field, known Known, saved map[string]QA) (a Answer, toRest bool) {
 	key := keyOf(fl.Label, fl.Kind, fl.Options)
 	switch {
 	case key == "resume":
-		return Answer{Note: noteCV}, true, false
+		return Answer{Note: noteCV}, false
 	case fl.Kind == formread.KindFile:
-		return Answer{Note: noteFile}, true, false
+		return Answer{Note: noteFile}, false
 	case key == "consent":
-		return Answer{Note: noteConsent}, true, false
+		return Answer{Note: noteConsent}, false
 	case key == "how_heard":
-		return Answer{Note: noteHowHeard}, true, false
+		return Answer{Note: noteHowHeard}, false
 	}
 	authNote := ""
 	vals, evidence := known.Values[key], "My data: "+strings.ReplaceAll(key, "_", " ")
@@ -86,25 +85,25 @@ func answerField(fl formread.Field, known Known, saved map[string]QA) (a Answer,
 	}
 	if len(vals) > 0 {
 		if !isChoice(fl.Kind, fl.Options) {
-			return Answer{Values: []string{joinTexts(vals)}, Source: SourceMyData, Note: authNote, Evidence: evidence}, true, false
+			return Answer{Values: []string{joinTexts(vals)}, Source: SourceMyData, Note: authNote, Evidence: evidence}, false
 		}
 		if picked, ok := pick(fl.Kind, fl.Options, vals); ok {
-			return Answer{Values: picked, Source: SourceMyData, Note: authNote, Evidence: evidence}, true, false
+			return Answer{Values: picked, Source: SourceMyData, Note: authNote, Evidence: evidence}, false
 		}
-		return Answer{Note: "Profile says " + joinTexts(vals) + "; none of the options match"}, true, false
+		return Answer{Note: "Profile says " + joinTexts(vals) + "; none of the options match"}, false
 	}
 	if q, ok := saved[norm(fl.Label)]; ok && !vocab.sensitive[key] {
 		val := Value{Text: strings.TrimSpace(q.Answer)}
 		evidence := "Questions & Answers: " + q.Question
 		if !isChoice(fl.Kind, fl.Options) {
-			return Answer{Values: []string{val.Text}, Source: SourceQA, Evidence: evidence}, true, false
+			return Answer{Values: []string{val.Text}, Source: SourceQA, Evidence: evidence}, false
 		}
 		if picked, ok := pick(fl.Kind, fl.Options, []Value{val}); ok {
-			return Answer{Values: picked, Source: SourceQA, Evidence: evidence}, true, false
+			return Answer{Values: picked, Source: SourceQA, Evidence: evidence}, false
 		}
 	}
 	if key == "" || vocab.drafted[key] {
-		return Answer{}, false, true
+		return Answer{Note: noteNoAnswerYet}, true
 	}
-	return Answer{Note: noteNotInMyData}, true, false
+	return Answer{Note: noteNotInMyData}, false
 }

@@ -147,7 +147,7 @@ func reply(subject formread.Subject, fields []formread.Field) FillResponse {
 	}
 	for _, fl := range fields {
 		if len(fl.Values) == 0 {
-			out.Left = append(out.Left, FillLeft{Key: fl.ID, Reason: cmp.Or(fl.Note, "Sifty has no answer for this yet")})
+			out.Left = append(out.Left, FillLeft{Key: fl.ID, Reason: cmp.Or(fl.Note, noteNoAnswerYet)})
 			continue
 		}
 		out.Answers = append(out.Answers, FillAnswer{Key: fl.ID, Value: fl.Values[0], Values: fl.Values, Source: fl.Source, Note: fl.Note})
